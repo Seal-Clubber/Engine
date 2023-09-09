@@ -1,7 +1,8 @@
 # SatoriEngine
+
 _The Future Network_
 
-The AI Engine that supports each SatoriNode
+The AI Engine that supports each SatoriNeuron
 
 ## Brief Highlevel Overview of the Project
 
@@ -24,4 +25,3 @@ Datastreams should have a simple format and a unique identity. They should have 
 ModelManagers produce a prediction of the future, specifically the immediate future, the next timestep. This may sound like a limiting factor, as it seems to be a limit on versatility. However, producing a forecast of multiple observations into the future creates a substantial amount of complexity for the rest of the system. We can push that complexity into a simple structure: have multiple datastreams describing the same data on various timescales: hourly, daily, monthly, etc. With this design, to get a mid- or long-term forecast one merely needs to query multiple predictors.
 
 Speaking of querying predictors, predictors are never literally queried. Instead each predictor (every ModelManager) produces a new datastream of their predictions. In this way their predictions become a freely accessible public good by default, as well as automatically becoming a new datastream other nodes can use in their own models.
-
