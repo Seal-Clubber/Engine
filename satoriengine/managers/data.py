@@ -112,10 +112,10 @@ class DataManager:
                     self.targets[observation.key] = None
                 x = self.targets.get(observation.key)
                 if (
-                    x is not None 
-                    and x.observationId is not None 
+                    x is not None
+                    and x.observationId is not None
                     and hasattr(observation, 'observationId')
-                    and observation.observationId is not None 
+                    and observation.observationId is not None
                     and x.observationId == observation.observationId
                 ):
                     return False

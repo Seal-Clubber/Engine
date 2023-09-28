@@ -1,7 +1,5 @@
 from typing import Optional
 import threading
-import pandas as pd
-from satorilib.concepts.structs import StreamId
 from satoriengine.managers.data import DataManager
 from satoriengine.managers.model import ModelManager
 from satoriengine.view import View
@@ -27,68 +25,6 @@ class Engine:
         self.models = models
         self.view = view
         self.api = api
-
-    def getObservationOf(
-        self,
-        streamId: StreamId,
-        timestamp: str
-    ) -> tuple[str, str]:
-        '''
-        queries that models to find the observation prior to the timestamp of a
-        given stream. returns the timestamp and the value of the observation.
-        if there is no observation before the given timestamp, it returns 
-        (None, None) if it has a problem getting the data it returns an empty
-        tuple (,).
-        '''
-        df = getDataOfBefore(streamId, timestamp)
-        if df is None:
-            return (,)
-        try:
-            df = df.sort_index()
-            return df.loc[df.index < target_timestamp].iloc[-1]
-        except Exception as _:
-            return (None, None)
-    
-
-    def getObservationCountOf(
-        self,
-        streamId: StreamId,
-        timestamp: str
-    ) -> Union[int, None]:
-        '''
-        queries that models to find the count of observations prior to the 
-        timestamp of a given stream. returns the count. if there are no 
-        observations before the given timestamp, it returns 0, if it has a 
-        problem getting the data it returns None.
-        '''
-        df = getDataOfBefore(streamId, timestamp)
-        if df is None:
-            return None
-        return df.shape[0]
-    
-        # TODO NEXT:
-        #
-        # after this is done we can add the api to the protocol for asking for
-        # counts, etc.
-
-    def getDataOfBefore(
-        self,
-        streamId: StreamId,
-        timestamp: str,
-    ) -> pd.DataFrame:
-        '''
-        queries that models to find the dataframe of observations prior to the 
-        timestamp of a given stream. returns the df. if there are no 
-        observations before the given timestamp, it returns an empty dataframe,
-        if it has a problem getting the data it returns None.
-        '''
-        # TODO NEXT:
-        # loop through models and find the one that has the stream
-        # get the data of the model and
-        # filter down to index and the column that corresponds to the stream
-        # dedupe that subset dataframe
-        # subset the dataframe to only those rows prior to the timestamp
-        # return df
 
     def out(self, predictions, scores, data=True, model=None):
         ''' old functionality that must be accounted for in new design
