@@ -130,7 +130,7 @@ class DataManager:
                 ''' tell the models that listen to this stream and these targets '''
                 streamId = observation.key
                 for model in models:
-                    logging.debug('model:', model.variable == streamId,)
+                    # logging.debug('model:', model.variable == streamId,)
                     if model.variable == streamId:
                         model.variableUpdated.on_next(observation.df)
                     else:
@@ -193,7 +193,7 @@ class DataManager:
                     #           it at this time.
                 }
                 self.start.server.registerPin(pin=payload)
-                logging.debug('engine registerPin:', payload)
+                # logging.debug('engine registerPin:', payload)
 
             def pathForDataset():
                 return Disk(id=observation.key).path(aggregate=None)
