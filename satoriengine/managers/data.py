@@ -63,6 +63,8 @@ class DataManager:
         self.listeners = []
         self.newData = BehaviorSubject(None)
         self.start = start
+        self.hashes = None
+        # hashes structure needs to be: dict[streamIdHash, df[time, hash]]
 
     def importance(self, inputs: dict = None):
         inputs = inputs or {}
