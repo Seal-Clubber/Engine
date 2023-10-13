@@ -159,21 +159,6 @@ class DataManager:
                     #            (observation.source, observation.stream, update)
                     #            for update in sendUpdates]])
 
-            def compress():
-                ''' 
-                compress if the number of incrementals is high
-                could make this responsive to /get/stream/cadence if we wanted.
-                don't compress if we're currently busy with downloading the ipfs
-                compress on multiples of 100, that way everyone might compress
-                at the same time and has the same ipfs.
-                '''
-                disk = Disk(id=observation.key)
-                if len(disk.incrementals()) % 3 == 0:
-                    try:
-                        disk.compress()
-                    except Exception as e:
-                        logging.error('ERROR: unable to compress:', e)
-
             def pin(path: str = None):
                 ''' pins the data to ipfs, returns pin address '''
                 return self.start.ipfs.addAndPinDirectory(
@@ -198,12 +183,12 @@ class DataManager:
                 # logging.debug('engine registerPin:', payload)
 
             def pathForDataset():
-                return Disk(id=observation.key).path(aggregate=None)
+                return Disk(id=observation.key).path()
 
             if remember():
                 saveIncremental()
                 tellModels()
-                compress()
+                # compress()
                 path = pathForDataset()
                 report(path, pinAddress=pin(path))
 
