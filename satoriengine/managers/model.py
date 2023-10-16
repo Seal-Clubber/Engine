@@ -125,7 +125,7 @@ class ModelManager:
             # this isn't the accuracy we really care about (historic accuracy),
             # it's accuracy of this current model on historic data.
             'accuracy': f'{str(self.stableScore*100)[0:5]} %' if hasattr(self, 'stableScore') else '',
-            'errs': self.errs,
+            'errs': self.errs if hasattr(self, 'errs') else [],
             'subscribers': 'none'}
 
     def syncManifest(self):
