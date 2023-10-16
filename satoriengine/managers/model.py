@@ -231,7 +231,7 @@ class ModelManager:
             if result:
                 logging.debug(self.variable.stream, self.variable.target, 'scores:',
                               self.stableScore, self.pilotScore)
-                # maybe this should be done on broadcast? saving it to memory
+                # todo: save this to disk so we have a history
                 if not hasattr(self, 'errs'):
                     self.errs = []
                 self.errs.append(self.pilotScore)
