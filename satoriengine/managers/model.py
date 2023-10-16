@@ -125,6 +125,7 @@ class ModelManager:
             # this isn't the accuracy we really care about (historic accuracy),
             # it's accuracy of this current model on historic data.
             'accuracy': f'{str(self.stableScore*100)[0:5]} %' if hasattr(self, 'stableScore') else '',
+            'errs': self.errs,
             'subscribers': 'none'}
 
     def syncManifest(self):
@@ -230,6 +231,10 @@ class ModelManager:
             if result:
                 logging.debug(self.variable.stream, self.variable.target, 'scores:',
                               self.stableScore, self.pilotScore)
+                # maybe this should be done on broadcast? saving it to memory
+                if not hasattr(self, 'errs'):
+                    self.errs = []
+                self.errs.append(self.pilotScore)
             return result
 
         def scoreClassificationModels():

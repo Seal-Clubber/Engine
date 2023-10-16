@@ -118,6 +118,7 @@ class StableModel(StableModelInterface):
         ''' called by manager '''
         self.current = self.current.apply(
             lambda col: pd.to_numeric(col, errors='ignore'))
+        # todo: maybe this should be done on broadcast? saving it to memory
         if hasattr(self, 'prediction') and self.prediction is not None:
             if not hasattr(self, 'predictions'):
                 self.predictions = []
