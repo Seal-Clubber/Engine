@@ -107,7 +107,7 @@ class ModelManager:
     def overview(self):
         def getValues():
             try:
-                logging.debug('in overview ', self.data)
+                # logging.debug('in overview ', self.data)
                 return self.data.dropna().loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.tolist()[-20:]
             except Exception as e:
                 logging.error('error in overview', e)
@@ -119,7 +119,7 @@ class ModelManager:
             'stream': self.variable.stream,
             'target': self.variable.target,
             'value': self.stable.current.values[0][0] if hasattr(self.stable, 'current') else '',
-            'prediction': self.stable.prediction if hasattr(self.stable, 'prediction') else '',
+            'prediction': self.stable.prediction if hasattr(self.stable, 'prediction') else 'null',
             'values': getValues(),
             'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
             # this isn't the accuracy we really care about (historic accuracy),
