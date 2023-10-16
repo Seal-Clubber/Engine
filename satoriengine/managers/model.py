@@ -121,7 +121,7 @@ class ModelManager:
             'value': self.stable.current.values[0][0] if hasattr(self.stable, 'current') else '',
             'prediction': self.stable.prediction if hasattr(self.stable, 'prediction') else '',
             'values': getValues(),
-            'predictions': [.9, .8, 1, .6, .9, .5, .6, .8, 1.1],
+            'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
             # this isn't the accuracy we really care about (historic accuracy),
             # it's accuracy of this current model on historic data.
             'accuracy': f'{str(self.stableScore*100)[0:5]} %' if hasattr(self, 'stableScore') else '',

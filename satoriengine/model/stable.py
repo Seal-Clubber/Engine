@@ -118,6 +118,10 @@ class StableModel(StableModelInterface):
         ''' called by manager '''
         self.current = self.current.apply(
             lambda col: pd.to_numeric(col, errors='ignore'))
+        if hasattr(self, 'prediction') and self.prediction is not None:
+            if not hasattr(self, 'predictions'):
+                self.predictions = []
+            self.predictions.append(self.prediction)
         self.prediction = self.xgb.predict(self.current)[0]
 
     ### TRAIN ######################################################################
