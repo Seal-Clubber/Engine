@@ -174,10 +174,10 @@ class ModelManager:
         self.data = self.disk.gather(
             streamIds=self.targets,
             targetColumn=self.id)
-        logging.debug('SETTING DATA:')
-        logging.debug('self.targets', self.targets)
-        logging.debug('self.id', self.id)
-        logging.debug('self.data', self.data)
+        # logging.debug('SETTING DATA:')
+        # logging.debug('self.targets', self.targets)
+        # logging.debug('self.id', self.id)
+        # logging.debug('self.data', self.data)
         handleEmpty()
 
     ### FEATURE DATA ####################################################################
@@ -227,15 +227,10 @@ class ModelManager:
             self.pilotScore = mean_absolute_error(
                 self.pilot.testY,
                 self.pilot.xgb.predict(self.pilot.testX))
-            result = self.pilotScore < self.stableScore
-            if result:
-                logging.debug(self.variable.stream, self.variable.target, 'scores:',
-                              self.stableScore, self.pilotScore)
-                # todo: save this to disk so we have a history
-                if not hasattr(self, 'errs'):
-                    self.errs = []
-                self.errs.append(self.pilotScore)
-            return result
+            return self.pilotScore < self.stableScore
+            # if result:
+            #    logging.debug(self.variable.stream, self.variable.target, 'scores:',
+            #                  self.stableScore, self.pilotScore)
 
         def scoreClassificationModels():
             ''' 
@@ -265,13 +260,21 @@ class ModelManager:
 
         if isinstance(self.stable.xgb, XGBRegressor):
             if scoreRegressiveModels():
+                self.saveErr()
                 return replaceStableModel()
         elif isinstance(self.stable.xgb, XGBClassifier):
             if scoreClassificationModels():
+                self.saveErr()
                 return replaceStableModel()
         return False
 
     ### SAVE ###########################################################################
+
+    def saveErr(self):
+        # todo: save this to disk so we have a history
+        if not hasattr(self, 'errs'):
+            self.errs = []
+        self.errs.append(self.pilotScore)
 
     def save(self):
         ''' save the current model '''
@@ -286,9 +289,8 @@ class ModelManager:
         ''' loads the model - happens on init so we automatically load our progress '''
         xgb = self.disk.loadModel(
             # modelPath=self.modelPath,
-            streamId=self.variable,
-        )
-        logging.debug('LOADING STABLE', xgb)
+            streamId=self.variable)
+        # logging.debug('LOADING STABLE', xgb)
         if xgb == False:
             return False
         if (
@@ -305,13 +307,13 @@ class ModelManager:
 
     def runPredictor(self):
         def makePrediction(isVariable=False):
-            logging.debug('in makePrediction')
+            # logging.debug('in makePrediction')
             if isVariable and self.stable.build():
-                logging.debug('PRODUCING PREDICITON')
+                # logging.debug('PRODUCING PREDICITON')
                 self.stable.producePrediction()
                 show(
                     f'prediction - {self.variable.stream} {self.variable.target}:', self.stable.prediction)
-                logging.debug('BROADCASTING PREDICITON')
+                # logging.debug('BROADCASTING PREDICITON')
                 self.predictionUpdate.on_next(self)
             # this is a feature to be added - a second publish stream which requires a
             # different dataset - one where the latest update is taken into account.
@@ -352,7 +354,7 @@ class ModelManager:
             makePrediction()
 
         def makePredictionFromNewVariable(incremental):
-            logging.debug('in makePredictionFromNewVariable')
+            # logging.debug('in makePredictionFromNewVariable')
             for col in incremental.columns:
                 if col not in self.data.columns:
                     incremental = incremental.drop(col, axis=1)
@@ -383,7 +385,7 @@ class ModelManager:
                 this happens on occasion...
                 maybe making  self.xgbStable a deepcopy would fix
                 '''
-                logging.debug('not fitted', e)
+                # logging.debug('not fitted', e)
             # except AttributeError as e:
             #    '''
             #    this happens at the beginning of running when we have not set
@@ -392,7 +394,7 @@ class ModelManager:
             #    #logging.debug('Attribute', e)
             #    pass
             except Exception as e:
-                logging.debug('UNEXPECTED', e)
+                logging.error('UNEXPECTED', e)
         else:
             time.sleep(1)
 

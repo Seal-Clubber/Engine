@@ -18,14 +18,14 @@ class StableModel(StableModelInterface):
     ### TARGET ######################################################################
 
     def _produceTarget(self):
-        logging.debug('self.data')
-        logging.debug(self.data)
+        # logging.debug('self.data')
+        # logging.debug(self.data)
         series = self.data.loc[:, self.id].shift(-1)
-        logging.debug('series')
-        logging.debug(series)
+        # logging.debug('series')
+        # logging.debug(series)
         self.target = pd.DataFrame(series)
-        logging.debug('self.target')
-        logging.debug(self.target)
+        # logging.debug('self.target')
+        # logging.debug(self.target)
 
     ### FEATURES ####################################################################
 
@@ -39,11 +39,11 @@ class StableModel(StableModelInterface):
 
     def _produceFeatureSet(self):
         producedFeatures = []
-        logging.debug('SELF.CHOSENFEATURES', self.chosenFeatures)
+        # logging.debug('SELF.CHOSENFEATURES', self.chosenFeatures)
         for feature in self.chosenFeatures:
-            logging.debug('FEATURE', feature)
+            # logging.debug('FEATURE', feature)
             fn = self.features.get(feature)
-            logging.debug('FN', fn, callable(fn))
+            # logging.debug('FN', fn, callable(fn))
             if callable(fn):
                 producedFeatures.append(fn(self.data))
         if len(producedFeatures) > 0:
@@ -52,7 +52,7 @@ class StableModel(StableModelInterface):
                 axis=1,
                 keys=[s.name for s in producedFeatures])
         # if self.featureSet == None:
-        #    logging.debug('WE NEED A FEATURESET')
+        #    #logging.debug('WE NEED A FEATURESET')
 
     def _produceFeatureImportance(self):
         self.featureImports = {
@@ -171,7 +171,7 @@ class StableModel(StableModelInterface):
     ### MAIN PROCESSES #################################################################
 
     def build(self):
-        logging.debug('BUILD', self.data)
+        # logging.debug('BUILD', self.data)
         if self.data is not None and not self.data.empty and self.data.shape[0] > 10:
             self._produceTarget()
             self._produceFeatureStructure()
@@ -181,7 +181,7 @@ class StableModel(StableModelInterface):
             self._produceFit()
             self._produceFeatureImportance()
             self._produceFeatureData()
-            logging.debug('returning true')
+            # logging.debug('returning true')
             return True
-        logging.debug('returning False')
+        # logging.debug('returning False')
         return False
