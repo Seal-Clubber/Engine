@@ -1,5 +1,7 @@
 from typing import Optional
+import time
 import threading
+from satorilib import logging
 from satoriengine.managers.data import DataManager
 from satoriengine.managers.model import ModelManager
 from satoriengine.view import View
@@ -9,7 +11,7 @@ class Engine:
 
     def __init__(
         self,
-        start=None,
+        getStart=None,
         data: DataManager = None,
         models: set[ModelManager] = None,
         api: Optional[object] = None,
@@ -20,7 +22,8 @@ class Engine:
         model - a ModelManager for the model
         models - a list of ModelManagers
         '''
-        self.start = start
+        self.getStart = getStart
+        self.start = None
         self.data = data
         self.models = models
         self.view = view
@@ -61,6 +64,11 @@ class Engine:
             self.view.view(self.data, predictions, scores)
             # out()
         # out(data=False)
+
+    def waitForStartTobeInitialized(self):
+        while self.start == None:
+            self.start = self.getStart()
+            time.sleep(1)
 
     def run(self):
         ''' Main '''
@@ -112,21 +120,34 @@ class Engine:
             if self.view:
                 self.view.listen(model)
 
+        logging.debug('starting engine', print='magenta')
         publisher()
+        logging.debug('pubbed', print='magenta')
         subscriber()
+        logging.debug('subbed', print='magenta')
         threads = {}
         # threads['scholar'] = threading.Thread(target=scholar, daemon=True)
         for model in self.models:
+            logging.debug('model 1', print='magenta')
             # we have to run this once for each model to complete its initialization
             model.buildStable()
+            logging.debug('model 2', print='magenta')
             predictor(model)
+            logging.debug('model 3', print='magenta')
             # sync(model)
             if self.view and self.view.isReactive:
+                logging.debug('model 4', print='magenta')
                 watcher(model)
+                logging.debug('model 5', print='magenta')
+            self.waitForStartTobeInitialized()
             threads[f'{model.id}.explorer'] = threading.Thread(
                 target=explorer, args=[model], daemon=True)
+            logging.debug('model 6', print='magenta')
         for thread in threads.values():
+            logging.debug('thread 1', print='magenta')
             thread.start()
+            logging.debug('thread 2', print='magenta')
+        logging.debug('engine done', print='magenta')
 
 
 howToRun = '''

@@ -55,14 +55,15 @@ class DataManager:
     def setConfig(cls, config):
         cls.config = config
 
-    def __init__(self, start: 'StartupDag' = None):
+    def __init__(self, getStart=None):
         # {source, streams, author, target: latest incremental}
         self.targets = dict()
         # {source, stream, author, target: latest predictions}
         self.predictions = dict()
         self.listeners = []
         self.newData = BehaviorSubject(None)
-        self.start = start
+        self.getStart = getStart
+        self.start = None
         self.hashes = None
         # hashes structure needs to be: dict[streamIdHash, df[time, hash]]
 
@@ -161,15 +162,15 @@ class DataManager:
 
             def pin(path: str = None):
                 ''' pins the data to ipfs, returns pin address '''
-                return self.start.ipfs.addAndPinDirectory(
+                return self.getStart().ipfs.addAndPinDirectory(
                     path,
                     name=hash.generatePathId(streamId=observation.key))
 
             def report(path, pinAddress: str):
                 ''' report's the ipfs address to the satori server '''
-                peer = self.start.ipfs.address()
+                peer = self.getStart().ipfs.address()
                 payload = {
-                    'author': {'pubkey': self.start.wallet.publicKey},
+                    'author': {'pubkey': self.getStart().wallet.publicKey},
                     'stream': observation.key.topic(asJson=False, authorAsPubkey=True),
                     'ipfs': pinAddress,
                     'disk': system.directorySize(path),
@@ -179,7 +180,7 @@ class DataManager:
                     #           go get the values by load the dataset, not worth
                     #           it at this time.
                 }
-                self.start.server.registerPin(pin=payload)
+                self.getStart().server.registerPin(pin=payload)
                 # logging.debug('engine registerPin:', payload)
 
             def pathForDataset():
@@ -234,7 +235,7 @@ class DataManager:
 
                 def publishToSatori():
                     if self.predictions.get(model.key) != None:
-                        self.start.pubsub.publish(
+                        self.getStart().pubsub.publish(
                             # topic=model.key, # shouldn't this be model.output?
                             topic=model.output.topic(),
                             data=self.predictions.get(model.key))

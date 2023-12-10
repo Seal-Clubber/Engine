@@ -171,17 +171,25 @@ class StableModel(StableModelInterface):
     ### MAIN PROCESSES #################################################################
 
     def build(self):
-        # logging.debug('BUILD', self.data)
+        logging.debug('BUILD', self.data, print='magenta')
         if self.data is not None and not self.data.empty and self.data.shape[0] > 10:
+            logging.debug('BUILD 0', print='magenta')
             self._produceTarget()
+            logging.debug('BUILD 1', print='magenta')
             self._produceFeatureStructure()
+            logging.debug('BUILD 2', print='magenta')
             self._produceFeatureSet()
+            logging.debug('BUILD 3', print='magenta')
             self._producePredictable()
+            logging.debug('BUILD 4', print='magenta')
             self._produceTrainingSet()
+            logging.debug('BUILD 5', print='magenta')
             self._produceFit()
+            logging.debug('BUILD 6', print='magenta')
             self._produceFeatureImportance()
+            logging.debug('BUILD 7', print='magenta')
             self._produceFeatureData()
-            # logging.debug('returning true')
+            logging.debug('returning true', print='magenta')
             return True
-        # logging.debug('returning False')
+        logging.debug('returning False', print='magenta')
         return False
