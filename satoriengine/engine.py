@@ -120,34 +120,22 @@ class Engine:
             if self.view:
                 self.view.listen(model)
 
-        logging.debug('starting engine', print='magenta')
         publisher()
-        logging.debug('pubbed', print='magenta')
         subscriber()
-        logging.debug('subbed', print='magenta')
         threads = {}
         # threads['scholar'] = threading.Thread(target=scholar, daemon=True)
         for model in self.models:
-            logging.debug('model 1', print='magenta')
             # we have to run this once for each model to complete its initialization
             model.buildStable()
-            logging.debug('model 2', print='magenta')
             predictor(model)
-            logging.debug('model 3', print='magenta')
             # sync(model)
             if self.view and self.view.isReactive:
-                logging.debug('model 4', print='magenta')
                 watcher(model)
-                logging.debug('model 5', print='magenta')
             self.waitForStartTobeInitialized()
             threads[f'{model.id}.explorer'] = threading.Thread(
                 target=explorer, args=[model], daemon=True)
-            logging.debug('model 6', print='magenta')
         for thread in threads.values():
-            logging.debug('thread 1', print='magenta')
             thread.start()
-            logging.debug('thread 2', print='magenta')
-        logging.debug('engine done', print='magenta')
 
 
 howToRun = '''
