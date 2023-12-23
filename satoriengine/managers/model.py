@@ -18,7 +18,7 @@ from sklearn.metrics import mean_absolute_error
 from xgboost import XGBRegressor, XGBClassifier
 from satorilib import logging
 from satorilib.concepts import StreamId
-from satorilib.api.disk import Disk
+from satorilib.api.disk import Cached
 from satorilib.api.interfaces.model import ModelMemoryApi
 from satoriengine.concepts import HyperParameter
 from satoriengine.model.pilot import PilotModel
@@ -26,7 +26,7 @@ from satoriengine.model.stable import StableModel
 from typing import Union
 
 
-class ModelManager:
+class ModelManager(Cached):
 
     config = None
 
@@ -73,7 +73,7 @@ class ModelManager:
         self.output = output
         self.key = self.variable.id
         self.id = self.variable.id
-        self.disk = Disk()
+
         self.memory = memory
         # self.modelPath = modelPath or self.disk.defaultModelPath(self.variable)
         self.targets: list[StreamId] = targets
@@ -95,6 +95,10 @@ class ModelManager:
             exploreFeatures=exploreFeatures)
         # not even necessary right now.
         # self.syncManifest()
+
+    @property
+    def streamId(self) -> StreamId:
+        return self.variable
 
     @property
     def prediction(self):

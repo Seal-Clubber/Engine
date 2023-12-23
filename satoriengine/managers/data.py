@@ -38,16 +38,16 @@ Basic Reponsibilities of the DataManager:
 '''
 import datetime as dt
 from reactivex.subject import BehaviorSubject
-from satorilib.api.disk import Disk
 from satorilib.concepts import Observation
 from satorilib.api import hash
 from satorilib.api import system
+from satorilib.api.disk import Cached
 from satorilib import logging
 # from satoriengine.managers.model import ModelManager
 # from satoriengine.init.start import StartupDag
 
 
-class DataManager:
+class DataManager(Cached):
 
     config = None
 
@@ -127,7 +127,8 @@ class DataManager:
 
             def saveIncremental():
                 ''' save this observation to the right parquet file on disk '''
-                Disk(id=observation.key).append(observation.df.copy())
+                self.streamId = observation.key  # required by Cache
+                self.disk.append(observation.df.copy())
 
             def tellModels():
                 ''' tell the models that listen to this stream and these targets '''
