@@ -41,7 +41,7 @@ from reactivex.subject import BehaviorSubject
 from satorilib.concepts import Observation
 from satorilib.api import hash
 from satorilib.api import system
-from satorilib.api.disk import Cached
+from satorilib.api.disk import Cached, Disk
 from satorilib import logging
 # from satoriengine.managers.model import ModelManager
 # from satoriengine.init.start import StartupDag
@@ -228,7 +228,6 @@ class DataManager(Cached):
                         for k, v in self.predictions.getAll(key=model.key):
                             path = DataManager.config.root(
                                 '..', 'predictions', k[0], k[1], k[2] + '.txt')
-
                             Disk(DataManager.config).savePrediction(
                                 path=path,
                                 prediction=f'{str(dt.datetime.now())} | {k} | {v}\n',)

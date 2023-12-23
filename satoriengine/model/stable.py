@@ -18,9 +18,9 @@ class StableModel(StableModelInterface):
     ### TARGET ######################################################################
 
     def _produceTarget(self):
-        # logging.debug('self.data')
-        # logging.debug(self.data)
-        series = self.data.loc[:, self.id].shift(-1)
+        # logging.debug('self.dataset')
+        # logging.debug(self.dataset)
+        series = self.dataset.loc[:, self.id].shift(-1)
         # logging.debug('series')
         # logging.debug(series)
         self.target = pd.DataFrame(series)
@@ -34,7 +34,7 @@ class StableModel(StableModelInterface):
             **self.features,
             **{
                 metric(column=col): partial(metric, column=col)
-                for metric, col in product(self.metrics.values(), self.data.columns)}
+                for metric, col in product(self.metrics.values(), self.dataset.columns)}
         }
 
     def _produceFeatureSet(self):
@@ -45,7 +45,7 @@ class StableModel(StableModelInterface):
             fn = self.features.get(feature)
             # logging.debug('FN', fn, callable(fn))
             if callable(fn):
-                producedFeatures.append(fn(self.data))
+                producedFeatures.append(fn(self.dataset))
         if len(producedFeatures) > 0:
             self.featureSet = pd.concat(
                 producedFeatures,
@@ -109,7 +109,7 @@ class StableModel(StableModelInterface):
         if self.featureSet.shape[0] > 0:
             self.current = pd.DataFrame(
                 self.featureSet.iloc[-1, :]).T  # .dropna(axis=1)
-            # logging.debug('\nself.data\n', self.data.tail(2))
+            # logging.debug('\nself.dataset\n', self.dataset.tail(2))
             # logging.debug('\nself.featureSet\n', self.featureSet.tail(2))
             # logging.debug('\nself.current\n', self.current)
             # logging.debug('\nself.prediction\n', self.prediction)
@@ -171,7 +171,7 @@ class StableModel(StableModelInterface):
     ### MAIN PROCESSES #################################################################
 
     def build(self):
-        if self.data is not None and not self.data.empty and self.data.shape[0] > 10:
+        if self.dataset is not None and not self.dataset.empty and self.dataset.shape[0] > 10:
             self._produceTarget()
             self._produceFeatureStructure()
             self._produceFeatureSet()

@@ -111,8 +111,8 @@ class ModelManager(Cached):
     def overview(self):
         def getValues():
             try:
-                # logging.debug('in overview ', self.data)
-                return self.data.dropna().loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.tolist()[-20:]
+                # logging.debug('in overview ', self.dataset)
+                return self.dataset.dropna().loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.tolist()[-20:]
             except Exception as e:
                 logging.error('error in overview', e)
                 return []
@@ -167,21 +167,21 @@ class ModelManager(Cached):
         def handleEmpty():
             '''
             todo: what should we do if no data available yet? 
-            should self.data be None? or should it be an empty dataframe without our target columns?
+            should self.dataset be None? or should it be an empty dataframe without our target columns?
             or should it be an empty dataframe with our target columns?
             It seems like it should just be None and that we should halt behavior until it has a
             threshold amount of data.
             '''
-            self.data = self.data if self.data is not None else pd.DataFrame(
+            self.dataset = self.dataset if self.dataset is not None else pd.DataFrame(
                 {x.key: [] for x in set(self.targets)})
 
-        self.data = self.disk.gather(
+        self.dataset = self.disk.gather(
             streamIds=self.targets,
             targetColumn=self.id)
         # logging.debug('SETTING DATA:')
         # logging.debug('self.targets', self.targets)
         # logging.debug('self.id', self.id)
-        # logging.debug('self.data', self.data)
+        # logging.debug('self.dataset', self.dataset)
         handleEmpty()
 
     ### FEATURE DATA ####################################################################
@@ -351,21 +351,21 @@ class ModelManager(Cached):
             #       wants it at constant time intervals or something). so we
             #       remove duplicates here instead of in self.memory because
             #       it's really the model's perogative.
-            self.data = self.memory.dropDuplicates(
+            self.dataset = self.memory.dropDuplicates(
                 self.memory.appendInsert(
-                    df=self.data,
+                    df=self.dataset,
                     incremental=incremental))
             makePrediction()
 
         def makePredictionFromNewVariable(incremental):
             # logging.debug('in makePredictionFromNewVariable')
             for col in incremental.columns:
-                if col not in self.data.columns:
+                if col not in self.dataset.columns:
                     incremental = incremental.drop(col, axis=1)
             # incremental.columns = ModelManager.addFeatureLevel(df=incremental)
-            self.data = self.memory.dropDuplicates(
+            self.dataset = self.memory.dropDuplicates(
                 self.memory.appendInsert(
-                    df=self.data,
+                    df=self.dataset,
                     incremental=incremental))
             makePrediction(isVariable=True)
 

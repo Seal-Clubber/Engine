@@ -1,6 +1,6 @@
 ''' interface for a PilotModel '''
 
-#from satoriengine.managers.model import ModelManager
+# from satoriengine.managers.model import ModelManager
 from satoriengine.model.interfaces.stable import StableModelInterface
 
 
@@ -23,13 +23,13 @@ class PilotModelInterface():
         self.testFeatures = self.chosenFeatures
         self.scoredFeatures = {}
         self.xgb = None
-        if not self.data.empty:
+        if not self.dataset.empty:
             self._produceFeatureSet()
 
     @property
-    def data(self):
+    def dataset(self):
         ''' gets data from the model manager '''
-        return self.manager.data
+        return self.manager.dataset
 
     @property
     def id(self):

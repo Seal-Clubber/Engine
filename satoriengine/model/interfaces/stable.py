@@ -1,7 +1,7 @@
 ''' interface for a StableModel '''
 from typing import Union
 from satoriengine.concepts import HyperParameter
-#from satoriengine.managers.model import ModelManager
+# from satoriengine.managers.model import ModelManager
 
 
 class StableModelInterface:
@@ -42,13 +42,13 @@ class StableModelInterface:
         self.xgbInUse = False
         self.xgb = None
         self._produceFeatureStructure()
-        if not self.data.empty:
+        if not self.dataset.empty:
             self._produceFeatureSet()
 
     @property
-    def data(self):
+    def dataset(self):
         ''' gets data from the model manager '''
-        return self.manager.data
+        return self.manager.dataset
 
     @property
     def id(self):

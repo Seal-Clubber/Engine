@@ -24,7 +24,7 @@ class PilotModel(PilotModelInterface):
         for feature in featureNames or self.testFeatures:
             fn = self.features.get(feature)
             if callable(fn):
-                producedFeatures.append(fn(self.data))
+                producedFeatures.append(fn(self.dataset))
         if len(producedFeatures) > 0:
             self.testFeatureSet = pd.concat(
                 producedFeatures,
@@ -36,7 +36,7 @@ class PilotModel(PilotModelInterface):
         for feature in featureNames or self.testFeatures:
             fn = self.features.get(feature)
             if callable(fn):
-                producedFeatures.append(fn(self.data))
+                producedFeatures.append(fn(self.dataset))
         if len(producedFeatures) > 0:
             return pd.concat(
                 producedFeatures,
