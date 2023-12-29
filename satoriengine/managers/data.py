@@ -111,15 +111,17 @@ class DataManager(Cached):
                 object with a DataFrame if it's new returns true so process can
                 continue, if a repeat, return false
                 '''
+                logging.debug('observation.df:', observation.df, print='green')
                 if observation.key not in self.targets.keys():
                     self.targets[observation.key] = None
                 x = self.targets.get(observation.key)
                 if (
                     x is not None
-                    and x.observationId is not None
-                    and hasattr(observation, 'observationId')
-                    and observation.observationId is not None
-                    and x.observationId == observation.observationId
+                    and hasattr(x, 'observationHash')
+                    and x.observationHash is not None
+                    and hasattr(observation, 'observationHash')
+                    and observation.observationHash is not None
+                    and x.observationHash == observation.observationHash
                 ):
                     return False
                 self.targets[observation.key] = observation
@@ -128,7 +130,12 @@ class DataManager(Cached):
             def saveIncremental():
                 ''' save this observation to the right parquet file on disk '''
                 self.streamId = observation.key  # required by Cache
-                self.disk.append(observation.df.copy())
+                if isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
+                    return self.disk.append(observation.df.copy())
+                return self.disk.appendByAttributes(
+                    timestamp=observation.timestamp,
+                    value=observation.value,
+                    observationHash=observation.observationHash)
 
             def tellModels():
                 ''' tell the models that listen to this stream and these targets '''
