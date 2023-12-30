@@ -38,7 +38,7 @@ Basic Reponsibilities of the DataManager:
 '''
 import datetime as dt
 from reactivex.subject import BehaviorSubject
-from satorilib.concepts import Observation
+from satorilib.concepts import Observation, StreamId
 from satorilib.api import hash
 from satorilib.api import system
 from satorilib.api.disk import Cached, Disk
@@ -111,7 +111,6 @@ class DataManager(Cached):
                 object with a DataFrame if it's new returns true so process can
                 continue, if a repeat, return false
                 '''
-                logging.debug('observation.df:', observation.df, print='green')
                 if observation.key not in self.targets.keys():
                     self.targets[observation.key] = None
                 x = self.targets.get(observation.key)
@@ -131,11 +130,7 @@ class DataManager(Cached):
                 ''' save this observation to the right parquet file on disk '''
                 self.streamId = observation.key  # required by Cache
                 if isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
-                    logging.debug('stream:', self.streamId,
-                                  'observation.df:', observation.df, print='yellow')
                     return self.disk.append(observation.df.copy())
-                logging.debug('stream:', self.streamId,
-                              'observation:', observation.value, print='yellow')
                 return self.disk.appendByAttributes(
                     timestamp=observation.timestamp,
                     value=observation.value,
@@ -246,8 +241,6 @@ class DataManager(Cached):
 
                 def save(streamId: StreamId, data: str = None):
                     self.streamId = streamId  # required by Cache
-                    logging.debug('stream:', self.streamId,
-                                  'data:', data, print='yellow')
                     return self.disk.appendByAttributes(value=data)
 
                 def publishToSatori(
