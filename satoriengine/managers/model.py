@@ -315,8 +315,8 @@ class ModelManager(Cached):
             if isVariable and self.stable.build():
                 # logging.debug('PRODUCING PREDICITON')
                 self.stable.producePrediction()
-                show(
-                    f'prediction - {self.variable.stream} {self.variable.target}:', self.stable.prediction)
+                logging.info(
+                    f'prediction - {self.variable.stream} {self.variable.target}:', self.stable.prediction, print='yellow')
                 # logging.debug('BROADCASTING PREDICITON')
                 self.predictionUpdate.on_next(self)
             # this is a feature to be added - a second publish stream which requires a
@@ -329,8 +329,8 @@ class ModelManager(Cached):
             #    self.predictionEdgeUpdate.on_next(self)
 
         def makePredictionFromNewModel():
-            show(f'model updated - {self.variable.stream} {self.variable.target}:',
-                 f'{self.stableScore}, {self.pilotScore}')
+            logging.info(f'model updated - {self.variable.stream} {self.variable.target}:',
+                         f'{self.stableScore}, {self.pilotScore}', print='yellow')
             makePrediction()
 
         def makePredictionFromNewInputs():
@@ -418,11 +418,3 @@ class ModelManager(Cached):
 
         self.newAvailableInput.subscribe(
             lambda x: sync(x) if x is not None else None)
-
-
-# testing
-def show(name, value):
-    if isinstance(value, pd.DataFrame):
-        print(f'\n{name}\n', value.tail(2))
-    else:
-        print(f'\n{name}\n', value)
