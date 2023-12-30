@@ -131,7 +131,11 @@ class DataManager(Cached):
                 ''' save this observation to the right parquet file on disk '''
                 self.streamId = observation.key  # required by Cache
                 if isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
+                    logging.debug('stream:', self.streamId,
+                                  'observation.df:', observation.df, print='yellow')
                     return self.disk.append(observation.df.copy())
+                logging.debug('stream:', self.streamId,
+                              'observation:', observation.value, print='yellow')
                 return self.disk.appendByAttributes(
                     timestamp=observation.timestamp,
                     value=observation.value,
@@ -240,17 +244,35 @@ class DataManager(Cached):
                                 prediction=f'{str(dt.datetime.now())} | {k} | {v}\n',)
                         self.predictions[model.key] = None
 
-                def publishToSatori():
-                    if self.predictions.get(model.key) != None:
-                        self.getStart().pubsub.publish(
-                            # topic=model.key, # shouldn't this be model.output?
-                            topic=model.output.topic(),
-                            data=self.predictions.get(model.key))
+                def save(streamId: StreamId, data: str = None):
+                    self.streamId = streamId  # required by Cache
+                    logging.debug('stream:', self.streamId,
+                                  'data:', data, print='yellow')
+                    return self.disk.appendByAttributes(value=data)
 
-                if model.variable.source == 'streamr':
-                    saveToDisk()
-                if model.variable.source == 'satori':
-                    publishToSatori()
+                def publishToSatori(
+                    streamId: StreamId,
+                    data: str = None,
+                    timestamp: str = None,
+                    observationHash: str = None
+                ):
+                    self.getStart().pubsub.publish(
+                        topic=streamId.topic(),
+                        data=data,
+                        time=timestamp,
+                        observationHash=observationHash)
+
+                data = self.predictions.get(model.key)
+                if data != None and model.variable.source == 'satori':
+                    (success, timestamp, observationHash) = save(
+                        streamId=model.output,
+                        data=data)
+                    if success:
+                        publishToSatori(
+                            streamId=model.output,
+                            data=data,
+                            timestamp=timestamp,
+                            observationHash=observationHash)
 
             remember()
             post()
