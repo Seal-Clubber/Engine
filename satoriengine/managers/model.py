@@ -328,7 +328,10 @@ class ModelManager(Cached):
                 # logging.debug('PRODUCING PREDICITON')
                 self.stable.producePrediction()
                 logging.info(
-                    f'prediction - {self.variable.stream} {self.variable.target}:', self.stable.prediction, color='green')
+                    'prediction produced! '
+                    f'{self.variable.stream} {self.variable.target}:',
+                    self.stable.prediction,
+                    color='green')
                 # logging.debug('BROADCASTING PREDICITON')
                 self.predictionUpdate.on_next(self)
             # this is a feature to be added - a second publish stream which requires a
@@ -341,8 +344,11 @@ class ModelManager(Cached):
             #    self.predictionEdgeUpdate.on_next(self)
 
         def makePredictionFromNewModel():
-            logging.info(f'model updated - {self.variable.stream} {self.variable.target}:',
-                         f'{self.stableScore}, {self.pilotScore}', color='green')
+            logging.info(
+                f'model updated! {self.variable.stream} {self.variable.target}'
+                f'\n  stable score: {self.stableScore}'
+                f'\n  pilot  score: {self.pilotScore}',
+                color='green')
             makePrediction()
 
         def makePredictionFromNewInputs():
