@@ -345,7 +345,7 @@ class ModelManager(Cached):
 
         def makePredictionFromNewModel():
             logging.info(
-                f'model updated! {self.variable.stream} {self.variable.target}'
+                f'model improved! {self.variable.stream} {self.variable.target}'
                 f'\n  stable score: {self.stableScore}'
                 f'\n  pilot  score: {self.pilotScore}',
                 color='green')

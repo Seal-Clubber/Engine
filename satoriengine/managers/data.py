@@ -134,12 +134,12 @@ class DataManager(Cached):
                     return self.disk.append(observation.df.copy())
                 logging.debug(
                     'newData!saveIncremental-appendByAttributes',
-                    observation.observedTime,
+                    observation.observationTime,
                     observation.value,
                     observation.observationHash,
                     color='yellow')
                 result = self.disk.appendByAttributes(
-                    timestamp=observation.observedTime,
+                    timestamp=observation.observationTime,
                     value=observation.value,
                     observationHash=observation.observationHash)
                 logging.debug(
