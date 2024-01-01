@@ -132,6 +132,12 @@ class DataManager(Cached):
                 self.streamId = observation.key  # required by Cache
                 if hasattr(observation, 'df') and isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
                     return self.disk.append(observation.df.copy())
+                logging.debug(
+                    'newData!saveIncremental-appendByAttributes',
+                    observation.observedTime,
+                    observation.value,
+                    observation.observationHash,
+                    color='yellow')
                 return self.disk.appendByAttributes(
                     timestamp=observation.observedTime,
                     value=observation.value,
