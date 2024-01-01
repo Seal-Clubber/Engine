@@ -50,12 +50,12 @@ from satorilib import logging
 
 class DataManager(Cached):
 
-    config = None
-
-    @classmethod
-    def setConfig(cls, config):
-        cls.config = config
-
+    # config = None
+    #
+    # @classmethod
+    # def setConfig(cls, config):
+    #    cls.config = config
+    #
     def __init__(self, getStart=None):
         # {source, streams, author, target: latest incremental}
         self.targets = dict()
@@ -229,19 +229,19 @@ class DataManager(Cached):
                 (meaning, we might have to pass that connection object down to
                 this function in the first place.)
                 '''
-                def saveToDisk():
-                    if self.predictions.get(model.key) != None:
-                        # why is there a for loop here?
-                        # we should only have 1 target, and one prediction...
-                        # is this really old, from when we thought a model might
-                        # have multiple targets, to predict a whole stream?
-                        for k, v in self.predictions.getAll(key=model.key):
-                            path = DataManager.config.root(
-                                '..', 'predictions', k[0], k[1], k[2] + '.txt')
-                            Disk(DataManager.config).savePrediction(
-                                path=path,
-                                prediction=f'{str(dt.datetime.now())} | {k} | {v}\n',)
-                        self.predictions[model.key] = None
+                # def saveToDisk():
+                #    if self.predictions.get(model.key) != None:
+                #        # why is there a for loop here?
+                #        # we should only have 1 target, and one prediction...
+                #        # is this really old, from when we thought a model might
+                #        # have multiple targets, to predict a whole stream?
+                #        for k, v in self.predictions.getAll(key=model.key):
+                #            path = DataManager.config.root(
+                #                '..', 'predictions', k[0], k[1], k[2] + '.txt')
+                #            Disk(DataManager.config).savePrediction(
+                #                path=path,
+                #                prediction=f'{str(dt.datetime.now())} | {k} | {v}\n',)
+                #        self.predictions[model.key] = None
 
                 def save(streamId: StreamId, data: str = None):
                     self.streamId = streamId  # required by Cache

@@ -109,23 +109,42 @@ class ModelManager(Cached):
         self.stable.build()
 
     def overview(self):
-        def getValues():
+        def getRows():
             try:
-                return self.dataset.dropna().iloc[-20:].loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.flatten().tolist()
+                return self.dataset.dropna().iloc[-20:].loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)]
             except Exception as e:
                 logging.error('error in overview', e)
                 return []
 
-        def getPredictions():
+        def getValues(rows: pd.DataFrame):
             try:
-                df = self.diskOf(self.output).cache
+                return rows.values.flatten().tolist()
+            except Exception as e:
+                logging.error('error in overview', e)
+                return []
+
+        def getPredictions(rows: pd.DataFrame):
+            try:
+                df = self.diskOf(self.output).cache.copy()
                 if df is None or df.empty:
                     return []
-                return df.iloc[-20:].value.values.tolist()
+                # this isn't enough, we need to match predictions times
+                # return df.iloc[-20:].value.values.tolist()
+                predictions = []
+                closestTimes = []
+                df.index = pd.to_datetime(df.index)
+                rows.index = pd.to_datetime(rows.index)
+                for t in rows.index:
+                    closestTime = df.index[df.index > t].min()
+                    if pd.notna(closestTime) and closestTime not in closestTimes:
+                        closestTimes.append(closestTime)
+                        predictions.append(df.loc[closestTime, 'value'])
+                return predictions[:-1]
             except Exception as e:
                 logging.error('error in overview', e)
                 return []
 
+        rows = getRows()
         return {
             'source': self.variable.source,
             'author': self.variable.author,
@@ -133,8 +152,8 @@ class ModelManager(Cached):
             'target': self.variable.target,
             'value': self.stable.current.values[0][0] if hasattr(self.stable, 'current') else '',
             'prediction': self.stable.prediction if hasattr(self.stable, 'prediction') else 'null',
-            'values': getValues(),
-            'predictions': getPredictions(),
+            'values': getValues(rows),
+            'predictions': getPredictions(rows),
             # 'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
             # this isn't the accuracy we really care about (historic accuracy),
             # it's accuracy of this current model on historic data.
