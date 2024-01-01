@@ -121,7 +121,9 @@ class ModelManager(Cached):
             try:
                 df = self.diskOf(self.output).cache
                 logging.debug('get Predictions ', df, color='yellow')
-                return self.diskOf(self.output).cache.dropna().iloc[-20:].value.values.tolist()
+                if df is None or df.empty:
+                    return []
+                return df.iloc[-20:].value.values.tolist()
             except Exception as e:
                 logging.error('error in overview', e)
                 return []

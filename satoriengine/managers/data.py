@@ -37,6 +37,7 @@ Basic Reponsibilities of the DataManager:
 4. garbage collect stale datastreams
 '''
 import datetime as dt
+import pandas as pd
 from reactivex.subject import BehaviorSubject
 from satorilib.concepts import Observation, StreamId
 from satorilib.api import hash
@@ -129,10 +130,10 @@ class DataManager(Cached):
             def saveIncremental():
                 ''' save this observation to the right parquet file on disk '''
                 self.streamId = observation.key  # required by Cache
-                if isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
+                if hasattr(observation, 'df') and isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
                     return self.disk.append(observation.df.copy())
                 return self.disk.appendByAttributes(
-                    timestamp=observation.timestamp,
+                    timestamp=observation.observedTime,
                     value=observation.value,
                     observationHash=observation.observationHash)
 
@@ -193,12 +194,18 @@ class DataManager(Cached):
             def pathForDataset():
                 return Disk(id=observation.key).path()
 
+            logging.debug('newData!1', color='yellow')
             if remember():
+                logging.debug('newData!2', color='yellow')
                 saveIncremental()
+                logging.debug('newData!3', color='yellow')
                 tellModels()
+                logging.debug('newData!4', color='yellow')
                 # compress()
                 path = pathForDataset()
+                logging.debug('newData!5', color='yellow')
                 report(path, pinAddress=pin(path))
+                logging.debug('newData!6', color='yellow')
 
         self.listeners.append(self.newData.subscribe(
             lambda x: handleNewData(models, x) if x is not None else None))
