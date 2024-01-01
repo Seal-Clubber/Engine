@@ -111,7 +111,6 @@ class ModelManager(Cached):
     def overview(self):
         def getValues():
             try:
-                # logging.debug('in overview ', self.dataset)
                 return self.dataset.dropna().iloc[-20:].loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.flatten().tolist()
             except Exception as e:
                 logging.error('error in overview', e)
@@ -120,7 +119,6 @@ class ModelManager(Cached):
         def getPredictions():
             try:
                 df = self.diskOf(self.output).cache
-                logging.debug('get Predictions ', df, color='yellow')
                 if df is None or df.empty:
                     return []
                 return df.iloc[-20:].value.values.tolist()

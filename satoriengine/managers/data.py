@@ -132,19 +132,10 @@ class DataManager(Cached):
                 self.streamId = observation.key  # required by Cache
                 if hasattr(observation, 'df') and isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
                     return self.disk.append(observation.df.copy())
-                logging.debug(
-                    'newData!saveIncremental-appendByAttributes',
-                    observation.observationTime,
-                    observation.value,
-                    observation.observationHash,
-                    color='yellow')
                 result = self.disk.appendByAttributes(
                     timestamp=observation.observationTime,
                     value=observation.value,
                     observationHash=observation.observationHash)
-                logging.debug(
-                    'newData!saveIncremental-result', result,
-                    color='yellow')
                 return result
 
             def tellModels():
@@ -199,23 +190,19 @@ class DataManager(Cached):
                     #           it at this time.
                 }
                 self.getStart().server.registerPin(pin=payload)
-                # logging.debug('engine registerPin:', payload)
 
             def pathForDataset():
                 return Disk(id=observation.key).path()
 
-            logging.debug('newData!1', color='yellow')
             if remember():
-                logging.debug('newData!2', color='yellow')
                 saveIncremental()
-                logging.debug('newData!3', color='yellow')
                 tellModels()
-                logging.debug('newData!4', color='yellow')
                 # compress()
-                path = pathForDataset()
-                logging.debug('newData!5', color='yellow')
-                report(path, pinAddress=pin(path))
-                logging.debug('newData!6', color='yellow')
+                # path = pathForDataset()
+                # never gets to here, these never print, something fails in path
+                # logging.debug('newData!5', color='yellow')
+                # report(path, pinAddress=pin(path))
+                # logging.debug('newData!6', color='yellow')
 
         self.listeners.append(self.newData.subscribe(
             lambda x: handleNewData(models, x) if x is not None else None))
