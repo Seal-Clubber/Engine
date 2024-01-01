@@ -347,7 +347,8 @@ class ModelManager(Cached):
                 f'\n  stable score: {self.stableScore}'
                 f'\n  pilot  score: {self.pilotScore}',
                 color='green')
-            makePrediction()
+            makePrediction(isVariable=True)
+            # it's not true, but we're just going to make a new prediction anyway
 
         def makePredictionFromNewInputs():
             '''
@@ -355,7 +356,8 @@ class ModelManager(Cached):
             of gathering and merging the ipfs history data.
             '''
             self.get()
-            makePrediction()
+            makePrediction(isVariable=True)
+            # it's not true, but we're just going to make a new prediction anyway
 
         def makePredictionFromNewTarget(incremental):
             # note: on disk we remove all duplicates, but in the model, datasets
@@ -371,7 +373,8 @@ class ModelManager(Cached):
                 self.memory.appendInsert(
                     df=self.dataset,
                     incremental=incremental))
-            makePrediction()
+            makePrediction(isVariable=True)
+            # it's not true, but we're just going to make a new prediction anyway
 
         def makePredictionFromNewVariable(incremental):
             # logging.debug('in makePredictionFromNewVariable')
@@ -393,6 +396,8 @@ class ModelManager(Cached):
             lambda x: makePredictionFromNewVariable(x) if x is not None else None)
         self.targetUpdated.subscribe(
             lambda x: makePredictionFromNewTarget(x) if x is not None else None)
+        # it's not true, but we're just going to make a new prediction on startup
+        makePrediction(isVariable=True)
 
     def runExplorer(self):
         if hasattr(self.stable, 'target') and hasattr(self.stable, 'xgbStable'):
