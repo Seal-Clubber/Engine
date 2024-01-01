@@ -138,10 +138,14 @@ class DataManager(Cached):
                     observation.value,
                     observation.observationHash,
                     color='yellow')
-                return self.disk.appendByAttributes(
+                result = self.disk.appendByAttributes(
                     timestamp=observation.observedTime,
                     value=observation.value,
                     observationHash=observation.observationHash)
+                logging.debug(
+                    'newData!saveIncremental-result', result,
+                    color='yellow')
+                return result
 
             def tellModels():
                 ''' tell the models that listen to this stream and these targets '''
