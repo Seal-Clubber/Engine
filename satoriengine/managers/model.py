@@ -10,6 +10,7 @@ Basic Reponsibilities of the ModelManager:
     C. evaluate new datasets when they become available
 4. save the best model details and load them upon restart
 '''
+from typing import Union
 import time
 import pandas as pd
 from reactivex.subject import BehaviorSubject
@@ -23,7 +24,6 @@ from satorilib.api.interfaces.model import ModelMemoryApi
 from satoriengine.concepts import HyperParameter
 from satoriengine.model.pilot import PilotModel
 from satoriengine.model.stable import StableModel
-from typing import Union
 
 
 class ModelManager(Cached):
@@ -112,7 +112,16 @@ class ModelManager(Cached):
         def getValues():
             try:
                 # logging.debug('in overview ', self.dataset)
-                return self.dataset.dropna().loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.tolist()[-20:]
+                return self.dataset.dropna().iloc[-20:].loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)].values.flatten().tolist()
+            except Exception as e:
+                logging.error('error in overview', e)
+                return []
+
+        def getPredictions():
+            try:
+                df = self.diskOf(self.output).cache
+                logging.debug('get Predictions ', df, color='yellow')
+                return self.diskOf(self.output).cache.dropna().iloc[-20:].value.values.tolist()
             except Exception as e:
                 logging.error('error in overview', e)
                 return []
@@ -125,7 +134,8 @@ class ModelManager(Cached):
             'value': self.stable.current.values[0][0] if hasattr(self.stable, 'current') else '',
             'prediction': self.stable.prediction if hasattr(self.stable, 'prediction') else 'null',
             'values': getValues(),
-            'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
+            'predictions': getPredictions(),
+            # 'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
             # this isn't the accuracy we really care about (historic accuracy),
             # it's accuracy of this current model on historic data.
             'accuracy': f'{str(self.stableScore*100)[0:5]} %' if hasattr(self, 'stableScore') else '',

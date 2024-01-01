@@ -249,6 +249,9 @@ class DataManager(Cached):
                     timestamp: str = None,
                     observationHash: str = None
                 ):
+                    logging.info(
+                        'outgoing realtime prediction:',
+                        f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
                     self.getStart().pubsub.publish(
                         topic=streamId.topic(),
                         data=data,
