@@ -11,6 +11,7 @@ Basic Reponsibilities of the ModelManager:
 4. save the best model details and load them upon restart
 '''
 from typing import Union
+import traceback
 import time
 import pandas as pd
 from reactivex.subject import BehaviorSubject
@@ -113,6 +114,7 @@ class ModelManager(Cached):
             try:
                 return self.dataset.dropna().iloc[-20:].loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)]
             except Exception as e:
+                traceback.print_exc()
                 logging.error('error in overview', e)
                 return []
 
@@ -120,6 +122,7 @@ class ModelManager(Cached):
             try:
                 return rows.values.flatten().tolist()
             except Exception as e:
+                traceback.print_exc()
                 logging.error('error in overview', e)
                 return []
 
@@ -141,6 +144,7 @@ class ModelManager(Cached):
                         predictions.append(df.loc[closestTime, 'value'])
                 return predictions[:-1]
             except Exception as e:
+                traceback.print_exc()
                 logging.error('error in overview', e)
                 return []
 
