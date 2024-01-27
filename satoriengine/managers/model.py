@@ -211,10 +211,10 @@ class ModelManager(Cached):
         self.dataset = self.disk.gather(
             streamIds=self.targets,
             targetColumn=self.id)
-        # logging.debug('SETTING DATA:')
-        # logging.debug('self.targets', self.targets)
-        # logging.debug('self.id', self.id)
-        # logging.debug('self.dataset', self.dataset)
+        # logging.debug('SETTING DATA:', color='yellow')
+        # logging.debug('self.targets', self.targets, color='yellow')
+        # logging.debug('self.id', self.id, color='yellow')
+        # logging.debug('self.dataset', self.dataset, color='yellow')
         handleEmpty()
 
     ### FEATURE DATA ####################################################################
