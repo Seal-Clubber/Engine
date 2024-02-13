@@ -207,10 +207,15 @@ class ModelManager(Cached):
             '''
             self.dataset = self.dataset if self.dataset is not None else pd.DataFrame(
                 {x.key: [] for x in set(self.targets)})
-
-        self.dataset = self.disk.gather(
-            streamIds=self.targets,
-            targetColumn=self.id)
+        try:
+            self.dataset = self.disk.gather(
+                streamIds=self.targets,
+                targetColumn=self.id)
+        except Exception as e:
+            logging.warning((
+                'Error in self.disk.gather... '
+                'If this error persists there may be a problem: '), e)
+            self.dataset = None
         # logging.debug('SETTING DATA:', color='yellow')
         # logging.debug('self.targets', self.targets, color='yellow')
         # logging.debug('self.id', self.id, color='yellow')
