@@ -14,12 +14,14 @@ from typing import Union
 import traceback
 import time
 import pandas as pd
+import numpy as np
+from reactivex import merge
 from reactivex.subject import BehaviorSubject
 from sklearn.exceptions import NotFittedError
 from sklearn.metrics import mean_absolute_error
 from xgboost import XGBRegressor, XGBClassifier
 from satorilib import logging
-from satorilib.concepts import StreamId
+from satorilib.concepts import StreamId, StreamOverview
 from satorilib.api.disk import Cached
 from satorilib.api.interfaces.model import ModelMemoryApi
 from satoriengine.concepts import HyperParameter
@@ -94,6 +96,7 @@ class ModelManager(Cached):
             manager=self,
             stable=self.stable,
             exploreFeatures=exploreFeatures)
+        self.lastOverview: Union[StreamOverview, None] = None
         # not even necessary right now.
         # self.syncManifest()
 
@@ -104,6 +107,20 @@ class ModelManager(Cached):
     @property
     def prediction(self):
         ''' gets prediction from the stable model '''
+        # this should convert from np.float64, etc to float
+        if (
+            isinstance(self.stable.prediction, np.float64) or
+            isinstance(self.stable.prediction, np.float32) or
+            isinstance(self.stable.prediction, np.float16)
+        ):
+            return float(self.stable.prediction)
+        if (
+            isinstance(self.stable.prediction, np.int64) or
+            isinstance(self.stable.prediction, np.int32) or
+            isinstance(self.stable.prediction, np.int16) or
+            isinstance(self.stable.prediction, np.int8)
+        ):
+            return int(self.stable.prediction)
         return self.stable.prediction
 
     def buildStable(self):
@@ -149,21 +166,33 @@ class ModelManager(Cached):
                 return []
 
         rows = getRows()
-        return {
-            'source': self.variable.source,
-            'author': self.variable.author,
-            'stream': self.variable.stream,
-            'target': self.variable.target,
-            'value': self.stable.current.values[0][0] if hasattr(self.stable, 'current') else '',
-            'prediction': self.stable.prediction if hasattr(self.stable, 'prediction') else 'null',
-            'values': getValues(rows),
-            'predictions': getPredictions(rows),
+        self.lastOverview = StreamOverview(
+            streamId=self.variable,
+            value=self.stable.current.values[0][0] if hasattr(
+                self.stable, 'current') else '',
+            prediction=self.stable.prediction if hasattr(
+                self.stable, 'prediction') else 'null',
+            values=getValues(rows),
+            predictions=getPredictions(rows),
             # 'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
             # this isn't the accuracy we really care about (historic accuracy),
             # it's accuracy of this current model on historic data.
-            'accuracy': f'{str(self.stableScore*100)[0:5]} %' if hasattr(self, 'stableScore') else '',
-            'errs': self.errs if hasattr(self, 'errs') else [],
-            'subscribers': 'none'}
+            accuracy=f'{str(self.stableScore*100)[0:5]} %' if hasattr(
+                self, 'stableScore') else '',
+            errs=self.errs if hasattr(self, 'errs') else [],
+            subscribers='none')
+        return self.lastOverview
+
+    def miniOverview(self):
+        ''' only contains the streamId '''
+        # really small
+        # return self.lastOverview or StreamOverview(streamId=self.variable, value='')
+        return self.lastOverview or StreamOverview(
+            streamId=self.variable,
+            value=self.stable.current.values[0][0] if hasattr(
+                self.stable, 'current') else '',
+            prediction=self.stable.prediction if hasattr(
+                self.stable, 'prediction') else '',)
 
     def syncManifest(self):
         # todo: fix this to work with the data from the server
@@ -183,9 +212,12 @@ class ModelManager(Cached):
         self.variableUpdated = BehaviorSubject(None)
         self.targetUpdated = BehaviorSubject(None)
         self.inputsUpdated = BehaviorSubject(None)
-        self.predictionUpdate = BehaviorSubject(None)
-        self.predictionEdgeUpdate = BehaviorSubject(None)
         self.newAvailableInput = BehaviorSubject(None)
+        self.predictionUpdate = BehaviorSubject(None)
+        self.privatePredictionUpdate = BehaviorSubject(None)
+        self.anyPpredictionUpdate = merge(
+            self.predictionUpdate,
+            self.privatePredictionUpdate,)
 
     ### GET DATA ####################################################################
 
@@ -348,26 +380,27 @@ class ModelManager(Cached):
     ### LIFECYCLE ######################################################################
 
     def runPredictor(self):
-        def makePrediction(isVariable=False):
+        def makePrediction(isVariable=False, private=False):
+            '''
+            we make predictions on startup, so that our 'prediction' variable
+            in the model is not empty, and we can show a prediction to the user,
+            but these predictions might be using a very old model so we do not
+            actually broadcast or save these predictions to the database. that's
+            when private is True.
+            '''
             # logging.debug('in makePrediction')
+            # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
-                # logging.debug('PRODUCING PREDICITON')
                 self.stable.producePrediction()
-                logging.info(
-                    'prediction produced! '
-                    f'{self.variable.stream} {self.variable.target}:',
-                    self.stable.prediction,
-                    color='green')
-                # logging.debug('BROADCASTING PREDICITON')
-                self.predictionUpdate.on_next(self)
-            # this is a feature to be added - a second publish stream which requires a
-            # different dataset - one where the latest update is taken into account.
-            #    if self.edge:
-            #        self.predictionEdgeUpdate.on_next(self)
-            # elif self.edge:
-            #    self.stable.build()
-            #    self.predictionEdge = self.producePrediction()
-            #    self.predictionEdgeUpdate.on_next(self)
+                if private:
+                    self.privatePredictionUpdate.on_next(self)
+                else:
+                    logging.info(
+                        'prediction produced! '
+                        f'{self.output.stream} {self.variable.target}:',
+                        self.stable.prediction,
+                        color='green')
+                    self.predictionUpdate.on_next(self)
 
         def makePredictionFromNewModel():
             logging.info(
@@ -376,7 +409,6 @@ class ModelManager(Cached):
                 f'\n  pilot  score: {self.pilotScore}',
                 color='green')
             makePrediction(isVariable=True)
-            # it's not true, but we're just going to make a new prediction anyway
 
         def makePredictionFromNewInputs():
             '''
@@ -385,7 +417,6 @@ class ModelManager(Cached):
             '''
             self.get()
             makePrediction(isVariable=True)
-            # it's not true, but we're just going to make a new prediction anyway
 
         def makePredictionFromNewTarget(incremental):
             # note: on disk we remove all duplicates, but in the model, datasets
@@ -402,7 +433,6 @@ class ModelManager(Cached):
                     df=self.dataset,
                     incremental=incremental))
             makePrediction(isVariable=True)
-            # it's not true, but we're just going to make a new prediction anyway
 
         def makePredictionFromNewVariable(incremental):
             # logging.debug('in makePredictionFromNewVariable')
@@ -424,8 +454,8 @@ class ModelManager(Cached):
             lambda x: makePredictionFromNewVariable(x) if x is not None else None)
         self.targetUpdated.subscribe(
             lambda x: makePredictionFromNewTarget(x) if x is not None else None)
-        # it's not true, but we're just going to make a new prediction on startup
-        makePrediction(isVariable=True)
+        # we make a new prediction on startup, but its not trustworthy:
+        makePrediction(isVariable=True, private=True)
 
     def runExplorer(self):
         if hasattr(self.stable, 'target') and hasattr(self.stable, 'xgbStable'):

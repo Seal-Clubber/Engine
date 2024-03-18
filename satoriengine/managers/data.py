@@ -262,15 +262,15 @@ class DataManager(Cached):
                         time=timestamp,
                         observationHash=observationHash)
 
-                data = self.predictions.get(model.key)
-                if data != None and model.variable.source == 'satori':
+                # data = self.predictions.get(model.key)
+                if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
                     (success, timestamp, observationHash) = save(
                         streamId=model.output,
-                        data=data)
+                        data=model.prediction)
                     if success:
                         publishToSatori(
                             streamId=model.output,
-                            data=data,
+                            data=model.prediction,
                             timestamp=timestamp,
                             observationHash=observationHash)
 
@@ -280,7 +280,6 @@ class DataManager(Cached):
         for model in models:
             self.listeners.append(model.predictionUpdate.subscribe(
                 lambda x: publish(x) if x else None))
-        #    self.listeners.append(model.predictionEdgeUpdate.subscribe(lambda x: publishEdge(x) if x else None))
 
     def runScholar(self, models):
         '''
