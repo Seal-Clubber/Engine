@@ -171,7 +171,7 @@ class ModelManager(Cached):
             value=self.stable.current.values[0][0] if hasattr(
                 self.stable, 'current') else '',
             prediction=self.stable.prediction if hasattr(
-                self.stable, 'prediction') else 'null',
+                self.stable, 'prediction') and self.stable.prediction != None else False,
             values=getValues(rows),
             predictions=getPredictions(rows),
             # 'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
@@ -215,7 +215,7 @@ class ModelManager(Cached):
         self.newAvailableInput = BehaviorSubject(None)
         self.predictionUpdate = BehaviorSubject(None)
         self.privatePredictionUpdate = BehaviorSubject(None)
-        self.anyPpredictionUpdate = merge(
+        self.anyPredictionUpdate = merge(
             self.predictionUpdate,
             self.privatePredictionUpdate,)
 
@@ -388,7 +388,7 @@ class ModelManager(Cached):
             actually broadcast or save these predictions to the database. that's
             when private is True.
             '''
-            # logging.debug('in makePrediction')
+            logging.debug('in makePrediction', private, color="yellow")
             # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
                 self.stable.producePrediction()
