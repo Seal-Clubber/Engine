@@ -130,8 +130,12 @@ class DataManager(Cached):
             def saveIncremental():
                 ''' save this observation to the right parquet file on disk '''
                 self.streamId = observation.key  # required by Cache
-                if hasattr(observation, 'df') and isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
-                    return self.disk.append(observation.df.copy())
+                # if hasattr(observation, 'df') and isinstance(observation.df, pd.DataFrame) and observation.df.shape[0] > 1:
+                #    logging.info('remembering with append',
+                #                 observation.df, print=True)
+                #    return self.disk.append(observation.df.copy())
+                logging.info(
+                    'remembering with appendByAttributes', observation.df, print=True)
                 result = self.disk.appendByAttributes(
                     timestamp=observation.observationTime,
                     value=observation.value,
@@ -245,7 +249,7 @@ class DataManager(Cached):
 
                 def save(streamId: StreamId, data: str = None):
                     self.streamId = streamId  # required by Cache
-                    return self.disk.appendByAttributes(value=data)
+                    return self.disk.appendByAttributes(value=data, hashThis=True)
 
                 def publishToSatori(
                     streamId: StreamId,
