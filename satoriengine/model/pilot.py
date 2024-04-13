@@ -210,11 +210,14 @@ class PilotModel(PilotModelInterface):
     ### MAIN PROCESSES #################################################################
 
     def build(self):
-        self._produceFeatures()
-        self._produceFeatureSet()
-        self._produceTrainingSet()
-        self._produceHyperParameters()
-        self._produceFit()
+        if self.dataset is not None and not self.dataset.empty and self.dataset.shape[0] > 10:
+            self._produceFeatures()
+            self._produceFeatureSet()
+            self._produceTrainingSet()
+            self._produceHyperParameters()
+            self._produceFit()
+            return True
+        return False
 
 # testing
 # def show(name, value):

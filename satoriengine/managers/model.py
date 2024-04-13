@@ -388,7 +388,7 @@ class ModelManager(Cached):
             actually broadcast or save these predictions to the database. that's
             when private is True.
             '''
-            logging.debug('in makePrediction', private, color="yellow")
+            # logging.debug('in makePrediction', private, color="yellow")
             # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
                 self.stable.producePrediction()
