@@ -295,6 +295,11 @@ class ModelManager(Cached):
                 compare their MAE values directly. A model with a lower MAE is
                 generally considered to have better predictive performance
             '''
+            if (
+                not hasattr(self.pilot, 'testY') or
+                not hasattr(self.stable, 'testY')
+            ):
+                return False
             self.stableScore = mean_absolute_error(
                 self.stable.testY,
                 self.stable.xgb.predict(self.stable.testX))
@@ -314,6 +319,11 @@ class ModelManager(Cached):
             negative values indicate that the model's predictions are worse than
             simply guessing the mean of the target variable.
             '''
+            if (
+                not hasattr(self.pilot, 'testY') or
+                not hasattr(self.stable, 'testY')
+            ):
+                return False
             self.stableScore = self.stable.xgb.score(
                 self.stable.testX,
                 self.stable.testY)
