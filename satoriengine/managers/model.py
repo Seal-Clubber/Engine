@@ -398,13 +398,13 @@ class ModelManager(Cached):
             actually broadcast or save these predictions to the database. that's
             when private is True.
             '''
-            logging.debug('makePrediction', self.variable,
-                          isVariable, private, color="yellow")
+            # logging.debug('makePrediction', self.variable,
+            #              isVariable, private, color="yellow")
             # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
                 self.stable.producePrediction()
-                logging.debug('prediction produced',
-                              self.stable.prediction, color='yellow')
+                # logging.debug('prediction produced',
+                #              self.stable.prediction, color='yellow')
                 if private:
                     self.privatePredictionUpdate.on_next(self)
                 else:
@@ -448,8 +448,8 @@ class ModelManager(Cached):
             makePrediction(isVariable=True)
 
         def makePredictionFromNewVariable(incremental):
-            logging.debug('in makePredictionFromNewVariable',
-                          incremental.columns, print=True)
+            # logging.debug('in makePredictionFromNewVariable',
+            #              incremental.columns, print=True)
             for col in incremental.columns:
                 if col not in self.dataset.columns:
                     incremental = incremental.drop(col, axis=1)

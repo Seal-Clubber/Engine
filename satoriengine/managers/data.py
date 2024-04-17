@@ -140,8 +140,6 @@ class DataManager(Cached):
                 ''' tell the models that listen to this stream and these targets '''
                 streamId = observation.key
                 for model in models:
-                    logging.debug('model:', model.variable ==
-                                  streamId, print=True)
                     if model.variable == streamId:
                         model.variableUpdated.on_next(observation.df)
                     else:
