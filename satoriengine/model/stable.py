@@ -55,10 +55,42 @@ class StableModel(StableModelInterface):
         #    #logging.debug('WE NEED A FEATURESET')
 
     def _produceFeatureImportance(self):
-        self.featureImports = {
-            name: fimport
-            for fimport, name in zip(self.xgbStable.feature_importances_, self.featureSet.columns)
-        } if self.xgbStable else {}
+        try:
+            self.featureImports = {
+                name: fimport
+                for fimport, name in zip(self.xgbStable.feature_importances_, self.featureSet.columns)
+            } if self.xgbStable else {}
+        except Exception as e:
+            logging.info('race ignored in feature importance:', e)
+            self.featureImports = {}
+            # not sure how this error can happen because .fit is run before this function is called.
+            # but it only happens rarely on startup so it's a race condition and has no effect.
+            # File "/usr/local/lib/python3.9/threading.py", line 980, in _bootstrap_inner
+            #    self.run()
+            # File "/usr/local/lib/python3.9/threading.py", line 917, in run
+            #    self._target(*self._args, **self._kwargs)
+            # File "/Satori/Neuron/satorineuron/init/start.py", line 107, in start
+            #    self.buildEngine()
+            # File "/Satori/Neuron/satorineuron/init/start.py", line 240, in buildEngine
+            #    self.engine.run()
+            # File "/Satori/Engine/satoriengine/engine.py", line 130, in run
+            #    predictor(model)
+            # File "/Satori/Engine/satoriengine/engine.py", line 105, in predictor
+            #    model.runPredictor()
+            # File "/Satori/Engine/satoriengine/managers/model.py", line 472, in runPredictor
+            #    makePrediction(isVariable=True, private=True)
+            # File "/Satori/Engine/satoriengine/managers/model.py", line 404, in makePrediction
+            #    if isVariable and self.stable.build():
+            # File "/Satori/Engine/satoriengine/model/stable.py", line 181, in build
+            #    self._produceFeatureImportance()
+            # File "/Satori/Engine/satoriengine/model/stable.py", line 60, in _produceFeatureImportance
+            #    for fimport, name in zip(self.xgbStable.feature_importances_, self.featureSet.columns)
+            # File "/usr/local/lib/python3.9/site-packages/xgboost-1.7.2-py3.9-linux-x86_64.egg/xgboost/sklearn.py", line 1304, in feature_importances_
+            #    b: Booster = self.get_booster()
+            # File "/usr/local/lib/python3.9/site-packages/xgboost-1.7.2-py3.9-linux-x86_64.egg/xgboost/sklearn.py", line 649, in get_booster
+            #    raise NotFittedError("need to call fit or load_model beforehand")
+            # sklearn.exceptions.NotFittedError: need to call fit or load_model beforehand
+            # except sklearn.exceptions.NotFittedError as e:
 
     def leastValuableFeature(self):
         ''' called by pilot '''

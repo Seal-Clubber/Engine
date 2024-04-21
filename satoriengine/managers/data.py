@@ -43,6 +43,7 @@ from satorilib.concepts import Observation, StreamId
 from satorilib.api import hash
 from satorilib.api import system
 from satorilib.api.disk import Cached, Disk
+from satorilib.api.disk.cache import CachedResult
 from satorilib import logging
 # from satoriengine.managers.model import ModelManager
 # from satoriengine.init.start import StartupDag
@@ -127,14 +128,13 @@ class DataManager(Cached):
                 self.targets[observation.key] = observation
                 return True
 
-            def saveIncremental():
+            def saveIncremental() -> CachedResult:
                 ''' save this observation to the right parquet file on disk '''
                 self.streamId = observation.key  # required by Cache
-                result = self.disk.appendByAttributes(
+                return self.disk.appendByAttributes(
                     timestamp=observation.observationTime,
                     value=observation.value,
                     observationHash=observation.observationHash)
-                return result
 
             def tellModels():
                 ''' tell the models that listen to this stream and these targets '''
@@ -191,15 +191,19 @@ class DataManager(Cached):
             def pathForDataset():
                 return Disk(id=observation.key).path()
 
+            def maybeResyncWithSynergy(cachedResult: CachedResult):
+                ''' resync with the synergy server if necessary '''
+                if not cachedResult.validated:
+                    self.getStart().syncDataset(observation.key)
+
             if remember():
-                saveIncremental()
+                cachedResult = saveIncremental()
+                maybeResyncWithSynergy(cachedResult)
                 tellModels()
                 # compress()
                 # path = pathForDataset()
                 # never gets to here, these never print, something fails in path
-                # logging.debug('newData!5', color='yellow')
                 # report(path, pinAddress=pin(path))
-                # logging.debug('newData!6', color='yellow')
 
         self.listeners.append(self.newData.subscribe(
             lambda x: handleNewData(models, x) if x is not None else None))
@@ -240,7 +244,7 @@ class DataManager(Cached):
                 #                prediction=f'{str(dt.datetime.now())} | {k} | {v}\n',)
                 #        self.predictions[model.key] = None
 
-                def save(streamId: StreamId, data: str = None):
+                def save(streamId: StreamId, data: str = None) -> CachedResult:
                     self.streamId = streamId  # required by Cache
                     return self.disk.appendByAttributes(value=data, hashThis=True)
 
@@ -261,15 +265,15 @@ class DataManager(Cached):
 
                 # data = self.predictions.get(model.key)
                 if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
-                    (success, timestamp, observationHash) = save(
+                    cachedResult = save(
                         streamId=model.output,
                         data=model.prediction)
-                    if success:
+                    if cachedResult.success and cachedResult.validated:
                         publishToSatori(
                             streamId=model.output,
                             data=model.prediction,
-                            timestamp=timestamp,
-                            observationHash=observationHash)
+                            timestamp=cachedResult.time,
+                            observationHash=cachedResult.hash)
 
             remember()
             post()
