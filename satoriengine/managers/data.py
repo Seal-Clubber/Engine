@@ -138,6 +138,7 @@ class DataManager(Cached):
 
             def tellModels():
                 ''' tell the models that listen to this stream and these targets '''
+                # logging.info('telling models', print=True)
                 streamId = observation.key
                 for model in models:
                     if model.variable == streamId:
@@ -198,7 +199,10 @@ class DataManager(Cached):
 
             if remember():
                 cachedResult = saveIncremental()
-                maybeResyncWithSynergy(cachedResult)
+                try:
+                    maybeResyncWithSynergy(cachedResult)
+                except Exception as e:
+                    logging.error('unable to resync stream:', e, print=True)
                 tellModels()
                 # compress()
                 # path = pathForDataset()
