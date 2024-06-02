@@ -398,17 +398,17 @@ class ModelManager(Cached):
             actually broadcast or save these predictions to the database. that's
             when private is True.
             '''
-            #logging.debug('makePrediction', self.variable,
+            # logging.debug('makePrediction', self.variable,
             #              isVariable, private, color="yellow")
             # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
                 self.stable.producePrediction()
-                #logging.debug('prediction produced',
+                # logging.debug('prediction produced',
                 #              self.stable.prediction, color='yellow')
                 if private:
                     self.privatePredictionUpdate.on_next(self)
                 else:
-                    #logging.info(
+                    # logging.info(
                     #    'prediction produced! '
                     #    f'{self.output.stream} {self.variable.target}:',
                     #    self.stable.prediction,
@@ -441,7 +441,7 @@ class ModelManager(Cached):
             #       wants it at constant time intervals or something). so we
             #       remove duplicates here instead of in self.memory because
             #       it's really the model's perogative.
-            #logging.debug('in makePredictionFromNewVariable',
+            # logging.debug('in makePredictionFromNewVariable',
             #              incremental.columns, print=True)
             self.dataset = self.memory.dropDuplicates(
                 self.memory.appendInsert(
@@ -450,7 +450,7 @@ class ModelManager(Cached):
             makePrediction(isVariable=True)
 
         def makePredictionFromNewVariable(incremental):
-            #logging.debug('in makePredictionFromNewVariable',
+            # logging.debug('in makePredictionFromNewVariable',
             #              incremental.columns, print=True)
             for col in incremental.columns:
                 if col not in self.dataset.columns:
