@@ -59,7 +59,7 @@ class StableModel(StableModelInterface):
             self.featureImports = {
                 name: fimport
                 for fimport, name in zip(self.xgbStable.feature_importances_, self.featureSet.columns)
-            } if self.xgbStable else {}
+            } if hasattr(self, 'xgbStable') else {name: fimport for fimport, name in zip(np.ones(self.featureSet.columns.shape), self.featureSet.columns) }
         except Exception as e:
             logging.info('race ignored in feature importance:', e)
             self.featureImports = {}
@@ -183,7 +183,7 @@ class StableModel(StableModelInterface):
     def _produceFit(self):
         self.xgbInUse = True
         # if all(isinstance(y[0], (int, float)) for y in self.trainY.values):
-        self.xgb = XGBRegressor(
+        self.xgb = XGBRegressor( # comment out for Chronos
             eval_metric='mae',
             **{param.name: param.value for param in self.hyperParameters})
         # else:
@@ -197,7 +197,7 @@ class StableModel(StableModelInterface):
             eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
             verbose=False)
         # self.xgbStable = copy.deepcopy(self.xgb) ## didn't fix it.
-        self.xgbStable = self.xgb
+        self.xgbStable = self.xgb # comment out for Chronos
         self.xgbInUse = False
 
     ### MAIN PROCESSES #################################################################

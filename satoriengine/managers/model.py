@@ -28,6 +28,7 @@ from satoriengine.concepts import HyperParameter
 from satoriengine.model.pilot import PilotModel
 from satoriengine.model.stable import StableModel
 
+from satoriengine.model.chronos_adapter import ChronosAdapter
 
 class ModelManager(Cached):
 
@@ -54,13 +55,13 @@ class ModelManager(Cached):
         override: bool = False,
     ):
         '''
-        variable: the response variable - that which we are trying to predict. 
+        variable: the response variable - that which we are trying to predict.
                 Is a StreamId object which must be entirely specified.
         disk: the disk interface
         memory: the memory interface
         modelPath: the path of the model
         hyperParameters: a list of HyperParameter objects
-        metrics: a dictionary of functions that each produce a feature 
+        metrics: a dictionary of functions that each produce a feature
                 (from 1 dynamic column) example: year over year, rolling average
         features: a dictionary of functions that each take in multiple columns
                 of the raw data and ouput a feature (cols known ahead of time)
@@ -231,7 +232,7 @@ class ModelManager(Cached):
 
         def handleEmpty():
             '''
-            todo: what should we do if no data available yet? 
+            todo: what should we do if no data available yet?
             should self.dataset be None? or should it be an empty dataframe without our target columns?
             or should it be an empty dataframe with our target columns?
             It seems like it should just be None and that we should halt behavior until it has a
@@ -269,17 +270,17 @@ class ModelManager(Cached):
     ### META TRAIN ######################################################################
 
     def evaluateCandidate(self):
-        ''' 
-        model consists of the hyperParameter values and the chosenFeatures, 
+        '''
+        model consists of the hyperParameter values and the chosenFeatures,
         these are saved to disk. we also replace the model object itself.
         '''
         def scoreRegressiveModels():
             '''
-            MAE of 0: 
+            MAE of 0:
                 This would indicate a perfect model, meaning the predictions
                 perfectly match the true values. However, achieving an MAE of
                 exactly 0 is rare and often unlikely in practical scenarios.
-            Small MAE: 
+            Small MAE:
                 A smaller MAE indicates that the model's predictions are, on
                 average, closer to the true values. The closer the MAE is to 0,
                 the better the model's performance. However, what is considered
@@ -312,8 +313,8 @@ class ModelManager(Cached):
             #                  self.stableScore, self.pilotScore)
 
         def scoreClassificationModels():
-            ''' 
-            The R2 score typically ranges from -∞ to 1. 
+            '''
+            The R2 score typically ranges from -∞ to 1.
             1 indicates a perfect fit.
             0 indicates the model performs no better than randomly guessing.
             negative values indicate that the model's predictions are worse than
@@ -370,6 +371,8 @@ class ModelManager(Cached):
             chosenFeatures=self.stable.chosenFeatures)
 
     def load(self):  # -> bool:
+        # self.stable.xgb = ChronosAdapter()
+        # return True
         ''' loads the model - happens on init so we automatically load our progress '''
         xgb = self.disk.loadModel(
             # modelPath=self.modelPath,
@@ -501,8 +504,8 @@ class ModelManager(Cached):
 
         def sync(x):
             '''
-            add the new datastreams and histories to the top 
-            of the list of things to explore and evaluate 
+            add the new datastreams and histories to the top
+            of the list of things to explore and evaluate
             '''
             # something like this?
             # self.features.append(x)
