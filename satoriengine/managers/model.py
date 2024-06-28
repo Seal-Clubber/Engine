@@ -371,7 +371,7 @@ class ModelManager(Cached):
             chosenFeatures=self.stable.chosenFeatures)
 
     def load(self):  # -> bool:
-        # self.stable.xgb = ChronosAdapter()
+        # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
         # return True
         ''' loads the model - happens on init so we automatically load our progress '''
         xgb = self.disk.loadModel(
