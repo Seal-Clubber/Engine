@@ -169,7 +169,7 @@ class ModelManager(Cached):
         rows = getRows()
         self.lastOverview = StreamOverview(
             streamId=self.variable,
-            value=self.stable.current.values[0][0] if hasattr(
+            value=self.stable.current.values[-1][0] if hasattr(
                 self.stable, 'current') else '',
             prediction=self.stable.prediction if hasattr(
                 self.stable, 'prediction') and self.stable.prediction != None else False,
@@ -190,7 +190,7 @@ class ModelManager(Cached):
         # return self.lastOverview or StreamOverview(streamId=self.variable, value='')
         return self.lastOverview or StreamOverview(
             streamId=self.variable,
-            value=self.stable.current.values[0][0] if hasattr(
+            value=self.stable.current.values[-1][0] if hasattr(
                 self.stable, 'current') else '',
             prediction=self.stable.prediction if hasattr(
                 self.stable, 'prediction') else '',)

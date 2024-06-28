@@ -139,8 +139,9 @@ class StableModel(StableModelInterface):
 
     def _producePredictable(self):
         if self.featureSet.shape[0] > 0:
-            self.current = pd.DataFrame(
-                self.featureSet.iloc[-1, :]).T  # .dropna(axis=1)
+            self.current = self.featureSet[-512:]
+            # self.current = pd.DataFrame(
+            #     self.featureSet.iloc[-1, :]).T  # .dropna(axis=1)
             # logging.debug('\nself.dataset\n', self.dataset.tail(2))
             # logging.debug('\nself.featureSet\n', self.featureSet.tail(2))
             # logging.debug('\nself.current\n', self.current)
