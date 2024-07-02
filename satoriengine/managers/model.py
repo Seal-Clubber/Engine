@@ -28,7 +28,8 @@ from satoriengine.concepts import HyperParameter
 from satoriengine.model.pilot import PilotModel
 from satoriengine.model.stable import StableModel
 
-from satoriengine.model.chronos_adapter import ChronosAdapter
+# from satoriengine.model.chronos_adapter import ChronosAdapter # un-comment for Chronos
+# from satoriengine.model.ttm_adapter import TTMAdapter # un-comment for TTM
 
 class ModelManager(Cached):
 
@@ -371,7 +372,8 @@ class ModelManager(Cached):
             chosenFeatures=self.stable.chosenFeatures)
 
     def load(self):  # -> bool:
-        # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
+        # # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
+        # self.stable.xgb = TTMAdapter() # un-comment for TTM
         # return True
         ''' loads the model - happens on init so we automatically load our progress '''
         xgb = self.disk.loadModel(

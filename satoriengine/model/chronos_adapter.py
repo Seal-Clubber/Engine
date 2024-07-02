@@ -1,7 +1,7 @@
+import time
 import numpy as np
 import torch
 from chronos import ChronosPipeline
-import time
 
 class ChronosAdapter():
 
@@ -16,6 +16,7 @@ class ChronosAdapter():
             torch_dtype=torch.bfloat16,
             force_download=False,
         )
+        self.ctx_len = 512 # historical context
 
     def fit(self, trainX, trainY, eval_set, verbose):
         pass
@@ -23,8 +24,9 @@ class ChronosAdapter():
     def predict(self, current):
         data = current.values
         data = np.squeeze(data)
-        data = data[-512:] # Chronos max historical context
+        data = data[-self.ctx_len:] # Chronos max historical context
         context = torch.tensor(data)
+
         t1_start = time.perf_counter_ns()
         forecast = self.pipeline.predict(
             context,
@@ -37,8 +39,8 @@ class ChronosAdapter():
         low, median, high = np.quantile(forecast[0].numpy(), [0.1, 0.5, 0.9], axis=0)
         predictions = median
         total_time = (time.perf_counter_ns() - t1_start) / 1e9 # seconds
-        print(f"Chronos prediction time seconds: {total_time}    Historical context size: {data.shape}    Predictions: {predictions}")
 
+        print(f"Chronos prediction time seconds: {total_time}    Historical context size: {data.shape}    Predictions: {predictions}")
         return np.asarray(predictions, dtype=np.float32)
 
     # def score(self):
