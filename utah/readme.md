@@ -1,5 +1,7 @@
 goal: automated timeseries prediction ppipline creation
 
+here we can use jupyter notebooks to explore how to make these/this pipeline, focusing on xgboost to start.
+
 sklearn piplines
 extract trends, cycles, xgboost, noise
 
@@ -25,4 +27,6 @@ b) Convolutional Neural Networks
 c) LSTM
 d) Transformers
 
-here we can use jupyter notebooks to explore how to make these/this pipeline, focusing on xgboost to start.
+Not open source. This is a shared Jupyter notebook that can be downloaded and tested locally on Jupyter, without cost. If the concepts are good, we can create our own comparable version from scratch using their approach, not their source code.
+https://www.kaggle.com/code/amirrezaeian/time-series-data-analysis-using-lstm-tutorial
+
