@@ -1,3 +1,4 @@
+goal: automated timeseries prediction ppipline creation
 
 sklearn piplines
 extract trends, cycles, xgboost, noise
