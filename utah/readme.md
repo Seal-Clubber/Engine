@@ -4,6 +4,7 @@ extract trends, cycles, xgboost, noise
 
 + other kinds of pipelines (pytorch etc.)
 
+lstm
 arima (classical, linear)
 xgboost
 deep learning approaches
