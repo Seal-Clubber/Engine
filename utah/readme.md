@@ -11,6 +11,8 @@ transformsers
 
 combinations
 
+sklearn + keras (possible standarization)
+
 Major classes of time series prediction
 A. ARIMA (classical time series - linear)
 B. XGBost (or as Jerome recommends combinations of classical time series and XGBoost)
