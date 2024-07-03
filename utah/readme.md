@@ -20,3 +20,5 @@ a) Recurrent neural network (one can argue that some of the other approaches fit
 b) Convolutional Neural Networks
 c) LSTM
 d) Transformers
+
+here we can use jupyter notebooks to explore how to make these/this pipeline, focusing on xgboost to start.
