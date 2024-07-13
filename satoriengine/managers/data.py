@@ -261,10 +261,16 @@ class DataManager(Cached):
                     logging.info(
                         'outgoing realtime prediction:',
                         f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
-                    self.getStart().pubsub.publish(
+                    ## send predictions to server, not pubsub now
+                    # self.getStart().pubsub.publish(
+                    #    topic=streamId.topic(),
+                    #    data=data,
+                    #    time=timestamp,
+                    #    observationHash=observationHash)
+                    self.getStart().server.publishPrediction(
                         topic=streamId.topic(),
                         data=data,
-                        time=timestamp,
+                        observationTime=timestamp,
                         observationHash=observationHash)
 
                 # data = self.predictions.get(model.key)
