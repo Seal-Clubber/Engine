@@ -278,6 +278,8 @@ class DataManager(Cached):
                     cachedResult = save(
                         streamId=model.output,
                         data=model.prediction)
+                    print('PREDICTING', cachedResult.success,
+                          cachedResult.validated)
                     if cachedResult.success and cachedResult.validated:
                         publishToSatori(
                             streamId=model.output,
