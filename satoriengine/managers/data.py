@@ -262,12 +262,12 @@ class DataManager(Cached):
                         'outgoing realtime prediction:',
                         f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
                     # send predictions to server, not pubsub now
-                    # self.getStart().pubsub.publish(
+                    # self.getStart().publish(
                     #    topic=streamId.topic(),
                     #    data=data,
                     #    observationTime=timestamp,
                     #    observationHash=observationHash)
-                    self.getStart().server.publishPrediction(
+                    self.getStart().server.publish(
                         topic=streamId.topic(),
                         data=data,
                         observationTime=timestamp,
