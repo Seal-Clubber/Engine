@@ -265,7 +265,7 @@ class DataManager(Cached):
                     # self.getStart().pubsub.publish(
                     #    topic=streamId.topic(),
                     #    data=data,
-                    #    time=timestamp,
+                    #    observationTime=timestamp,
                     #    observationHash=observationHash)
                     self.getStart().server.publishPrediction(
                         topic=streamId.topic(),
@@ -278,9 +278,7 @@ class DataManager(Cached):
                     cachedResult = save(
                         streamId=model.output,
                         data=model.prediction)
-                    print('PREDICTING',
-                          cachedResult.validated)
-                    if cachedResult.success: #and cachedResult.validated:
+                    if cachedResult.success:  # and cachedResult.validated:
                         publishToSatori(
                             streamId=model.output,
                             data=model.prediction,
