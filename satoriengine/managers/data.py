@@ -271,7 +271,8 @@ class DataManager(Cached):
                         topic=streamId.topic(),
                         data=data,
                         observationTime=timestamp,
-                        observationHash=observationHash)
+                        observationHash=observationHash,
+                        isPrediction=True)
 
                 # data = self.predictions.get(model.key)
                 if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
