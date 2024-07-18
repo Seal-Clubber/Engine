@@ -57,7 +57,7 @@ def rollingPercentChangeMetric(
                     f'{transformation}'))
         except Exception as e:
             # don't worry too much about feature engineering right now
-            logging.error(e)
+            logging.error('engine error', e)
             feature = df[column]
             # if e == "unsupported operand type(s) for /: 'str' and 'float'":
             #    feature = (

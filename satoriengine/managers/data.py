@@ -261,18 +261,25 @@ class DataManager(Cached):
                     logging.info(
                         'outgoing realtime prediction:',
                         f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
-                    self.getStart().pubsub.publish(
+                    # send predictions to server, not pubsub now
+                    # self.getStart().publish(
+                    #    topic=streamId.topic(),
+                    #    data=data,
+                    #    observationTime=timestamp,
+                    #    observationHash=observationHash)
+                    self.getStart().server.publish(
                         topic=streamId.topic(),
                         data=data,
-                        time=timestamp,
-                        observationHash=observationHash)
+                        observationTime=timestamp,
+                        observationHash=observationHash,
+                        isPrediction=True)
 
                 # data = self.predictions.get(model.key)
                 if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
                     cachedResult = save(
                         streamId=model.output,
                         data=model.prediction)
-                    if cachedResult.success and cachedResult.validated:
+                    if cachedResult.success:  # and cachedResult.validated:
                         publishToSatori(
                             streamId=model.output,
                             data=model.prediction,
