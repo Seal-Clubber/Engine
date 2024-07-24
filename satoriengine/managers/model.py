@@ -426,7 +426,7 @@ class ModelManager(Cached):
                 f'\n  stable score: {self.stableScore}'
                 f'\n  pilot  score: {self.pilotScore}',
                 color='green')
-            makePrediction(isVariable=True)
+            makePrediction(isVariable=True, private=True)
 
         def makePredictionFromNewInputs():
             '''
