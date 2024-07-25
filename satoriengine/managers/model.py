@@ -418,6 +418,7 @@ class ModelManager(Cached):
                     #    f'{self.output.stream} {self.variable.target}:',
                     #    self.stable.prediction,
                     #    color='green')
+                    self.stable.metric_prediction = self.stable.prediction
                     self.predictionUpdate.on_next(self)
 
         def makePredictionFromNewModel():
@@ -461,6 +462,18 @@ class ModelManager(Cached):
                 if col not in self.dataset.columns:
                     incremental = incremental.drop(col, axis=1)
             # incremental.columns = ModelManager.addFeatureLevel(df=incremental)
+            if hasattr(self.stable, 'metric_prediction'):
+                incremental_np = np.float32(incremental[self.id][-1])
+                self.stable.metric_loss = np.abs(self.stable.metric_prediction - incremental_np)
+                self.stable.metric_loss_acc = 100 - self.stable.metric_loss / (incremental_np + 1e-10) * 100
+                alpha = 0.01
+                self.stable.metric_loss_ema = alpha * self.stable.metric_loss + (1 - alpha) * self.stable.metric_loss_ema if hasattr(self.stable, 'metric_loss_ema') else self.stable.metric_loss
+                self.stable.metric_loss_ema_acc = 100 - self.stable.metric_loss_ema / (incremental_np + 1e-10) * 100
+                logging.info(
+                    f'metrics for {self.variable.stream} {self.variable.target}'
+                    f'\n  loss {self.stable.metric_loss} acc {self.stable.metric_loss_acc}'
+                    f'\n  loss ema {self.stable.metric_loss_ema} acc {self.stable.metric_loss_ema_acc}',
+                    color='green')
             self.dataset = self.memory.dropDuplicates(
                 self.memory.appendInsert(
                     df=self.dataset,
