@@ -127,6 +127,14 @@ class ModelManager(Cached):
         self.stable.build()
 
     def overview(self):
+        # def fullData():
+        #    try:
+        #        return self.disk.gather(
+        #            streamIds=self.targets,
+        #            targetColumn=self.id)
+        #    except Exception as e:
+        #        return pd.DataFrame()
+
         def getRows():
             try:
                 return self.dataset.dropna().iloc[-20:].loc[:, (self.variable.source, self.variable.author, self.variable.stream, self.variable.target)]
@@ -172,6 +180,7 @@ class ModelManager(Cached):
                 self.stable, 'current') else '',
             prediction=self.stable.prediction if hasattr(
                 self.stable, 'prediction') and self.stable.prediction != None else False,
+            # dataset=fullData(),
             values=getValues(rows),
             predictions=getPredictions(rows),
             # 'predictions': self.stable.predictions if hasattr(self.stable, 'predictions') else [],
@@ -362,6 +371,8 @@ class ModelManager(Cached):
 
     def save(self):
         ''' save the current model '''
+        if self.disk is None:
+            return False
         self.disk.saveModel(
             self.stable.xgb,
             # modelPath=self.modelPath,
@@ -371,6 +382,8 @@ class ModelManager(Cached):
 
     def load(self):  # -> bool:
         ''' loads the model - happens on init so we automatically load our progress '''
+        if self.disk is None:
+            return False
         xgb = self.disk.loadModel(
             # modelPath=self.modelPath,
             streamId=self.variable)
