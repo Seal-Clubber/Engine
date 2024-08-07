@@ -253,9 +253,7 @@ class ModelManager(Cached):
                 streamIds=self.targets,
                 targetColumn=self.id)
         except Exception as e:
-            logging.warning((
-                'Error in self.disk.gather... '
-                'If this error persists there may be a problem: '), e)
+            logging.warning('Error in self.disk.gather for', self.id, e)
             self.dataset = None
         # logging.debug('SETTING DATA:', color='yellow')
         # logging.debug('self.targets', self.targets, color='yellow')
