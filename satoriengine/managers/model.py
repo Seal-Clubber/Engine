@@ -381,9 +381,6 @@ class ModelManager(Cached):
             chosenFeatures=self.stable.chosenFeatures)
 
     def load(self):  # -> bool:
-        # # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
-        # self.stable.xgb = TTMAdapter() # un-comment for TTM
-        # return True
         ''' loads the model - happens on init so we automatically load our progress '''
         if self.disk is None:
             return False
@@ -392,6 +389,11 @@ class ModelManager(Cached):
             streamId=self.variable)
         # logging.debug('LOADING STABLE', xgb)
         if xgb == False:
+            # self.stable.xgb = XGBRegressor( # comment for Chronos/TTM
+            #     eval_metric='mae',
+            #     **{param.name: param.value for param in self.stable.hyperParameters})
+            # # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
+            # # self.stable.xgb = TTMAdapter() # un-comment for TTM
             return False
         if (
             all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and

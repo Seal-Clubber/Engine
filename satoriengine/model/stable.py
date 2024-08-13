@@ -56,10 +56,11 @@ class StableModel(StableModelInterface):
 
     def _produceFeatureImportance(self):
         try:
+            feature_imports = self.xgbStable.feature_importances_ if hasattr(self, 'xgbStable') else np.ones(self.featureSet.columns.shape)
             self.featureImports = {
                 name: fimport
-                for fimport, name in zip(self.xgbStable.feature_importances_, self.featureSet.columns)
-            } if hasattr(self, 'xgbStable') else {name: fimport for fimport, name in zip(np.ones(self.featureSet.columns.shape), self.featureSet.columns) }
+                for fimport, name in zip(feature_imports, self.featureSet.columns)
+            }
         except Exception as e:
             logging.info('race ignored in feature importance:', e)
             self.featureImports = {name: fimport for fimport, name in zip(np.ones(self.featureSet.columns.shape), self.featureSet.columns) }
@@ -192,6 +193,8 @@ class StableModel(StableModelInterface):
         #    self.xgb = XGBClassifier(
         #        eval_metric='mae',
         #        **{param.name: param.value for param in self.hyperParameters})
+        # for param in self.hyperParameters:
+        #     setattr(self.xgb, param.name, param.value)
         self.xgb.fit(
             self.trainX,
             self.trainY,
