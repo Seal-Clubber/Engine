@@ -14,6 +14,7 @@ from xgboost import XGBRegressor, XGBClassifier
 
 from satoriengine.model.interfaces.pilot import PilotModelInterface
 from satoriengine.utils.impute import coerceAndFill
+from satoriengine.utils import clean
 
 
 class PilotModel(PilotModelInterface):
@@ -65,19 +66,20 @@ class PilotModel(PilotModelInterface):
         df = self.testFeatureSet.copy()
         df = df.iloc[0:-1, :]
         df = df.replace([np.inf, -np.inf], np.nan)
+        df.columns = clean.columnNames(df.columns)
         # df = df.reset_index(drop=True)
-        df = coerceAndFill(df)
-        # df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
+        # df = coerceAndFill(df)
+        df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
         self.trainX, self.testX, self.trainY, self.testY = train_test_split(
             df, self.target.iloc[0:df.shape[0], :], test_size=self.split or 0.2, shuffle=False)
-        # self.trainX = self.trainX.apply(
-        #    lambda col: pd.to_numeric(col, errors='coerce'))
-        # self.testX = self.testX.apply(
-        #    lambda col: pd.to_numeric(col, errors='coerce'))
-        # self.trainY = self.trainY.apply(
-        #    lambda col: pd.to_numeric(col, errors='coerce'))
-        # self.testY = self.testY.apply(
-        #    lambda col: pd.to_numeric(col, errors='coerce'))
+        self.trainX = self.trainX.apply(
+            lambda col: pd.to_numeric(col, errors='coerce'))
+        self.testX = self.testX.apply(
+            lambda col: pd.to_numeric(col, errors='coerce'))
+        self.trainY = self.trainY.apply(
+            lambda col: pd.to_numeric(col, errors='coerce'))
+        self.testY = self.testY.apply(
+            lambda col: pd.to_numeric(col, errors='coerce'))
         self.trainY = self.trainY.astype(
             self.trainX[self.trainX.columns[self.trainX.columns.isin(self.trainY.columns)]].dtypes)
         self.testY = self.testY.astype(
@@ -97,7 +99,6 @@ class PilotModel(PilotModelInterface):
             self.trainX,
             self.trainY,
             eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
-            missing=np.nan,
             verbose=False)
 
     ### META TRAIN ######################################################################

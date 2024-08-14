@@ -11,6 +11,8 @@ from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor, XGBClassifier
 from satorilib import logging
 from satoriengine.model.interfaces.stable import StableModelInterface
+from satoriengine.utils.impute import coerceAndFill
+from satoriengine.utils import clean
 
 
 class StableModel(StableModelInterface):
@@ -150,13 +152,15 @@ class StableModel(StableModelInterface):
         ''' called by manager '''
         self.current = self.current.apply(
             lambda col: pd.to_numeric(col, errors='ignore'))
+        df = self.current.copy()
+        df.columns = clean.columnNames(df.columns)
         # todo: maybe this should be done on broadcast? saving it to memory
         #       and we should save this to disk so we have a history
         if hasattr(self, 'prediction') and self.prediction is not None:
             if not hasattr(self, 'predictions'):
                 self.predictions = []
             self.predictions.append(self.prediction)
-        self.prediction = self.xgb.predict(self.current)[0]
+        self.prediction = self.xgb.predict(df)[0]
 
     ### TRAIN ######################################################################
 
@@ -164,17 +168,20 @@ class StableModel(StableModelInterface):
         df = self.featureSet.copy()
         df = df.iloc[0:-1, :]
         df = df.replace([np.inf, -np.inf], np.nan)
+        df.columns = clean.columnNames(df.columns)
         # df = df.reset_index(drop=True) # why?
+        # df = coerceAndFill(df)
+        df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
         self.trainX, self.testX, self.trainY, self.testY = train_test_split(
             df, self.target.iloc[0:df.shape[0], :], test_size=self.split or 0.2, shuffle=False)
         self.trainX = self.trainX.apply(
-            lambda col: pd.to_numeric(col, errors='ignore'))
+            lambda col: pd.to_numeric(col, errors='coerce'))
         self.testX = self.testX.apply(
-            lambda col: pd.to_numeric(col, errors='ignore'))
+            lambda col: pd.to_numeric(col, errors='coerce'))
         self.trainY = self.trainY.apply(
-            lambda col: pd.to_numeric(col, errors='ignore'))
+            lambda col: pd.to_numeric(col, errors='coerce'))
         self.testY = self.testY.apply(
-            lambda col: pd.to_numeric(col, errors='ignore'))
+            lambda col: pd.to_numeric(col, errors='coerce'))
         self.trainY = self.trainY.astype(
             self.trainX[self.trainX.columns[self.trainX.columns.isin(self.trainY.columns)]].dtypes)
         self.testY = self.testY.astype(
