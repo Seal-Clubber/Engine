@@ -28,6 +28,8 @@ from satoriengine.concepts import HyperParameter
 from satoriengine.model.pilot import PilotModel
 from satoriengine.model.stable import StableModel
 
+# from satoriengine.model.chronos_adapter import ChronosAdapter # un-comment for Chronos
+# from satoriengine.model.ttm_adapter import TTMAdapter # un-comment for TTM
 
 class ModelManager(Cached):
 
@@ -54,13 +56,13 @@ class ModelManager(Cached):
         override: bool = False,
     ):
         '''
-        variable: the response variable - that which we are trying to predict. 
+        variable: the response variable - that which we are trying to predict.
                 Is a StreamId object which must be entirely specified.
         disk: the disk interface
         memory: the memory interface
         modelPath: the path of the model
         hyperParameters: a list of HyperParameter objects
-        metrics: a dictionary of functions that each produce a feature 
+        metrics: a dictionary of functions that each produce a feature
                 (from 1 dynamic column) example: year over year, rolling average
         features: a dictionary of functions that each take in multiple columns
                 of the raw data and ouput a feature (cols known ahead of time)
@@ -176,7 +178,7 @@ class ModelManager(Cached):
         rows = getRows()
         self.lastOverview = StreamOverview(
             streamId=self.variable,
-            value=self.stable.current.values[0][0] if hasattr(
+            value=self.stable.current.values[-1][0] if hasattr(
                 self.stable, 'current') else '',
             prediction=self.stable.prediction if hasattr(
                 self.stable, 'prediction') and self.stable.prediction != None else False,
@@ -198,7 +200,7 @@ class ModelManager(Cached):
         # return self.lastOverview or StreamOverview(streamId=self.variable, value='')
         return self.lastOverview or StreamOverview(
             streamId=self.variable,
-            value=self.stable.current.values[0][0] if hasattr(
+            value=self.stable.current.values[-1][0] if hasattr(
                 self.stable, 'current') else '',
             prediction=self.stable.prediction if hasattr(
                 self.stable, 'prediction') else '',)
@@ -240,7 +242,7 @@ class ModelManager(Cached):
 
         def handleEmpty():
             '''
-            todo: what should we do if no data available yet? 
+            todo: what should we do if no data available yet?
             should self.dataset be None? or should it be an empty dataframe without our target columns?
             or should it be an empty dataframe with our target columns?
             It seems like it should just be None and that we should halt behavior until it has a
@@ -276,17 +278,17 @@ class ModelManager(Cached):
     ### META TRAIN ######################################################################
 
     def evaluateCandidate(self):
-        ''' 
-        model consists of the hyperParameter values and the chosenFeatures, 
+        '''
+        model consists of the hyperParameter values and the chosenFeatures,
         these are saved to disk. we also replace the model object itself.
         '''
         def scoreRegressiveModels():
             '''
-            MAE of 0: 
+            MAE of 0:
                 This would indicate a perfect model, meaning the predictions
                 perfectly match the true values. However, achieving an MAE of
                 exactly 0 is rare and often unlikely in practical scenarios.
-            Small MAE: 
+            Small MAE:
                 A smaller MAE indicates that the model's predictions are, on
                 average, closer to the true values. The closer the MAE is to 0,
                 the better the model's performance. However, what is considered
@@ -319,8 +321,8 @@ class ModelManager(Cached):
             #                  self.stableScore, self.pilotScore)
 
         def scoreClassificationModels():
-            ''' 
-            The R2 score typically ranges from -∞ to 1. 
+            '''
+            The R2 score typically ranges from -∞ to 1.
             1 indicates a perfect fit.
             0 indicates the model performs no better than randomly guessing.
             negative values indicate that the model's predictions are worse than
@@ -387,6 +389,11 @@ class ModelManager(Cached):
             streamId=self.variable)
         # logging.debug('LOADING STABLE', xgb)
         if xgb == False:
+            # self.stable.xgb = XGBRegressor( # comment for Chronos/TTM
+            #     eval_metric='mae',
+            #     **{param.name: param.value for param in self.stable.hyperParameters})
+            # # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
+            # # self.stable.xgb = TTMAdapter() # un-comment for TTM
             return False
         if (
             all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and
@@ -424,6 +431,7 @@ class ModelManager(Cached):
                     #    f'{self.output.stream} {self.variable.target}:',
                     #    self.stable.prediction,
                     #    color='green')
+                    self.stable.metric_prediction = self.stable.prediction
                     self.predictionUpdate.on_next(self)
 
         def makePredictionFromNewModel():
@@ -467,6 +475,18 @@ class ModelManager(Cached):
                 if col not in self.dataset.columns:
                     incremental = incremental.drop(col, axis=1)
             # incremental.columns = ModelManager.addFeatureLevel(df=incremental)
+            if hasattr(self.stable, 'metric_prediction'):
+                incremental_np = np.float32(incremental[self.id][-1])
+                self.stable.metric_loss = np.abs(self.stable.metric_prediction - incremental_np)
+                self.stable.metric_loss_acc = 100 - self.stable.metric_loss / (incremental_np + 1e-10) * 100
+                alpha = 0.01
+                self.stable.metric_loss_ema = alpha * self.stable.metric_loss + (1 - alpha) * self.stable.metric_loss_ema if hasattr(self.stable, 'metric_loss_ema') else self.stable.metric_loss
+                self.stable.metric_loss_ema_acc = 100 - self.stable.metric_loss_ema / (incremental_np + 1e-10) * 100
+                logging.info(
+                    f'metrics for {self.variable.stream} {self.variable.target}'
+                    f'\n  loss {self.stable.metric_loss} acc {self.stable.metric_loss_acc}'
+                    f'\n  loss ema {self.stable.metric_loss_ema} acc {self.stable.metric_loss_ema_acc}',
+                    color='green')
             self.dataset = self.memory.dropDuplicates(
                 self.memory.appendInsert(
                     df=self.dataset,
@@ -512,8 +532,8 @@ class ModelManager(Cached):
 
         def sync(x):
             '''
-            add the new datastreams and histories to the top 
-            of the list of things to explore and evaluate 
+            add the new datastreams and histories to the top
+            of the list of things to explore and evaluate
             '''
             # something like this?
             # self.features.append(x)
