@@ -58,14 +58,16 @@ class StableModel(StableModelInterface):
 
     def _produceFeatureImportance(self):
         try:
-            feature_imports = self.xgbStable.feature_importances_ if hasattr(self, 'xgbStable') else np.ones(self.featureSet.columns.shape)
+            feature_imports = self.xgbStable.feature_importances_ if hasattr(
+                self, 'xgbStable') else np.ones(self.featureSet.columns.shape)
             self.featureImports = {
                 name: fimport
                 for fimport, name in zip(feature_imports, self.featureSet.columns)
             }
         except Exception as e:
             logging.info('race ignored in feature importance:', e)
-            self.featureImports = {name: fimport for fimport, name in zip(np.ones(self.featureSet.columns.shape), self.featureSet.columns) }
+            self.featureImports = {name: fimport for fimport, name in zip(
+                np.ones(self.featureSet.columns.shape), self.featureSet.columns)}
             # not sure how this error can happen because .fit is run before this function is called.
             # but it only happens rarely on startup so it's a race condition and has no effect.
             # File "/usr/local/lib/python3.9/threading.py", line 980, in _bootstrap_inner
@@ -142,7 +144,7 @@ class StableModel(StableModelInterface):
 
     def _producePredictable(self):
         if self.featureSet.shape[0] > 0:
-            self.current = self.featureSet[-512:]
+            self.current = self.featureSet[-1:]
             # self.current = pd.DataFrame(
             #     self.featureSet.iloc[-1, :]).T  # .dropna(axis=1)
             # logging.debug('\nself.dataset\n', self.dataset.tail(2))
@@ -192,7 +194,7 @@ class StableModel(StableModelInterface):
     def _produceFit(self):
         self.xgbInUse = True
         # if all(isinstance(y[0], (int, float)) for y in self.trainY.values):
-        self.xgb = XGBRegressor( # comment for Chronos/TTM
+        self.xgb = XGBRegressor(  # comment for Chronos/TTM
             eval_metric='mae',
             **{param.name: param.value for param in self.hyperParameters})
         # else:
@@ -208,7 +210,7 @@ class StableModel(StableModelInterface):
             eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
             verbose=False)
         # self.xgbStable = copy.deepcopy(self.xgb) ## didn't fix it.
-        self.xgbStable = self.xgb # comment for Chronos/TTM
+        self.xgbStable = self.xgb  # comment for Chronos/TTM
         self.xgbInUse = False
 
     ### MAIN PROCESSES #################################################################
