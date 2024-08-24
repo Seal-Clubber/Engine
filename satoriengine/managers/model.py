@@ -13,6 +13,7 @@ Basic Reponsibilities of the ModelManager:
 from typing import Union
 import traceback
 import time
+import copy
 import pandas as pd
 import numpy as np
 from reactivex import merge
@@ -347,7 +348,7 @@ class ModelManager(Cached):
                 param.value = param.test
             self.stable.chosenFeatures = self.pilot.testFeatures
             self.stable.featureSet = self.pilot.testFeatureSet
-            self.stable.xgb = self.pilot.xgb
+            self.stable.xgb = copy.deepcopy(self.pilot.xgb)
             self.save()
             return True
 
@@ -388,12 +389,12 @@ class ModelManager(Cached):
             # modelPath=self.modelPath,
             streamId=self.variable)
         # logging.debug('LOADING STABLE', xgb)
-        if xgb == False:
-            # self.stable.xgb = XGBRegressor( # comment for Chronos/TTM
-            #     eval_metric='mae',
-            #     **{param.name: param.value for param in self.stable.hyperParameters})
-            # # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
-            # # self.stable.xgb = TTMAdapter() # un-comment for TTM
+        if xgb is None or xgb == False:
+            self.stable.xgb = XGBRegressor( # comment for Chronos/TTM
+                eval_metric='mae',
+                **{param.name: param.value for param in self.stable.hyperParameters})
+            # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
+            # self.stable.xgb = TTMAdapter() # un-comment for TTM
             return False
         if (
             all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and
@@ -525,6 +526,7 @@ class ModelManager(Cached):
             #    pass
             except Exception as e:
                 logging.error('UNEXPECTED', e)
+            time.sleep(1)
         else:
             time.sleep(1)
 
