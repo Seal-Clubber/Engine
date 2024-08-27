@@ -48,6 +48,7 @@ class ModelManager(Cached):
         targets: list[StreamId] = None,
         memory: ModelMemoryApi = None,
         modelPath: str = None,
+        xgbParams: list = [],
         hyperParameters: list[HyperParameter] = None,
         metrics: dict = None,
         features: dict = None,
@@ -86,6 +87,7 @@ class ModelManager(Cached):
         self.targets: list[StreamId] = targets
         self.setupFlags()
         self.get()
+        self.xgbParams = xgbParams
         self.stable = StableModel(
             manager=self,
             hyperParameters=hyperParameters or [],
@@ -393,7 +395,7 @@ class ModelManager(Cached):
         if xgb is None or xgb == False:
             self.stable.xgb = XGBRegressor( # comment for Chronos/TTM
                 eval_metric='mae',
-                **{param.name: param.value for param in self.stable.hyperParameters})
+                **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
             # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
             # self.stable.xgb = TTMAdapter() # un-comment for TTM
             return False
@@ -403,7 +405,8 @@ class ModelManager(Cached):
             True
         ):
             self.stable.xgb = xgb
-            self.stable.hyperParameters = xgb.savedHyperParameters
+            self.stable.hyperParameters = [next((param2 for param2 in xgb.savedHyperParameters if param2.name==param.name), param)
+                                           for param in self.stable.hyperParameters]
             self.stable.chosenFeatures = xgb.savedChosenFeatures
         return True
 
@@ -437,11 +440,12 @@ class ModelManager(Cached):
                     self.predictionUpdate.on_next(self)
 
         def makePredictionFromNewModel():
-            # logging.info(
-            #    f'model improved! {self.variable.stream} {self.variable.target}'
-            #    f'\n  stable score: {self.stableScore}'
-            #    f'\n  pilot  score: {self.pilotScore}',
-            #    color='green')
+            logging.info(
+                f'model improved! {self.variable.stream} {self.variable.target}'
+                f'\n  stable score: {self.stableScore}'
+                f'\n  pilot  score: {self.pilotScore}'
+                "\n  parameters: {}".format({param.name:param.value for param in self.stable.hyperParameters}),
+                color='green')
             makePrediction(isVariable=True, private=True)
 
         def makePredictionFromNewInputs():
@@ -479,17 +483,14 @@ class ModelManager(Cached):
             # incremental.columns = ModelManager.addFeatureLevel(df=incremental)
             if hasattr(self.stable, 'metric_prediction'):
                 incremental_np = np.float32(incremental[self.id][-1])
-                self.stable.metric_loss = np.abs(
-                    self.stable.metric_prediction - incremental_np)
-                self.stable.metric_loss_acc = 100 - \
-                    self.stable.metric_loss / (incremental_np + 1e-10) * 100
+                self.stable.metric_loss = np.abs(self.stable.metric_prediction - incremental_np)
+                self.stable.metric_loss_acc = 100 - self.stable.metric_loss / (incremental_np + 1e-10) * 100
                 alpha = 0.01
-                self.stable.metric_loss_ema = alpha * self.stable.metric_loss + \
-                    (1 - alpha) * self.stable.metric_loss_ema if hasattr(self.stable,
-                                                                         'metric_loss_ema') else self.stable.metric_loss
-                self.stable.metric_loss_ema_acc = 100 - \
-                    self.stable.metric_loss_ema / \
-                    (incremental_np + 1e-10) * 100
+                if hasattr(self.stable, 'metric_loss_ema'):
+                    self.stable.metric_loss_ema = alpha * self.stable.metric_loss + (1 - alpha) * self.stable.metric_loss_ema
+                else:
+                    self.stable.metric_loss_ema = self.stable.metric_loss
+                self.stable.metric_loss_ema_acc = 100 - self.stable.metric_loss_ema / (incremental_np + 1e-10) * 100
                 logging.info(
                     f'metrics for {self.variable.stream} {self.variable.target}'
                     f'\n  loss {self.stable.metric_loss} acc {self.stable.metric_loss_acc}'

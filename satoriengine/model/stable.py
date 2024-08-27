@@ -144,7 +144,20 @@ class StableModel(StableModelInterface):
 
     def _producePredictable(self):
         if self.featureSet.shape[0] > 0:
-            self.current = self.featureSet[-1:]
+            df = self.featureSet.copy()
+            df = df.iloc[0:-1, :]
+            df = df.replace([np.inf, -np.inf], np.nan)
+            df.columns = clean.columnNames(df.columns)
+            # df = df.reset_index(drop=True) # why?
+            # df = coerceAndFill(df)
+            df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
+
+            lookback_len = next((param.value for param in self.hyperParameters if param.name=='lookback_len'), 1)
+            data = df.to_numpy(dtype=np.float64).flatten()
+            data = data[-lookback_len:]
+            if data.shape[0] < lookback_len:
+                data = np.pad(data, (lookback_len - data.shape[0], 0), mode='constant', constant_values=0.0)
+            self.current = pd.DataFrame([data])
             # self.current = pd.DataFrame(
             #     self.featureSet.iloc[-1, :]).T  # .dropna(axis=1)
             # logging.debug('\nself.dataset\n', self.dataset.tail(2))
@@ -154,10 +167,10 @@ class StableModel(StableModelInterface):
 
     def producePrediction(self):
         ''' called by manager '''
-        self.current = self.current.apply(
-            lambda col: pd.to_numeric(col, errors='ignore'))
+        # self.current = self.current.apply(
+        #     lambda col: pd.to_numeric(col, errors='ignore'))
         df = self.current.copy()
-        df.columns = clean.columnNames(df.columns)
+        # df.columns = clean.columnNames(df.columns)
         # todo: maybe this should be done on broadcast? saving it to memory
         #       and we should save this to disk so we have a history
         if hasattr(self, 'prediction') and self.prediction is not None:
@@ -176,20 +189,31 @@ class StableModel(StableModelInterface):
         # df = df.reset_index(drop=True) # why?
         # df = coerceAndFill(df)
         df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
+
+        lookback_len = next((param.value for param in self.hyperParameters if param.name=='lookback_len'), 1)
+        data = df.to_numpy(dtype=np.float64).flatten()
+        data = np.concatenate([np.zeros((lookback_len,), dtype=data.dtype), data])
+        data = [data[i-lookback_len:i] for i in range(lookback_len, data.shape[0])]
+        df = pd.DataFrame(data)
+
+        df_target = self.target.iloc[0:df.shape[0], :]
+        data = df_target.to_numpy(dtype=np.float64).flatten()
+        df_target = pd.DataFrame(data)
+
         self.trainX, self.testX, self.trainY, self.testY = train_test_split(
-            df, self.target.iloc[0:df.shape[0], :], test_size=self.split or 0.2, shuffle=False)
-        self.trainX = self.trainX.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.testX = self.testX.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.trainY = self.trainY.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.testY = self.testY.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.trainY = self.trainY.astype(
-            self.trainX[self.trainX.columns[self.trainX.columns.isin(self.trainY.columns)]].dtypes)
-        self.testY = self.testY.astype(
-            self.testX[self.testX.columns[self.testX.columns.isin(self.testY.columns)]].dtypes)
+            df, df_target, test_size=self.split or 0.2, shuffle=False)
+        # self.trainX = self.trainX.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.testX = self.testX.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.trainY = self.trainY.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.testY = self.testY.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.trainY = self.trainY.astype(
+        #     self.trainX[self.trainX.columns[self.trainX.columns.isin(self.trainY.columns)]].dtypes)
+        # self.testY = self.testY.astype(
+        #     self.testX[self.testX.columns[self.testX.columns.isin(self.testY.columns)]].dtypes)
 
     def _produceFit(self):
         self.xgbInUse = True

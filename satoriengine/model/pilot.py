@@ -70,26 +70,37 @@ class PilotModel(PilotModelInterface):
         # df = df.reset_index(drop=True)
         # df = coerceAndFill(df)
         df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
+
+        lookback_len = next((param.test for param in self.hyperParameters if param.name=='lookback_len'), 1)
+        data = df.to_numpy(dtype=np.float64).flatten()
+        data = np.concatenate([np.zeros((lookback_len,), dtype=data.dtype), data])
+        data = [data[i-lookback_len:i] for i in range(lookback_len, data.shape[0])]
+        df = pd.DataFrame(data)
+
+        df_target = self.target.iloc[0:df.shape[0], :]
+        data = df_target.to_numpy(dtype=np.float64).flatten()
+        df_target = pd.DataFrame(data)
+
         self.trainX, self.testX, self.trainY, self.testY = train_test_split(
-            df, self.target.iloc[0:df.shape[0], :], test_size=self.split or 0.2, shuffle=False)
-        self.trainX = self.trainX.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.testX = self.testX.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.trainY = self.trainY.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.testY = self.testY.apply(
-            lambda col: pd.to_numeric(col, errors='coerce'))
-        self.trainY = self.trainY.astype(
-            self.trainX[self.trainX.columns[self.trainX.columns.isin(self.trainY.columns)]].dtypes)
-        self.testY = self.testY.astype(
-            self.testX[self.testX.columns[self.testX.columns.isin(self.testY.columns)]].dtypes)
+            df, df_target, test_size=self.split or 0.2, shuffle=False)
+        # self.trainX = self.trainX.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.testX = self.testX.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.trainY = self.trainY.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.testY = self.testY.apply(
+        #     lambda col: pd.to_numeric(col, errors='coerce'))
+        # self.trainY = self.trainY.astype(
+        #     self.trainX[self.trainX.columns[self.trainX.columns.isin(self.trainY.columns)]].dtypes)
+        # self.testY = self.testY.astype(
+        #     self.testX[self.testX.columns[self.testX.columns.isin(self.testY.columns)]].dtypes)
 
     def _produceFit(self):
         # if all(isinstance(y[0], (int, float)) for y in self.trainY.values):
         self.xgb = XGBRegressor(
             eval_metric='mae',
-            **{param.name: param.test for param in self.hyperParameters})
+            **{param.name: param.test for param in self.hyperParameters if param.name in self.manager.xgbParams})
         # else:
         #    # todo: Classifier untested
         #    self.xgb = XGBClassifier(
@@ -215,10 +226,10 @@ class PilotModel(PilotModelInterface):
 
     def build(self):
         if self.dataset is not None and not self.dataset.empty and self.dataset.shape[0] > 10:
+            self._produceHyperParameters()
             self._produceFeatures()
             self._produceFeatureSet()
             self._produceTrainingSet()
-            self._produceHyperParameters()
             self._produceFit()
             return True
         return False
