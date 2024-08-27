@@ -31,6 +31,7 @@ from satoriengine.model.stable import StableModel
 # from satoriengine.model.chronos_adapter import ChronosAdapter # un-comment for Chronos
 # from satoriengine.model.ttm_adapter import TTMAdapter # un-comment for TTM
 
+
 class ModelManager(Cached):
 
     config = None
@@ -416,21 +417,21 @@ class ModelManager(Cached):
             actually broadcast or save these predictions to the database. that's
             when private is True.
             '''
-            # logging.debug('makePrediction', self.variable,
-            #              isVariable, private, color="yellow")
+            logging.debug('makePrediction', self.variable,
+                          isVariable, private, color="yellow")
             # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
                 self.stable.producePrediction()
-                # logging.debug('prediction produced',
-                #              self.stable.prediction, color='yellow')
+                logging.debug('prediction produced',
+                              self.stable.prediction, color='yellow')
                 if private:
                     self.privatePredictionUpdate.on_next(self)
                 else:
-                    # logging.info(
-                    #    'prediction produced! '
-                    #    f'{self.output.stream} {self.variable.target}:',
-                    #    self.stable.prediction,
-                    #    color='green')
+                    logging.info(
+                        'prediction produced! '
+                        f'{self.output.stream} {self.variable.target}:',
+                        self.stable.prediction,
+                        color='green')
                     self.stable.metric_prediction = self.stable.prediction
                     self.predictionUpdate.on_next(self)
 
@@ -477,11 +478,17 @@ class ModelManager(Cached):
             # incremental.columns = ModelManager.addFeatureLevel(df=incremental)
             if hasattr(self.stable, 'metric_prediction'):
                 incremental_np = np.float32(incremental[self.id][-1])
-                self.stable.metric_loss = np.abs(self.stable.metric_prediction - incremental_np)
-                self.stable.metric_loss_acc = 100 - self.stable.metric_loss / (incremental_np + 1e-10) * 100
+                self.stable.metric_loss = np.abs(
+                    self.stable.metric_prediction - incremental_np)
+                self.stable.metric_loss_acc = 100 - \
+                    self.stable.metric_loss / (incremental_np + 1e-10) * 100
                 alpha = 0.01
-                self.stable.metric_loss_ema = alpha * self.stable.metric_loss + (1 - alpha) * self.stable.metric_loss_ema if hasattr(self.stable, 'metric_loss_ema') else self.stable.metric_loss
-                self.stable.metric_loss_ema_acc = 100 - self.stable.metric_loss_ema / (incremental_np + 1e-10) * 100
+                self.stable.metric_loss_ema = alpha * self.stable.metric_loss + \
+                    (1 - alpha) * self.stable.metric_loss_ema if hasattr(self.stable,
+                                                                         'metric_loss_ema') else self.stable.metric_loss
+                self.stable.metric_loss_ema_acc = 100 - \
+                    self.stable.metric_loss_ema / \
+                    (incremental_np + 1e-10) * 100
                 logging.info(
                     f'metrics for {self.variable.stream} {self.variable.target}'
                     f'\n  loss {self.stable.metric_loss} acc {self.stable.metric_loss_acc}'
