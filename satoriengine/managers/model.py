@@ -417,13 +417,13 @@ class ModelManager(Cached):
             actually broadcast or save these predictions to the database. that's
             when private is True.
             '''
-            logging.debug('makePrediction', self.variable,
-                          isVariable, private, color="yellow")
+            # logging.debug('makePrediction', self.variable,
+            #              isVariable, private, color="yellow")
             # why do I rebuild each time? (would this be sufficient? self.stable.xgb is not None and self.stable.xgb.isFitted)
             if isVariable and self.stable.build():
                 self.stable.producePrediction()
-                logging.debug('prediction produced',
-                              self.stable.prediction, color='yellow')
+                # logging.debug('prediction produced',
+                #              self.stable.prediction, color='yellow')
                 if private:
                     self.privatePredictionUpdate.on_next(self)
                 else:
@@ -436,11 +436,11 @@ class ModelManager(Cached):
                     self.predictionUpdate.on_next(self)
 
         def makePredictionFromNewModel():
-            logging.info(
-                f'model improved! {self.variable.stream} {self.variable.target}'
-                f'\n  stable score: {self.stableScore}'
-                f'\n  pilot  score: {self.pilotScore}',
-                color='green')
+            # logging.info(
+            #    f'model improved! {self.variable.stream} {self.variable.target}'
+            #    f'\n  stable score: {self.stableScore}'
+            #    f'\n  pilot  score: {self.pilotScore}',
+            #    color='green')
             makePrediction(isVariable=True, private=True)
 
         def makePredictionFromNewInputs():

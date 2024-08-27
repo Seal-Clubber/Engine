@@ -216,26 +216,14 @@ class StableModel(StableModelInterface):
     ### MAIN PROCESSES #################################################################
 
     def build(self):
-        print('stable.build', self.dataset is not None,
-              not self.dataset.empty, self.dataset.shape[0] > 10, self.dataset.shape[0])
         if self.dataset is not None and not self.dataset.empty and self.dataset.shape[0] > 10:
-            # print('stable.build1')
             self._produceTarget()
-            # print('stable.build2')
             self._produceFeatureStructure()
-            # print('stable.build3')
             self._produceFeatureSet()
-            # print('stable.build4')
             self._producePredictable()
-            # print('stable.build5')
             self._produceTrainingSet()
-            # print('stable.build6')
             self._produceFit()
-            # print('stable.build7')
             self._produceFeatureImportance()
-            # print('stable.build8')
             self._produceFeatureData()
-            # print('stable.build9')
             return True
-        # print('stable.build10')
         return False
