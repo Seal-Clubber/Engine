@@ -12,8 +12,8 @@ ppscore==1.3.0 # 1.2.0
 scikit-learn==1.2.0 # 0.24.2
 matplotlib==3.6.2 # should remove this dependency
 IPython==8.7.0 # should remove this dependency
-torch==2.3.1 # 2.3.1
-transformers==4.41.2 # 4.41.2
+# torch==2.3.1 # 2.3.1 # uncomment for Chronos/TTM
+# transformers==4.41.2 # 4.41.2 # uncomment for Chronos/TTM
 
 # needed for data managemnet
 pyarrow==10.0.1 # 6.0.1
