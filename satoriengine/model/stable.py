@@ -155,7 +155,7 @@ class StableModel(StableModelInterface):
             lookback_len = next((param.value for param in self.hyperParameters if param.name=='lookback_len'), 1)
             data = df.to_numpy(dtype=np.float64).flatten()
             data = data[-lookback_len:]
-            if data.shape[0] < lookback_len:
+            if self.manager.predictor == 'xgboost' and data.shape[0] < lookback_len:
                 data = np.pad(data, (lookback_len - data.shape[0], 0), mode='constant', constant_values=0.0)
             self.current = pd.DataFrame([data])
             # self.current = pd.DataFrame(
@@ -234,7 +234,7 @@ class StableModel(StableModelInterface):
             eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
             verbose=False)
         # self.xgbStable = copy.deepcopy(self.xgb) ## didn't fix it.
-        if type(self.xgb).__name__ == 'XGBRegressor': self.xgbStable = self.xgb  # turns on pilot
+        if self.manager.predictor == 'xgboost': self.xgbStable = self.xgb # turns on pilot
         self.xgbInUse = False
 
     ### MAIN PROCESSES #################################################################

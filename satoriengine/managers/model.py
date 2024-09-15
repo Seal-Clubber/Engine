@@ -401,10 +401,11 @@ class ModelManager(Cached):
                 self.stable.xgb = XGBRegressor(
                     eval_metric='mae',
                     **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
-            elif self.predictor == 'chronos':
-                self.stable.xgb = ChronosAdapter(self.useGPU)
-            elif self.predictor == 'ttm':
-                self.stable.xgb = TTMAdapter(self.useGPU)
+            elif self.predictor == 'chronos': self.stable.xgb = ChronosAdapter(self.useGPU)
+            elif self.predictor == 'ttm': self.stable.xgb = TTMAdapter(self.useGPU)
+            if self.predictor == 'chronos' or self.predictor == 'ttm':
+                lb_idx = next((i for i in range(len(self.stable.hyperParameters)) if self.stable.hyperParameters[i].name=='lookback_len'), -1)
+                if lb_idx >= 0: self.stable.hyperParameters[lb_idx].value = self.stable.xgb.ctx_len
             return False
         if (
             all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and
