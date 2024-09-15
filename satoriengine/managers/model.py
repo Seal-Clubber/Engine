@@ -89,7 +89,7 @@ class ModelManager(Cached):
         self.get()
 
         self.useGPU = os.environ.get('GPU_FLAG', default='off') == 'on'
-        self.predictor = 'xgboost' # xgboost chronos ttm
+        self.predictor = os.environ.get('PREDICTOR', default='xgboost') # xgboost chronos ttm
         self.xgbParams = xgbParams
         self.stable = StableModel(
             manager=self,
@@ -397,12 +397,12 @@ class ModelManager(Cached):
             streamId=self.variable)
         # logging.debug('LOADING STABLE', xgb)
         if xgb is None or xgb == False:
-            if self.predictor == 'xgboost':
+            if self.predictor == 'chronos': self.stable.xgb = ChronosAdapter(self.useGPU)
+            elif self.predictor == 'ttm': self.stable.xgb = TTMAdapter(self.useGPU)
+            else:
                 self.stable.xgb = XGBRegressor(
                     eval_metric='mae',
                     **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
-            elif self.predictor == 'chronos': self.stable.xgb = ChronosAdapter(self.useGPU)
-            elif self.predictor == 'ttm': self.stable.xgb = TTMAdapter(self.useGPU)
             if self.predictor == 'chronos' or self.predictor == 'ttm':
                 lb_idx = next((i for i in range(len(self.stable.hyperParameters)) if self.stable.hyperParameters[i].name=='lookback_len'), -1)
                 if lb_idx >= 0: self.stable.hyperParameters[lb_idx].value = self.stable.xgb.ctx_len
