@@ -5,16 +5,17 @@ from chronos import ChronosPipeline
 
 class ChronosAdapter():
 
-    def __init__(self):
+    def __init__(self, useGPU):
+        device_map = 'cuda' if useGPU else 'cpu'
         self.pipeline = ChronosPipeline.from_pretrained(
             "amazon/chronos-t5-tiny", # 8M
             # "amazon/chronos-t5-mini", # 20M
             # "amazon/chronos-t5-small", # 46M
             # "amazon/chronos-t5-base", # 200M
             # "amazon/chronos-t5-large", # 710M
-            device_map="cpu", # "cpu" for any CPU, "cuda" for Nvidia GPU, "mps" for Apple Silicon
+            device_map=device_map, # 'cpu' for any CPU, 'cuda' for Nvidia GPU, 'mps' for Apple Silicon
             torch_dtype=torch.bfloat16,
-            force_download=False,
+            # force_download=True,
         )
         self.ctx_len = 512 # historical context
 

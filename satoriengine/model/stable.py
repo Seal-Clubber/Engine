@@ -218,7 +218,7 @@ class StableModel(StableModelInterface):
     def _produceFit(self):
         self.xgbInUse = True
         # if all(isinstance(y[0], (int, float)) for y in self.trainY.values):
-        # self.xgb = XGBRegressor(  # comment for Chronos/TTM
+        # self.xgb = XGBRegressor(
         #     eval_metric='mae',
         #     **{param.name: param.value for param in self.hyperParameters})
         # else:
@@ -234,7 +234,7 @@ class StableModel(StableModelInterface):
             eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
             verbose=False)
         # self.xgbStable = copy.deepcopy(self.xgb) ## didn't fix it.
-        self.xgbStable = self.xgb  # comment for Chronos/TTM (turns off pilot)
+        if type(self.xgb).__name__ == 'XGBRegressor': self.xgbStable = self.xgb  # turns on pilot
         self.xgbInUse = False
 
     ### MAIN PROCESSES #################################################################

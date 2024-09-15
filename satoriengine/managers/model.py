@@ -12,7 +12,7 @@ Basic Reponsibilities of the ModelManager:
 '''
 from typing import Union
 import traceback
-import time
+import os, time
 import copy
 import pandas as pd
 import numpy as np
@@ -29,8 +29,8 @@ from satoriengine.concepts import HyperParameter
 from satoriengine.model.pilot import PilotModel
 from satoriengine.model.stable import StableModel
 
-# from satoriengine.model.chronos_adapter import ChronosAdapter # un-comment for Chronos
-# from satoriengine.model.ttm_adapter import TTMAdapter # un-comment for TTM
+from satoriengine.model.chronos_adapter import ChronosAdapter
+from satoriengine.model.ttm_adapter import TTMAdapter
 
 
 class ModelManager(Cached):
@@ -87,6 +87,9 @@ class ModelManager(Cached):
         self.targets: list[StreamId] = targets
         self.setupFlags()
         self.get()
+
+        self.useGPU = os.environ.get('GPU_FLAG', default='off') == 'on'
+        self.predictor = 'xgboost' # xgboost chronos ttm
         self.xgbParams = xgbParams
         self.stable = StableModel(
             manager=self,
@@ -102,6 +105,7 @@ class ModelManager(Cached):
             manager=self,
             stable=self.stable,
             exploreFeatures=exploreFeatures)
+
         self.lastOverview: Union[StreamOverview, None] = None
         # not even necessary right now.
         # self.syncManifest()
@@ -393,11 +397,14 @@ class ModelManager(Cached):
             streamId=self.variable)
         # logging.debug('LOADING STABLE', xgb)
         if xgb is None or xgb == False:
-            self.stable.xgb = XGBRegressor( # comment for Chronos/TTM
-                eval_metric='mae',
-                **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
-            # self.stable.xgb = ChronosAdapter() # un-comment for Chronos
-            # self.stable.xgb = TTMAdapter() # un-comment for TTM
+            if self.predictor == 'xgboost':
+                self.stable.xgb = XGBRegressor(
+                    eval_metric='mae',
+                    **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
+            elif self.predictor == 'chronos':
+                self.stable.xgb = ChronosAdapter(self.useGPU)
+            elif self.predictor == 'ttm':
+                self.stable.xgb = TTMAdapter(self.useGPU)
             return False
         if (
             all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and

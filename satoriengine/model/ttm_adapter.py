@@ -5,13 +5,14 @@ from tsfm_public.models.tinytimemixer import TinyTimeMixerForPrediction
 
 class TTMAdapter():
 
-    def __init__(self):
+    def __init__(self, useGPU):
+        device_map = 'cuda' if useGPU else 'cpu'
         self.pipeline = TinyTimeMixerForPrediction.from_pretrained(
             "ibm/TTM",
             revision="main", # 512-96
             # revision="1024_96_v1",
-            device_map="cpu",
-            force_download=False,
+            device_map=device_map,
+            # force_download=True,
         )
         self.ctx_len = 512 # historical context
 
