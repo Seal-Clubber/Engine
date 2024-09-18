@@ -230,7 +230,7 @@ class DataManager(Cached):
                 which could be streamr, or satori pubsub, or even something
                 else. then post this prediction to that source. If it is streamr
                 send it over to the nodeJS server. if it is satori pubsub, send
-                use the pubsub connection object in the StartupDag object 
+                use the pubsub connection object in the StartupDag object
                 (meaning, we might have to pass that connection object down to
                 this function in the first place.)
                 '''
@@ -258,6 +258,7 @@ class DataManager(Cached):
                     timestamp: str = None,
                     observationHash: str = None
                 ):
+                    start = self.getStart()
                     logging.info(
                         'outgoing realtime prediction:',
                         f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
@@ -267,12 +268,13 @@ class DataManager(Cached):
                     #    data=data,
                     #    observationTime=timestamp,
                     #    observationHash=observationHash)
-                    self.getStart().server.publish(
+                    start.server.publish(
                         topic=streamId.topic(),
                         data=data,
                         observationTime=timestamp,
                         observationHash=observationHash,
-                        isPrediction=True)
+                        isPrediction=True,
+                        useAuthorizedCall=start.version[1] >= 2 and start.version[2] >= 6)
 
                 # data = self.predictions.get(model.key)
                 if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
@@ -296,8 +298,8 @@ class DataManager(Cached):
     def runScholar(self, models):
         '''
         download histories (do not subscribe, these histories are experimental)
-        and tell exploratory model managers to use them as inputs in order to 
-        evaluat their usefulness. if they are useful, then we will officially 
+        and tell exploratory model managers to use them as inputs in order to
+        evaluat their usefulness. if they are useful, then we will officially
         use them which means pushing the exploratory model to stable, purging
         the history, subscribing to them, downloading their updated history.
 
@@ -307,7 +309,7 @@ class DataManager(Cached):
         nodes by their inputs and outputs are identified) in order to evaulate
         new datastreams that it might find useful.
 
-        there's a lot to do here but for mvp we'll just randomly sample 
+        there's a lot to do here but for mvp we'll just randomly sample
         datastreams from whatever sources are available to us.
         '''
 
