@@ -12,7 +12,8 @@ Basic Reponsibilities of the ModelManager:
 '''
 from typing import Union
 import traceback
-import os, time
+import os
+import time
 import copy
 import pandas as pd
 import numpy as np
@@ -89,7 +90,10 @@ class ModelManager(Cached):
         self.get()
 
         self.useGPU = os.environ.get('GPU_FLAG', default='off') == 'on'
-        self.predictor = os.environ.get('PREDICTOR', default='xgboost') # xgboost chronos ttm
+        self.predictor = os.environ.get(
+            'PREDICTOR', default='xgboost')  # xgboost chronos ttm
+        if self.predictor not in ['chronos', 'ttm']:
+            self.predictor = 'xgboost'
         self.xgbParams = xgbParams
         self.stable = StableModel(
             manager=self,
@@ -412,12 +416,14 @@ class ModelManager(Cached):
                 True
             ):
                 self.stable.xgb = xgb
-                self.stable.hyperParameters = [next((param2 for param2 in xgb.savedHyperParameters if param2.name==param.name), param)
-                                            for param in self.stable.hyperParameters]
+                self.stable.hyperParameters = [next((param2 for param2 in xgb.savedHyperParameters if param2.name == param.name), param)
+                                               for param in self.stable.hyperParameters]
                 self.stable.chosenFeatures = xgb.savedChosenFeatures
         if self.predictor == 'chronos' or self.predictor == 'ttm':
-            lb_idx = next((i for i in range(len(self.stable.hyperParameters)) if self.stable.hyperParameters[i].name=='lookback_len'), -1)
-            if lb_idx >= 0: self.stable.hyperParameters[lb_idx].value = self.stable.xgb.ctx_len
+            lb_idx = next((i for i in range(len(self.stable.hyperParameters))
+                          if self.stable.hyperParameters[i].name == 'lookback_len'), -1)
+            if lb_idx >= 0:
+                self.stable.hyperParameters[lb_idx].value = self.stable.xgb.ctx_len
         return True
 
     ### LIFECYCLE ######################################################################
@@ -454,7 +460,8 @@ class ModelManager(Cached):
                 f'model improved! {self.variable.stream} {self.variable.target}'
                 f'\n  stable score: {self.stableScore}'
                 f'\n  pilot  score: {self.pilotScore}'
-                "\n  parameters: {}".format({param.name:param.value for param in self.stable.hyperParameters}),
+                "\n  parameters: {}".format(
+                    {param.name: param.value for param in self.stable.hyperParameters}),
                 color='green')
             makePrediction(isVariable=True, private=True)
 
@@ -493,14 +500,19 @@ class ModelManager(Cached):
             # incremental.columns = ModelManager.addFeatureLevel(df=incremental)
             if hasattr(self.stable, 'metric_prediction'):
                 incremental_np = np.float32(incremental[self.id][-1])
-                self.stable.metric_loss = np.abs(self.stable.metric_prediction - incremental_np)
-                self.stable.metric_loss_acc = 100 - self.stable.metric_loss / (incremental_np + 1e-10) * 100
+                self.stable.metric_loss = np.abs(
+                    self.stable.metric_prediction - incremental_np)
+                self.stable.metric_loss_acc = 100 - \
+                    self.stable.metric_loss / (incremental_np + 1e-10) * 100
                 alpha = 0.01
                 if hasattr(self.stable, 'metric_loss_ema'):
-                    self.stable.metric_loss_ema = alpha * self.stable.metric_loss + (1 - alpha) * self.stable.metric_loss_ema
+                    self.stable.metric_loss_ema = alpha * self.stable.metric_loss + \
+                        (1 - alpha) * self.stable.metric_loss_ema
                 else:
                     self.stable.metric_loss_ema = self.stable.metric_loss
-                self.stable.metric_loss_ema_acc = 100 - self.stable.metric_loss_ema / (incremental_np + 1e-10) * 100
+                self.stable.metric_loss_ema_acc = 100 - \
+                    self.stable.metric_loss_ema / \
+                    (incremental_np + 1e-10) * 100
                 logging.info(
                     f'metrics for {self.variable.stream} {self.variable.target}'
                     f'\n  loss {self.stable.metric_loss} acc {self.stable.metric_loss_acc}'
