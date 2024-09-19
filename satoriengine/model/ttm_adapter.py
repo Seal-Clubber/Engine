@@ -1,4 +1,4 @@
-import time
+import os, time
 import numpy as np
 import torch
 from tsfm_public.models.tinytimemixer import TinyTimeMixerForPrediction
@@ -6,6 +6,8 @@ from tsfm_public.models.tinytimemixer import TinyTimeMixerForPrediction
 class TTMAdapter():
 
     def __init__(self, useGPU):
+        hfhome = os.environ.get('HF_HOME', default='/Satori/Neuron/models/huggingface')
+        os.makedirs(hfhome, exist_ok=True)
         device_map = 'cuda' if useGPU else 'cpu'
         self.pipeline = TinyTimeMixerForPrediction.from_pretrained(
             "ibm/TTM",

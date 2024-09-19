@@ -1,4 +1,4 @@
-import time
+import os, time
 import numpy as np
 import torch
 from chronos import ChronosPipeline
@@ -7,6 +7,8 @@ from chronos import ChronosPipeline
 class ChronosAdapter():
 
     def __init__(self, useGPU):
+        hfhome = os.environ.get('HF_HOME', default='/Satori/Neuron/models/huggingface')
+        os.makedirs(hfhome, exist_ok=True)
         device_map = 'cuda' if useGPU else 'cpu'
         self.pipeline = ChronosPipeline.from_pretrained(
             "amazon/chronos-t5-large" if useGPU else "amazon/chronos-t5-small",
