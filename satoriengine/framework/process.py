@@ -1,28 +1,10 @@
 from typing import Union
-
-# Data processing
-# ==============================================================================
 from datetime import datetime, timedelta
 from pandas.tseries.frequencies import to_offset
 from scipy.stats import kruskal
-import warnings
 import numpy as np
 import pandas as pd
-import datetime
-
-# Supplemental functions related to feature extraction and selection
 from sklearn.preprocessing import PolynomialFeatures
-
-# Plots and Graphs
-# ==============================================================================
-import matplotlib.pyplot as plt
-plt.style.use('fivethirtyeight')
-plt.rcParams['lines.linewidth'] = 1.5
-plt.rcParams['font.size'] = 10
-
-# Warnings configuration
-# ==============================================================================
-# warnings.filterwarnings('once')
 
 
 class ProcessedData:
@@ -194,9 +176,9 @@ def create_exogenous_features(original_dataset, optimally_differenced_dataset, d
     if sampling_frequency_offset <= year_test and dataset_offset >= to_offset('1095d'):
         SeasonalFrequency.append('year')
 
-    print("Finished creating list of SF")
-    print("Here is the issue")
-    print(SeasonalFrequency)
+    # print("Finished creating list of SF")
+    # print("Here is the issue")
+    # print(SeasonalFrequency)
     # Create all calendar features
     for SF in SeasonalFrequency:
         if SF == 'hour':
@@ -319,7 +301,7 @@ def create_exogenous_features(original_dataset, optimally_differenced_dataset, d
         # new_dataset.dropna()
         # print(new_dataset)
         num_columns = new_dataset.shape[1]
-        print(f"Number of columns: {num_columns}")
+        # print(f"Number of columns: {num_columns}")
         new_dataset = polynomialobject2.fit_transform(new_dataset.dropna())
         # print(new_dataset)
 
@@ -352,8 +334,6 @@ def generate_exog_data(end_date, freq, steps, date_format):
     exog_timewindow = exog_timewindow.asfreq(freq)
 
     return exog_series, exog_timewindow
-
-# loop over 'df_exogenous_features' columns, and if column name in not in list lightgbm_selected_exog then delete that column
 
 
 def filter_dataframe_col(df, selected_col):
@@ -448,21 +428,9 @@ def process_data(
     col_names: Union[list[str], None] = None,
     training_percentage: int = 80,
     validation_percentage: int = 10,
-    test_percentage: int = 10,
-    date_time_format: str = '%Y-%m-%d %H:%M:%S',
+    # test_percentage: int = 10,
     quick_start: bool = False,
 ) -> ProcessedData:
-
-    # Use default column names if not provided
-    # if col_names is None:
-    #     col_names = ['date_time', 'value', 'id']
-
-    # # Read the CSV file
-    # raw_dataset = pd.read_csv(filename, names=col_names, header=None)
-
-    # # Process date_time column
-    # raw_dataset['date_time'] = pd.to_datetime(raw_dataset['date_time'], format=date_time_format)
-    # raw_dataset = raw_dataset.set_index('date_time')
 
     if col_names is None:
         col_names = ['date_time', 'value', 'id']
@@ -481,15 +449,13 @@ def process_data(
 
     raw_dataset = raw_dataset.set_index('date_time')
 
-    # temp
     raw_diff_dat = raw_dataset.index.to_series().diff()
     value_counts = raw_diff_dat.value_counts().sort_index()
-    # result_df = pd.DataFrame({'Value': value_counts.index, 'Occurrences': value_counts.values})
-    # result_df = result_df.sort_values('Value').reset_index(drop=True)
     num_distinct_values = len(value_counts)
-    if num_distinct_values > (len(raw_dataset) * 0.05):
 
+    if num_distinct_values > (len(raw_dataset) * 0.05):
         median = raw_dataset.index.to_series().diff().median()
+
         if median < timedelta(hours=1, minutes=0, seconds=29):
             if (median >= timedelta(minutes=59, seconds=29)):
                 round_to_hour = 1
@@ -543,35 +509,15 @@ def process_data(
     # Replace the original dataset with the averaged one
     dataset = dataset_averaged
 
-    print(dataset.tail(5))
-    print('***************')
-    # Apply the sampling frequency
-    print(sampling_frequency)
-    # dataset = dataset.asfreq(sampling_frequency)
+    # maybe should be changed
     dataset = dataset.asfreq(sampling_frequency, method='nearest')
-    print(dataset.tail(5))
-    print('****************')
+
     datasetsize = len(dataset)
-    # temp
-    # print(datasetsize)
-    nan_count = dataset['value'].isna().sum()
-    # print(f"The number of NaN values in the 'value' column is: {nan_count}")
-    # end
 
     training_index = round(training_percentage / 100 * datasetsize)
     validation_index = min(
         training_index + round(validation_percentage / 100 * datasetsize), datasetsize - 2)
     test_index = datasetsize - 1
-
-    # print("start")
-    # print(training_index)
-    # print(validation_index)
-    # print(test_index)
-    # print("end")
-
-    print(dataset.tail(5))
-
-    # print(dataset)
 
     dataset = dataset.reset_index()
     end_train = dataset.iloc[training_index]['date_time']
@@ -583,19 +529,6 @@ def process_data(
     dataset = dataset.set_index('date_time')
 
     dataset = dataset.asfreq(sampling_frequency)
-
-    print(dataset.tail(5))
-    # datasetsize = len(dataset)
-    # temp
-    # print(dataset)
-    # print(len(dataset))
-    nan_count = dataset['value'].isna().sum()
-    # print(f"The number of NaN values in the 'value' column is: {nan_count}")
-    # end
-
-    # data['users_imputed'] = data['users'].interpolate(method='linear')
-    # data_train = data.loc[: end_train, :]
-    # data_test  = data.loc[end_train:, :]
 
     # Split data into subsets
     data_train = dataset.loc[:end_train, :]
@@ -610,10 +543,6 @@ def process_data(
         'test': end_test
     }
 
-    # print(end_train)
-    # print(end_validation)
-    # print(end_test)
-
     data_subsets = {
         'train': data_train,
         'validation': data_val,
@@ -623,15 +552,11 @@ def process_data(
 
     dataset_end_time = dataset.index[-1]
 
-    # print(sampling_frequency)
-    # print(dataset)
-    # print(len(dataset))
-    include_fractional_hour = True
     _, _, df_exogenous_features, _, _, _ = create_exogenous_features(original_dataset=dataset,
                                                                      optimally_differenced_dataset=dataset,
                                                                      dataset_start_time=dataset_start_time,
                                                                      dataset_end_time=dataset_end_time,
-                                                                     include_fractional_hour=include_fractional_hour,
+                                                                     include_fractional_hour=True,
                                                                      exogenous_feature_type='AdditiveandMultiplicativeExogenousFeatures',
                                                                      sampling_frequency=sampling_frequency)
 
@@ -655,16 +580,6 @@ def process_data(
         'validation': data_val_withfeatures,
         'test': data_test_withfeatures
     }
-
-    # random_start
-    # make a random model selector excluding random_forest
-    # system-clock used to generate the random seed
-    # things to be randomized :
-    # model
-    # feature_set_reduction
-    # FeatureReductionType : RFECV or RFE ( default setting for no.of parameters )
-    # Exogtype : any one of the 4 ( if dataset size does not allow it be anything else then do accordingly and not randomize them )
-    # random_state for bayesian search inside the generalized_hyperparameter search
 
     all_models = ['baseline', 'direct_linearregression', 'direct_ridge', 'direct_lasso', 'direct_linearboost',
                   'direct_lightgbm', 'autoreg_linearregression', 'autoreg_ridge', 'autoreg_lasso', 'autoreg_linearboost',
@@ -713,17 +628,10 @@ def process_data(
             int(week_timedelta / sampling_timedelta), len(data_subsets['test']))
 
     if dataset_duration >= pd.Timedelta(days=19) and len(dataset) >= 25:
-        print("Hits the >= 25 length dataset case and >= 19 days")
+        # print("Hits the >= 25 length dataset case and >= 19 days")
         # quick_start : linear_regression with no_exog, feature_set_reduction = False
         if quick_start:
             allowed_models = ['direct_linearregression']
-
-        # if sampling_timedelta < day_timedelta:
-        #     # Calculate steps relative to a day
-        #     forecasting_steps = int(day_timedelta / sampling_timedelta)
-        # elif sampling_timedelta >= day_timedelta:
-        #     # Calculate steps relative to a week
-        #     forecasting_steps = min(int(week_timedelta / sampling_timedelta), len(data_subsets['test'])) # can override the setting but have to not do backtesting
 
         use_weight = True
         time_metric_baseline = "days"
@@ -732,7 +640,7 @@ def process_data(
     else:
         # quick_start : linear_regression with no_exog, feature_set_reduction = False
         if dataset_duration >= pd.Timedelta(days=3) and len(dataset) >= 72:
-            print("Hits the >= 72 length dataset case and >= 3 days")
+            # print("Hits the >= 72 length dataset case and >= 3 days")
             allowed_models = ['baseline', 'direct_linearregression', 'direct_ridge', 'direct_lasso', 'direct_lightgbm', 'direct_xgb', 'direct_catboost',
                               'direct_histgradient', 'autoreg_linearregression', 'autoreg_ridge', 'autoreg_lasso', 'autoreg_lightgbm', 'autoreg_histgradient',
                               'autoreg_xgb', 'autoreg_catboost', 'arima', 'skt_ets']  # testing
@@ -742,19 +650,14 @@ def process_data(
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = min(
                 dataset_duration.days - 1, 1)
-            # if sampling_timedelta < day_timedelta:
-            #     # Calculate steps relative to a day
-            #     forecasting_steps = int(day_timedelta / sampling_timedelta)
-            # elif sampling_timedelta >= day_timedelta:
-            #     # Calculate steps relative to a week
-            #     forecasting_steps = min(int(week_timedelta / sampling_timedelta), len(data_subsets['test'])) # can override the setting but have to not do backtesting
+            
         elif (dataset_duration.total_seconds() / 3600) >= 12 and len(dataset) >= 12:
             # quick_start : baseline with no_exog, feature_set_reduction = False
             allowed_models = ['baseline', 'autoreg_lightgbm',
                               'autoreg_linearregression']  # testing
             if quick_start:
                 allowed_models = ['baseline']
-            print("Hits the >= 12 length dataset case and >= 12 hours")
+            # print("Hits the >= 12 length dataset case and >= 12 hours")
 
             if sampling_timedelta > pd.Timedelta(hours=1):
                 time_metric_baseline = "days"
@@ -768,7 +671,7 @@ def process_data(
             forecasterequivalentdate = 1
             # forecasting_steps = lags
         elif len(dataset) >= 6:
-            print("Hits the >= 6 length dataset case")
+            # print("Hits the >= 6 length dataset case")
             # quick_start : Baseline with no_exog, feature_set_reduction = False
             # print("inside smaller dataset size < 12 hours")
             allowed_models = ['baseline']
@@ -783,7 +686,7 @@ def process_data(
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = 1
         else:
-            print("Hits the invalid dataset case")
+            # print("Hits the invalid dataset case")
             if_small_dataset = True
 
         use_weight = False
@@ -791,10 +694,10 @@ def process_data(
     backtest_steps = forecasting_steps
 
     nan_percentage = dataset.isna().mean()
-    print(nan_percentage)
+    # print(nan_percentage)
     if nan_percentage.value > 0.4:
         use_weight = False
 
-    print(allowed_models)
+    # print(allowed_models)
     return ProcessedData(
         end_times, dataset, data_subsets, dataset_withfeatures, dataset_with_features_subsets, dataset_start_time, dataset_end_time, sampling_frequency, int(lags), backtest_steps, forecasting_steps, use_weight, time_metric_baseline, forecasterequivalentdate, forecasterequivalentdate_n_offsets, if_small_dataset, allowed_models)

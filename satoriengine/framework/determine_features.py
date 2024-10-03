@@ -192,7 +192,7 @@ def test_seasonality(differenced_dataset, SF, sampling_frequency):
         print(f"Error in seasonality test for {SF}: {str(e)}")
         return False, None
 
-def create_exogenous_features(original_dataset, optimally_differenced_dataset, dataset_start_time, dataset_end_time, include_fractional_hour = False, exogenous_feature_type='AdditiveandMultiplicativeExogenousFeatures', sampling_frequency='h'):
+def create_exogenous_features(original_dataset, optimally_differenced_dataset, dataset_start_time, dataset_end_time, include_fractional_hour = False, exogenous_feature_type='NoExogenousFeatures', sampling_frequency='h'):
     if exogenous_feature_type == 'NoExogenousFeatures':
         return [], pd.DataFrame(), pd.DataFrame(), False, False, False
 
@@ -254,9 +254,9 @@ def create_exogenous_features(original_dataset, optimally_differenced_dataset, d
     if sampling_frequency_offset <= year_test and dataset_offset >= to_offset('1095d') : # in the future we can add in holidays and yearly_quarters
         SeasonalFrequency.append('year')
 
-    print("Finished creating list of SF")
-    print("Here is the issue")
-    print(SeasonalFrequency)
+    # print("Finished creating list of SF")
+    # print("Here is the issue")
+    # print(SeasonalFrequency)
     # Create all calendar features
     for SF in SeasonalFrequency:
         if SF == 'hour' :
@@ -297,7 +297,7 @@ def create_exogenous_features(original_dataset, optimally_differenced_dataset, d
         chosen_hour_type = None  # This will store either 'hour' or 'fractional_hour'
 
         # Special handling for hour and fractional_hour
-        print("Here")
+        # print("Here")
         if 'hour' in SeasonalFrequency:
             hour_seasonal, hour_p_value = test_seasonality(optimally_differenced_dataset, 'hour', sampling_frequency)
             frac_hour_seasonal, frac_hour_p_value = test_seasonality(optimally_differenced_dataset, 'fractional_hour', sampling_frequency)
@@ -367,7 +367,7 @@ def create_exogenous_features(original_dataset, optimally_differenced_dataset, d
         # new_dataset.dropna()
         # print(new_dataset)
         num_columns = new_dataset.shape[1]
-        print(f"Number of columns: {num_columns}")
+        # print(f"Number of columns: {num_columns}")
         new_dataset = polynomialobject2.fit_transform(new_dataset.dropna())
         # print(new_dataset)
 
@@ -768,11 +768,6 @@ def determine_differentiation(data_train_with_id, max_diff=5):
     # data_diff['value'] = temporary_series.values
 
     data_diff = impute_data(data_diff, replace=True, imputed_value='value', method='polynomial', order=2)
-    print(data_diff.head(30))
-    print("below is the tail")
-    print(data_diff.tail(30))
-    print("----------------------------------------------------------------")
-    print(data_diff['value'].isna().sum())
 
     for i in range(max_diff):
         # print(i)

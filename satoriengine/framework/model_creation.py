@@ -588,8 +588,7 @@ def model_create_train_test_and_predict(
     dayofweek_seasonality: bool = False,
     week_seasonality: bool = False
 ):
-    print("Hereeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-    print(model_name)
+    
     if data_missing:
         value = 'value_imputed'
     else:
@@ -600,14 +599,10 @@ def model_create_train_test_and_predict(
     y.index = pd.to_datetime(y.index)
     split_index = y.index.get_loc(end_validation)
     y_train = y.iloc[:split_index + 1]
-    # print(y_train.tail())
     y_train.index = pd.to_datetime(y_train.index)
-    # print(y_train.tail())
     y_test = y.iloc[split_index + 1:]
 
     if model_name.lower() == "baseline":
-
-        # Run baseline forecasting
 
         baseline_forecaster = create_forecaster("baseline",
                                                 time_metric_baseline = baseline_1,
@@ -615,25 +610,11 @@ def model_create_train_test_and_predict(
                                                 forecasterequivalentdate_n_offsets = baseline_3
                                                )
         baseline_forecaster.fit(y=dataset_selected_features.loc[:end_validation, value])
-        print(dataset_selected_features.loc[:end_validation, value].tail())
-        # print(backtest_steps)
         backtest_predictions = baseline_forecaster.predict(steps=backtest_steps)
         backtest_predictions = backtest_predictions.to_frame(name='pred')
-        print('here0')
-        print(backtest_predictions.head())
-        print(y_train.tail())
-        print(y_test.head())
-        # print(y_test.tail())
         backtest_error = calculate_error(y_test, backtest_predictions[:len(y_test)], y_train, error_type=metric)
-        print(backtest_error)
-        print('here1')
-        # Calculate interval coverage
         coverage, _ = "NA"
-
-        # Fit the forecaster on the entire dataset
         baseline_forecaster.fit(y=dataset_selected_features[value])
-        # Make predictions
-        print(dataset_selected_features[value].tail())
         forecast = baseline_forecaster.predict(steps=forecasting_steps)
 
         return {
