@@ -1,3 +1,5 @@
+from typing import Union
+
 # Data processing
 # ==============================================================================
 from datetime import datetime, timedelta
@@ -20,7 +22,47 @@ plt.rcParams['font.size'] = 10
 
 # Warnings configuration
 # ==============================================================================
-warnings.filterwarnings('once')
+# warnings.filterwarnings('once')
+
+
+class ProcessedData:
+    def __init__(
+        self,
+        end_times,
+        dataset,
+        data_subsets,
+        dataset_withfeatures,
+        dataset_with_features_subsets,
+        dataset_start_time,
+        dataset_end_time,
+        sampling_frequency,
+        lags: int,
+        backtest_steps,
+        forecasting_steps,
+        use_weight,
+        time_metric_baseline,
+        forecasterequivalentdate,
+        forecasterequivalentdate_n_offsets,
+        if_small_dataset,
+        allowed_models,
+    ):
+        self.end_times = end_times
+        self.dataset = dataset
+        self.data_subsets = data_subsets
+        self.dataset_withfeatures = dataset_withfeatures
+        self.dataset_with_features_subsets = dataset_with_features_subsets
+        self.dataset_start_time = dataset_start_time
+        self.dataset_end_time = dataset_end_time
+        self.sampling_frequency = sampling_frequency
+        self.lags = lags
+        self.backtest_steps = backtest_steps
+        self.forecasting_steps = forecasting_steps
+        self.use_weight = use_weight
+        self.time_metric_baseline = time_metric_baseline
+        self.forecasterequivalentdate = forecasterequivalentdate
+        self.forecasterequivalentdate_n_offsets = forecasterequivalentdate_n_offsets
+        self.if_small_dataset = if_small_dataset
+        self.allowed_models = allowed_models
 
 
 def fractional_hour_generator(datetimeparameter):
@@ -400,8 +442,16 @@ def process_noisy_dataset(df, round_to_hours, round_to_minutes, round_to_seconds
     return df_copy
 
 
-def process_data(filename, sampling_frequency=None, col_names=None, training_percentage=80, validation_percentage=10,
-                 test_percentage=10, date_time_format='%Y-%m-%d %H:%M:%S', quick_start=False):
+def process_data(
+    filename: str,
+    sampling_frequency: Union[str, None] = None,
+    col_names: Union[list[str], None] = None,
+    training_percentage: int = 80,
+    validation_percentage: int = 10,
+    test_percentage: int = 10,
+    date_time_format: str = '%Y-%m-%d %H:%M:%S',
+    quick_start: bool = False,
+) -> ProcessedData:
 
     # Use default column names if not provided
     # if col_names is None:
@@ -746,4 +796,5 @@ def process_data(filename, sampling_frequency=None, col_names=None, training_per
         use_weight = False
 
     print(allowed_models)
-    return end_times, dataset, data_subsets, dataset_withfeatures, dataset_with_features_subsets, dataset_start_time, dataset_end_time, sampling_frequency, int(lags), backtest_steps, forecasting_steps, use_weight, time_metric_baseline, forecasterequivalentdate, forecasterequivalentdate_n_offsets, if_small_dataset, allowed_models
+    return ProcessedData(
+        end_times, dataset, data_subsets, dataset_withfeatures, dataset_with_features_subsets, dataset_start_time, dataset_end_time, sampling_frequency, int(lags), backtest_steps, forecasting_steps, use_weight, time_metric_baseline, forecasterequivalentdate, forecasterequivalentdate_n_offsets, if_small_dataset, allowed_models)
