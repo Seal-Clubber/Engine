@@ -53,11 +53,11 @@ class Features:
         differentiation: int, 
         dataset_selected_features: pd.DataFrame, 
         forecast_calendar_features: list, 
-        hour_seasonality : Union[bool, None], 
-        dow_seasonality : Union[bool, None], 
-        week_seasonality : Union[bool, None], 
-        missing_values : bool, 
-        weight : Union[Callable[[pd.DatetimeIndex], np.ndarray], None]
+        hour_seasonality: Union[bool, None], 
+        dow_seasonality: Union[bool, None], 
+        week_seasonality: Union[bool, None], 
+        missing_values: bool, 
+        weight: Union[Callable[[pd.DatetimeIndex], np.ndarray], None]
     ):
         self.selected_lags = selected_lags
         self.selected_exog = selected_exog

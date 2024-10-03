@@ -22,7 +22,7 @@ from satoriengine.framework.demonstration import demonstration
 streamId = StreamId(source='test', stream='test', target='test', author='test')
 path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
 #
-processedData = process_data(filename=path)
+processedData = process_data(filename='modifiedkaggletraffic2.csv')
 features = determine_feature_set(processedData)
 model = model_create_train_test_and_predict(features, processedData)
 quickstart = demonstration(processedData, features, model)
