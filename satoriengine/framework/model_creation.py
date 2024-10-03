@@ -24,7 +24,11 @@ from skforecast.ForecasterSarimax import ForecasterSarimax
 from skforecast.model_selection_sarimax import backtesting_sarimax
 from pmdarima import auto_arima
 
-from skforecast.model_selection import grid_search_forecaster, random_search_forecaster, bayesian_search_forecaster
+from skforecast.model_selection import (
+    grid_search_forecaster,
+    random_search_forecaster,
+    bayesian_search_forecaster,
+)
 
 # linear regressors : LinearRegression(), Lasso() or Ridge()
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
@@ -38,119 +42,243 @@ from sktime.forecasting.tbats import TBATS
 from sktime.forecasting.neuralforecast import NeuralForecastLSTM
 from sktime.forecasting.model_selection import SlidingWindowSplitter
 from sktime.forecasting.model_selection import ForecastingOptunaSearchCV
-from sktime.performance_metrics.forecasting import mean_absolute_scaled_error, mean_squared_error, mean_absolute_error
-from sktime.performance_metrics.forecasting import MeanAbsoluteScaledError #check if this is needed
+from sktime.performance_metrics.forecasting import (
+    mean_absolute_scaled_error,
+    mean_squared_error,
+    mean_absolute_error,
+)
+from sktime.performance_metrics.forecasting import (
+    MeanAbsoluteScaledError,
+)  # check if this is needed
 import optuna
 
-def create_forecaster(model_type, if_exog=None, random_state=None, verbose=None, lags=None, differentiation=None, custom_params=None, weight=None, steps=None, time_metric_baseline="days", forecasterequivalentdate=1, forecasterequivalentdate_n_offsets=7, y=None, start_p=24, start_q=0, max_p=24, max_q=1, seasonal=True, test='adf', m=24, d=None, D=None):
+class ForecastModelResult:
+    def __init__(self, 
+                 model_name: str,
+                 sampling_freq: str,
+                 differentiation: int,
+                 selected_lags: int,
+                 selected_exog: list,
+                 dataset_selected_features: pd.DataFrame,
+                 selected_hyperparameters: Union[Dict[str, Any], None],
+                 backtest_steps: int,
+                 backtest_prediction_interval: List[int],
+                 backtest_predictions: pd.DataFrame,
+                 backtest_error: float,
+                 backtest_interval_coverage: Union[float, str],
+                 model_trained_on_all_data: Any,
+                 forecasting_steps: int,
+                 forecast: pd.DataFrame):
+        self.model_name = model_name
+        self.sampling_freq = sampling_freq
+        self.differentiation = differentiation
+        self.selected_lags = selected_lags
+        self.selected_exog = selected_exog
+        self.dataset_selected_features = dataset_selected_features
+        self.selected_hyperparameters = selected_hyperparameters
+        self.backtest_steps = backtest_steps
+        self.backtest_prediction_interval = backtest_prediction_interval
+        self.backtest_predictions = backtest_predictions
+        self.backtest_error = backtest_error
+        self.backtest_interval_coverage = backtest_interval_coverage
+        self.model_trained_on_all_data = model_trained_on_all_data
+        self.forecasting_steps = forecasting_steps
+        self.forecast = forecast
+
+
+def create_forecaster(
+    model_type,
+    if_exog=None,
+    random_state=None,
+    verbose=None,
+    lags=None,
+    differentiation=None,
+    custom_params=None,
+    weight=None,
+    steps=None,
+    time_metric_baseline="days",
+    forecasterequivalentdate=1,
+    forecasterequivalentdate_n_offsets=7,
+    y=None,
+    start_p=24,
+    start_q=0,
+    max_p=24,
+    max_q=1,
+    seasonal=True,
+    test="adf",
+    m=24,
+    d=None,
+    D=None,
+):
     forecaster_params = {
-        'lags': lags,
-        'differentiation': differentiation if differentiation and differentiation > 0 else None,
-        'weight_func': weight,
-        'transformer_y': StandardScaler(),
-        'transformer_exog': StandardScaler() if if_exog else None
+        "lags": lags,
+        "differentiation": (
+            differentiation if differentiation and differentiation > 0 else None
+        ),
+        "weight_func": weight,
+        "transformer_y": StandardScaler(),
+        "transformer_exog": StandardScaler() if if_exog else None,
     }
     forecaster_params = {k: v for k, v in forecaster_params.items() if v is not None}
 
-    regressor_params = {'random_state': random_state} if random_state else {}
+    regressor_params = {"random_state": random_state} if random_state else {}
 
     if custom_params:
         regressor_params.update(custom_params)
 
     def create_autoreg(regressor_class, **extra_params):
         params = {**regressor_params, **extra_params}
-        return lambda: ForecasterAutoreg(regressor=regressor_class(**params), **forecaster_params)
+        return lambda: ForecasterAutoreg(
+            regressor=regressor_class(**params), **forecaster_params
+        )
 
     def create_autoreg_direct(regressor_class, **extra_params):
         params = {**regressor_params, **extra_params}
-        return lambda: ForecasterAutoregDirect(regressor=regressor_class(**params), steps=steps, **forecaster_params)
+        return lambda: ForecasterAutoregDirect(
+            regressor=regressor_class(**params), steps=steps, **forecaster_params
+        )
 
     model_creators = {
-        'baseline': lambda: ForecasterEquivalentDate(
+        "baseline": lambda: ForecasterEquivalentDate(
             offset=pd.DateOffset(**{time_metric_baseline: forecasterequivalentdate}),
-            n_offsets=forecasterequivalentdate_n_offsets
+            n_offsets=forecasterequivalentdate_n_offsets,
         ),
-        'arima': lambda: ForecasterSarimax(
+        "arima": lambda: ForecasterSarimax(
             regressor=auto_arima(
-                y=y, start_p=start_p, start_q=start_q, max_p=max_p, max_q=max_q,
-                seasonal=seasonal, test=test or 'adf', m=m, d=d, D=D,
-                trace=True, error_action='ignore', suppress_warnings=True, stepwise=True
+                y=y,
+                start_p=start_p,
+                start_q=start_q,
+                max_p=max_p,
+                max_q=max_q,
+                seasonal=seasonal,
+                test=test or "adf",
+                m=m,
+                d=d,
+                D=D,
+                trace=True,
+                error_action="ignore",
+                suppress_warnings=True,
+                stepwise=True,
             ),
-            **forecaster_params
+            **forecaster_params,
         ),
-        'direct_linearregression': create_autoreg_direct(LinearRegression),
-        'direct_ridge': create_autoreg_direct(Ridge),
-        'direct_lasso': create_autoreg_direct(Lasso),
-        'direct_linearboost': create_autoreg_direct(LinearBoostRegressor, base_estimator=LinearRegression()),
-        'direct_lightgbm': create_autoreg_direct(LGBMRegressor),
-        'direct_xgb': create_autoreg_direct(XGBRegressor),
-        'direct_catboost': create_autoreg_direct(CatBoostRegressor),
-        'direct_histgradient': create_autoreg_direct(HistGradientBoostingRegressor),
-        'autoreg_linearregression': create_autoreg(LinearRegression),
-        'autoreg_ridge': create_autoreg(Ridge),
-        'autoreg_lasso': create_autoreg(Lasso),
-        'autoreg_linearboost': create_autoreg(LinearBoostRegressor, base_estimator=LinearRegression()), # test
-        'autoreg_lightgbm': create_autoreg(LGBMRegressor, verbose=verbose),
-        'autoreg_randomforest': create_autoreg(RandomForestRegressor),
-        'autoreg_xgb': create_autoreg(XGBRegressor),
-        'autoreg_catboost': create_autoreg(CatBoostRegressor, verbose=False, allow_writing_files=False, boosting_type='Plain', leaf_estimation_iterations=10),
-        'autoreg_histgradient': create_autoreg(HistGradientBoostingRegressor, verbose=0 if verbose == -1 else verbose)
+        "direct_linearregression": create_autoreg_direct(LinearRegression),
+        "direct_ridge": create_autoreg_direct(Ridge),
+        "direct_lasso": create_autoreg_direct(Lasso),
+        "direct_linearboost": create_autoreg_direct(
+            LinearBoostRegressor, base_estimator=LinearRegression()
+        ),
+        "direct_lightgbm": create_autoreg_direct(LGBMRegressor),
+        "direct_xgb": create_autoreg_direct(XGBRegressor),
+        "direct_catboost": create_autoreg_direct(CatBoostRegressor),
+        "direct_histgradient": create_autoreg_direct(HistGradientBoostingRegressor),
+        "autoreg_linearregression": create_autoreg(LinearRegression),
+        "autoreg_ridge": create_autoreg(Ridge),
+        "autoreg_lasso": create_autoreg(Lasso),
+        "autoreg_linearboost": create_autoreg(
+            LinearBoostRegressor, base_estimator=LinearRegression()
+        ),  # test
+        "autoreg_lightgbm": create_autoreg(LGBMRegressor, verbose=verbose),
+        "autoreg_randomforest": create_autoreg(RandomForestRegressor),
+        "autoreg_xgb": create_autoreg(XGBRegressor),
+        "autoreg_catboost": create_autoreg(
+            CatBoostRegressor,
+            verbose=False,
+            allow_writing_files=False,
+            boosting_type="Plain",
+            leaf_estimation_iterations=10,
+        ),
+        "autoreg_histgradient": create_autoreg(
+            HistGradientBoostingRegressor, verbose=0 if verbose == -1 else verbose
+        ),
     }
 
     if model_type not in model_creators:
         raise ValueError(f"Unknown model type: {model_type}")
 
-    if model_type == 'arima' and y is None:
+    if model_type == "arima" and y is None:
         raise ValueError("For ARIMA model, 'y' parameter is required.")
 
     return model_creators[model_type]()
 
-def perform_backtesting(forecaster, y, end_validation, exog=None, steps=24, metric='mean_absolute_scaled_error', refit=False,
-                        interval=None, n_boot=0, in_sample_residuals=True, binned_residuals=False,
-                        is_sarimax=False, fixed_train_size=False, suppress_warnings_fit=True):
+
+def perform_backtesting(
+    forecaster,
+    y,
+    end_validation,
+    exog=None,
+    steps=24,
+    metric="mean_absolute_scaled_error",
+    refit=False,
+    interval=None,
+    n_boot=0,
+    in_sample_residuals=True,
+    binned_residuals=False,
+    is_sarimax=False,
+    fixed_train_size=False,
+    suppress_warnings_fit=True,
+):
     print(len(y))
     print(len(y.loc[:end_validation]))
     if is_sarimax:
         backtesting_params = {
-            'forecaster': forecaster,
-            'y': y,
-            'initial_train_size': len(y.loc[:end_validation]),
-            'fixed_train_size': fixed_train_size,
-            'steps': steps,
-            'metric': metric,
-            'refit': False,
-            'n_jobs': 'auto',
-            'suppress_warnings_fit': suppress_warnings_fit,
-            'verbose': False,
-            'show_progress': False
+            "forecaster": forecaster,
+            "y": y,
+            "initial_train_size": len(y.loc[:end_validation]),
+            "fixed_train_size": fixed_train_size,
+            "steps": steps,
+            "metric": metric,
+            "refit": False,
+            "n_jobs": "auto",
+            "suppress_warnings_fit": suppress_warnings_fit,
+            "verbose": False,
+            "show_progress": False,
         }
-        backtest_metric, backtest_predictions = backtesting_sarimax(**backtesting_params)
+        backtest_metric, backtest_predictions = backtesting_sarimax(
+            **backtesting_params
+        )
     else:
         backtesting_params = {
-            'forecaster': forecaster,
-            'y': y,
-            'exog': exog,
-            'steps': steps,
-            'metric': metric,
-            'initial_train_size': len(y.loc[:end_validation]),
-            'refit': refit,
-            'interval': interval,
-            'n_boot': n_boot,
-            'in_sample_residuals': in_sample_residuals,
-            'binned_residuals': binned_residuals,
-            'n_jobs': 'auto',
-            'verbose': False,
-            'show_progress': True
+            "forecaster": forecaster,
+            "y": y,
+            "exog": exog,
+            "steps": steps,
+            "metric": metric,
+            "initial_train_size": len(y.loc[:end_validation]),
+            "refit": refit,
+            "interval": interval,
+            "n_boot": n_boot,
+            "in_sample_residuals": in_sample_residuals,
+            "binned_residuals": binned_residuals,
+            "n_jobs": "auto",
+            "verbose": False,
+            "show_progress": True,
         }
-        backtest_metric, backtest_predictions = backtesting_forecaster(**backtesting_params)
+        backtest_metric, backtest_predictions = backtesting_forecaster(
+            **backtesting_params
+        )
 
     print(f"Backtest error ({metric}): {backtest_metric}")
     return backtest_metric, backtest_predictions
 
+
 class GeneralizedHyperparameterSearch:
-    def __init__(self, forecaster, y, lags, exog=None, steps=12, metric='mean_absolute_scaled_error',
-                 initial_train_size=None, fixed_train_size=False, refit=False,
-                 return_best=True, n_jobs='auto', verbose=False, show_progress=True):
+    def __init__(
+        self,
+        forecaster,
+        y,
+        lags,
+        exog=None,
+        steps=12,
+        metric="mean_absolute_scaled_error",
+        initial_train_size=None,
+        fixed_train_size=False,
+        refit=False,
+        return_best=True,
+        n_jobs="auto",
+        verbose=False,
+        show_progress=True,
+    ):
         self.forecaster = forecaster
         self.y = y
         self.exog = exog
@@ -164,65 +292,67 @@ class GeneralizedHyperparameterSearch:
         self.verbose = verbose
         self.show_progress = show_progress
         self.default_param_ranges = {
-                'lightgbm': {
-                    'n_estimators': ('int', 400, 1200, 100),
-                    'max_depth': ('int', 3, 10, 1),
-                    'min_data_in_leaf': ('int', 25, 500),
-                    'learning_rate': ('float', 0.01, 0.5),
-                    'feature_fraction': ('float', 0.5, 1, 0.1),
-                    'max_bin': ('int', 50, 250, 25),
-                    'reg_alpha': ('float', 0, 1, 0.1),
-                    'reg_lambda': ('float', 0, 1, 0.1),
-                    'lags': ('categorical', [lags])
-                },
-                'catboost': {
-                    'n_estimators': ('int', 100, 1000, 100),
-                    'max_depth': ('int', 3, 10, 1),
-                    'learning_rate': ('float', 0.01, 1),
-                    'lags': ('categorical', [lags])
-                },
-                'randomforest': {
-                    'n_estimators'    : ('int', 400, 1200, 100),
-                    'max_depth'       : ('int', 3, 10, 1),
-                    'ccp_alpha'       : ('float', 0, 1, 0.1),
-                    'lags'            : ('categorical', [lags])
-                },
-                'xgboost': {
-                    'n_estimators'    : ('int', 30, 5000),
-                    'max_depth'       : ('int' , -1, 256),
-                    'learning_rate'   : ('float', 0.01, 1),
-                    'subsample'       : ('float', 0.01, 1.0),
-                    'colsample_bytree': ('float', 0.01, 1.0),
-                    'gamma'           : ('float', 0, 1),
-                    'reg_alpha'       : ('float', 0, 1),
-                    'reg_lambda'      : ('float', 0, 1),
-                    'lags'            : ('categorical', [lags])
-                },
-                'histgradient': {
-                    'max_iter'          : ('int', 400, 1200, 100),
-                    'max_depth'         : ('int' , 1, 256),
-                    'learning_rate'     : ('float', 0.01, 1),
-                    'min_samples_leaf'  : ('int', 1, 20, 1),
-                    'l2_regularization' : ('float', 0, 1),
-                    'lags'              : ('categorical', [lags])
-                }
-            }
+            "lightgbm": {
+                "n_estimators": ("int", 400, 1200, 100),
+                "max_depth": ("int", 3, 10, 1),
+                "min_data_in_leaf": ("int", 25, 500),
+                "learning_rate": ("float", 0.01, 0.5),
+                "feature_fraction": ("float", 0.5, 1, 0.1),
+                "max_bin": ("int", 50, 250, 25),
+                "reg_alpha": ("float", 0, 1, 0.1),
+                "reg_lambda": ("float", 0, 1, 0.1),
+                "lags": ("categorical", [lags]),
+            },
+            "catboost": {
+                "n_estimators": ("int", 100, 1000, 100),
+                "max_depth": ("int", 3, 10, 1),
+                "learning_rate": ("float", 0.01, 1),
+                "lags": ("categorical", [lags]),
+            },
+            "randomforest": {
+                "n_estimators": ("int", 400, 1200, 100),
+                "max_depth": ("int", 3, 10, 1),
+                "ccp_alpha": ("float", 0, 1, 0.1),
+                "lags": ("categorical", [lags]),
+            },
+            "xgboost": {
+                "n_estimators": ("int", 30, 5000),
+                "max_depth": ("int", -1, 256),
+                "learning_rate": ("float", 0.01, 1),
+                "subsample": ("float", 0.01, 1.0),
+                "colsample_bytree": ("float", 0.01, 1.0),
+                "gamma": ("float", 0, 1),
+                "reg_alpha": ("float", 0, 1),
+                "reg_lambda": ("float", 0, 1),
+                "lags": ("categorical", [lags]),
+            },
+            "histgradient": {
+                "max_iter": ("int", 400, 1200, 100),
+                "max_depth": ("int", 1, 256),
+                "learning_rate": ("float", 0.01, 1),
+                "min_samples_leaf": ("int", 1, 20, 1),
+                "l2_regularization": ("float", 0, 1),
+                "lags": ("categorical", [lags]),
+            },
+        }
         self.model_type = self._detect_model_type()
-        self.current_param_ranges = self.default_param_ranges.get(self.model_type, {}).copy()
+        self.current_param_ranges = self.default_param_ranges.get(
+            self.model_type, {}
+        ).copy()
 
     def _detect_model_type(self):
-        if 'LGBMRegressor' in str(type(self.forecaster.regressor)):
-            return 'lightgbm'
-        elif 'CatBoostRegressor' in str(type(self.forecaster.regressor)):
-            return 'catboost'
-        elif 'RandomForestRegressor' in str(type(self.forecaster.regressor)):
-            return 'randomforest'
-        elif 'XGBRegressor' in str(type(self.forecaster.regressor)):
-            return 'xgboost'
-        elif 'HistGradientBoostingRegressor' in str(type(self.forecaster.regressor)):
-            return 'histgradient'
+        if "LGBMRegressor" in str(type(self.forecaster.regressor)):
+            return "lightgbm"
+        elif "CatBoostRegressor" in str(type(self.forecaster.regressor)):
+            return "catboost"
+        elif "RandomForestRegressor" in str(type(self.forecaster.regressor)):
+            return "randomforest"
+        elif "XGBRegressor" in str(type(self.forecaster.regressor)):
+            return "xgboost"
+        elif "HistGradientBoostingRegressor" in str(type(self.forecaster.regressor)):
+            return "histgradient"
         else:
-            return 'unknown'
+            return "unknown"
 
     def exclude_parameters(self, params_to_exclude):
         """
@@ -234,7 +364,9 @@ class GeneralizedHyperparameterSearch:
             if param in self.current_param_ranges:
                 del self.current_param_ranges[param]
             else:
-                print(f"Warning: Parameter '{param}' not found in the current search space.")
+                print(
+                    f"Warning: Parameter '{param}' not found in the current search space."
+                )
 
     def include_parameters(self, params_to_include):
         """
@@ -247,9 +379,13 @@ class GeneralizedHyperparameterSearch:
             if param in default_ranges and param not in self.current_param_ranges:
                 self.current_param_ranges[param] = default_ranges[param]
             elif param in self.current_param_ranges:
-                print(f"Warning: Parameter '{param}' is already in the current search space.")
+                print(
+                    f"Warning: Parameter '{param}' is already in the current search space."
+                )
             else:
-                print(f"Warning: Parameter '{param}' not found in the default search space for {self.model_type}.")
+                print(
+                    f"Warning: Parameter '{param}' not found in the default search space for {self.model_type}."
+                )
 
     def update_parameter_range(self, param, new_range):
         """
@@ -261,7 +397,9 @@ class GeneralizedHyperparameterSearch:
         if param in self.current_param_ranges:
             self.current_param_ranges[param] = new_range
         else:
-            print(f"Warning: Parameter '{param}' not found in the current search space.")
+            print(
+                f"Warning: Parameter '{param}' not found in the current search space."
+            )
 
     def display_available_parameters(self):
         """
@@ -269,23 +407,26 @@ class GeneralizedHyperparameterSearch:
         """
         print(f"Available parameters for {self.model_type.upper()} model:")
         self._display_params(self.current_param_ranges)
-        print("\nYou can override these parameters by passing a dictionary to the bayesian_search method.")
+        print(
+            "\nYou can override these parameters by passing a dictionary to the bayesian_search method."
+        )
 
     def _display_params(self, param_ranges):
         for param, config in param_ranges.items():
             param_type = config[0]
-            if param_type in ['int', 'float']:
-                step = config[3] if len(config) > 3 else 'N/A'
-                print(f"  {param}: {param_type}, range: {config[1]} to {config[2]}, step: {step}")
-            elif param_type == 'categorical':
+            if param_type in ["int", "float"]:
+                step = config[3] if len(config) > 3 else "N/A"
+                print(
+                    f"  {param}: {param_type}, range: {config[1]} to {config[2]}, step: {step}"
+                )
+            elif param_type == "categorical":
                 print(f"  {param}: {param_type}, choices: {config[1]}")
-
 
     def _prepare_lags_grid(self, lags):
         if isinstance(lags, dict):
             return lags
         elif isinstance(lags, (list, np.ndarray)):
-            return {'lags': lags}
+            return {"lags": lags}
         else:
             raise ValueError("lags must be either a dict, list, or numpy array")
 
@@ -293,14 +434,14 @@ class GeneralizedHyperparameterSearch:
         param_grid = {}
         for param, config in param_ranges.items():
             param_type = config[0]
-            if param_type in ['int', 'float']:
+            if param_type in ["int", "float"]:
                 start, stop = config[1:3]
                 step = config[3] if len(config) > 3 else 1
-                if param_type == 'int':
+                if param_type == "int":
                     param_grid[param] = list(range(start, stop + 1, step))
                 else:
                     param_grid[param] = list(np.arange(start, stop + step, step))
-            elif param_type == 'categorical':
+            elif param_type == "categorical":
                 param_grid[param] = config[1]
         return param_grid
 
@@ -308,14 +449,16 @@ class GeneralizedHyperparameterSearch:
         param_distributions = {}
         for param, config in param_ranges.items():
             param_type = config[0]
-            if param_type in ['int', 'float']:
+            if param_type in ["int", "float"]:
                 start, stop = config[1:3]
                 step = config[3] if len(config) > 3 else 1
-                if param_type == 'int':
-                    param_distributions[param] = np.arange(start, stop + 1, step, dtype=int)
+                if param_type == "int":
+                    param_distributions[param] = np.arange(
+                        start, stop + 1, step, dtype=int
+                    )
                 else:
                     param_distributions[param] = np.arange(start, stop + step, step)
-            elif param_type == 'categorical':
+            elif param_type == "categorical":
                 param_distributions[param] = config[1]
         return param_distributions
 
@@ -342,7 +485,7 @@ class GeneralizedHyperparameterSearch:
             return_best=self.return_best,
             n_jobs=self.n_jobs,
             verbose=self.verbose,
-            show_progress=self.show_progress
+            show_progress=self.show_progress,
         )
 
     # needs to be fixed
@@ -352,7 +495,9 @@ class GeneralizedHyperparameterSearch:
         else:
             self.current_param_ranges.update(param_ranges)
 
-        param_distributions = self._prepare_param_distributions(self.current_param_ranges)
+        param_distributions = self._prepare_param_distributions(
+            self.current_param_ranges
+        )
 
         return random_search_forecaster(
             forecaster=self.forecaster,
@@ -370,9 +515,8 @@ class GeneralizedHyperparameterSearch:
             random_state=random_state,
             n_jobs=self.n_jobs,
             verbose=self.verbose,
-            show_progress=self.show_progress
+            show_progress=self.show_progress,
         )
-
 
     def bayesian_search(self, param_ranges=None, n_trials=20, random_state=123):
         if param_ranges is None:
@@ -391,22 +535,28 @@ class GeneralizedHyperparameterSearch:
             for param, config in param_ranges.items():
                 param_type = config[0]
 
-                if param_type == 'int':
+                if param_type == "int":
                     start, stop = config[1:3]
                     step = config[3] if len(config) > 3 else 1
-                    search_space[param] = trial.suggest_int(param, start, stop, step=step)
-                elif param_type == 'float':
+                    search_space[param] = trial.suggest_int(
+                        param, start, stop, step=step
+                    )
+                elif param_type == "float":
                     start, stop = config[1:3]
                     step = config[3] if len(config) > 3 else None
                     if step:
-                        search_space[param] = trial.suggest_float(param, start, stop, step=step)
+                        search_space[param] = trial.suggest_float(
+                            param, start, stop, step=step
+                        )
                     else:
                         search_space[param] = trial.suggest_float(param, start, stop)
-                elif param_type == 'categorical':
+                elif param_type == "categorical":
                     choices = config[1]
                     search_space[param] = trial.suggest_categorical(param, choices)
                 else:
-                    raise ValueError(f"Unknown parameter type for {param}: {param_type}")
+                    raise ValueError(
+                        f"Unknown parameter type for {param}: {param_type}"
+                    )
             return search_space
 
         def search_space_wrapper(trial):
@@ -428,10 +578,13 @@ class GeneralizedHyperparameterSearch:
             random_state=random_state,
             n_jobs=self.n_jobs,
             verbose=self.verbose,
-            show_progress=self.show_progress
+            show_progress=self.show_progress,
         )
 
-def predict_interval_custom(forecaster, steps=24, interval=[10, 90], n_boot=20, exog=None, alpha=None):
+
+def predict_interval_custom(
+    forecaster, steps=24, interval=[10, 90], n_boot=20, exog=None, alpha=None
+):
     if isinstance(forecaster, ForecasterSarimax):
         # Case for ARIMA model
         if alpha is None:
@@ -440,18 +593,14 @@ def predict_interval_custom(forecaster, steps=24, interval=[10, 90], n_boot=20, 
     elif exog is not None:
         # Case with exogenous features for other models
         return forecaster.predict_interval(
-            exog=exog,
-            steps=steps,
-            interval=interval,
-            n_boot=n_boot
+            exog=exog, steps=steps, interval=interval, n_boot=n_boot
         )
     else:
         # Case without exogenous features for other models
         return forecaster.predict_interval(
-            steps=steps,
-            interval=interval,
-            n_boot=n_boot
+            steps=steps, interval=interval, n_boot=n_boot
         )
+
 
 def calculate_theoretical_coverage(interval):
     if len(interval) != 2:
@@ -468,10 +617,14 @@ def calculate_theoretical_coverage(interval):
     # print(f"Theoretical coverage: {coverage}%")
     return coverage
 
-def calculate_interval_coverage(satoridataset, interval_predictions, end_validation, end_test, value):
-    # Ensure both datasets have the same index
-    common_index = satoridataset.loc[end_validation:end_test].index.intersection(interval_predictions.index)
 
+def calculate_interval_coverage(
+    satoridataset, interval_predictions, end_validation, end_test, value
+):
+    # Ensure both datasets have the same index
+    common_index = satoridataset.loc[end_validation:end_test].index.intersection(
+        interval_predictions.index
+    )
 
     # Align the datasets
     satori_aligned = satoridataset.loc[common_index, value]
@@ -481,25 +634,28 @@ def calculate_interval_coverage(satoridataset, interval_predictions, end_validat
     coverage = np.mean(
         np.logical_and(
             satori_aligned >= predictions_aligned["lower_bound"],
-            satori_aligned <= predictions_aligned["upper_bound"]
+            satori_aligned <= predictions_aligned["upper_bound"],
         )
     )
 
-    #pseudo-code
+    # pseudo-code
     # a df which contains a common index [date-time], 3 columns[  predictions_aligned["lower_bound"], satori_aligned["value"], predictions_aligned["upper_bound"] ]
-    coverage_df = pd.DataFrame({
-        'lower_bound': predictions_aligned['lower_bound'],
-         value : satori_aligned,
-        'upper_bound': predictions_aligned['upper_bound'],
-        'if_in_range': (satori_aligned >= predictions_aligned['lower_bound']) &
-                       (satori_aligned <= predictions_aligned['upper_bound'])
-    }, index=common_index)
+    coverage_df = pd.DataFrame(
+        {
+            "lower_bound": predictions_aligned["lower_bound"],
+            value: satori_aligned,
+            "upper_bound": predictions_aligned["upper_bound"],
+            "if_in_range": (satori_aligned >= predictions_aligned["lower_bound"])
+            & (satori_aligned <= predictions_aligned["upper_bound"]),
+        },
+        index=common_index,
+    )
 
     total_count = len(coverage_df)
-    in_range_count = coverage_df['if_in_range'].sum()
-    #end
+    in_range_count = coverage_df["if_in_range"].sum()
+    # end
 
-    #Equivalent code
+    # Equivalent code
     # covered_data = 0
     # total_rows = len(satori_aligned)
 
@@ -512,20 +668,25 @@ def calculate_interval_coverage(satoridataset, interval_predictions, end_validat
     #         covered_data += 1
 
     # coverage = covered_data / total_rows
-    #end Equivalent code
+    # end Equivalent code
 
     # Calculate total area of the interval
-    area = (predictions_aligned['upper_bound'] - predictions_aligned['lower_bound']).sum()
+    area = (
+        predictions_aligned["upper_bound"] - predictions_aligned["lower_bound"]
+    ).sum()
 
     print(f"Total data points: {total_count}")
     print(f"Data points within range: {in_range_count}")
-    print(f"Predicted interval coverage assuming Gaussian distribution: {round(100*coverage, 2)}%")
+    print(
+        f"Predicted interval coverage assuming Gaussian distribution: {round(100*coverage, 2)}%"
+    )
     print(f"Total area of the interval: {round(area, 2)}")
     # print(coverage_df)
 
     return coverage, area
 
-def calculate_error(y_true, backtest_prediction, y_train, error_type='mase'):
+
+def calculate_error(y_true, backtest_prediction, y_train, error_type="mase"):
     """
     Calculate either Mean Absolute Scaled Error (MASE), Mean Squared Error (MSE),
     or Mean Absolute Error (MAE) based on the specified error_type for forecast data.
@@ -549,16 +710,17 @@ def calculate_error(y_true, backtest_prediction, y_train, error_type='mase'):
     aligned_true = y_true.loc[backtest_prediction.index]
 
     # Extract point predictions
-    y_pred = backtest_prediction['pred']
+    y_pred = backtest_prediction["pred"]
 
-    if error_type.lower() == 'mase':
+    if error_type.lower() == "mase":
         return mean_absolute_scaled_error(aligned_true, y_pred, y_train=y_train)
-    elif error_type.lower() == 'mse':
+    elif error_type.lower() == "mse":
         return mean_squared_error(aligned_true, y_pred)
-    elif error_type.lower() == 'mae':
+    elif error_type.lower() == "mae":
         return mean_absolute_error(aligned_true, y_pred)
     else:
         raise ValueError("Invalid error_type. Choose 'mase', 'mse', or 'mae'.")
+
 
 def model_create_train_test_and_predict(
     model_name: str,
@@ -581,60 +743,62 @@ def model_create_train_test_and_predict(
     random_state_hyper: int = 123,
     backtest_steps: int = 24,
     interval: List[int] = [10, 90],
-    metric: str = 'mase',
+    metric: str = "mase",
     forecast_calendar_features: Union[List[str], None] = None,
     forecasting_steps: int = 24,
     hour_seasonality: bool = False,
     dayofweek_seasonality: bool = False,
-    week_seasonality: bool = False
+    week_seasonality: bool = False,
 ):
-    
-    if data_missing:
-        value = 'value_imputed'
-    else:
-        value = 'value'
 
+    if data_missing:
+        value = "value_imputed"
+    else:
+        value = "value"
 
     y = dataset_selected_features[value].copy()
     y.index = pd.to_datetime(y.index)
     split_index = y.index.get_loc(end_validation)
-    y_train = y.iloc[:split_index + 1]
+    y_train = y.iloc[: split_index + 1]
     y_train.index = pd.to_datetime(y_train.index)
-    y_test = y.iloc[split_index + 1:]
+    y_test = y.iloc[split_index + 1 :]
 
     if model_name.lower() == "baseline":
 
-        baseline_forecaster = create_forecaster("baseline",
-                                                time_metric_baseline = baseline_1,
-                                                forecasterequivalentdate = baseline_2,
-                                                forecasterequivalentdate_n_offsets = baseline_3
-                                               )
+        baseline_forecaster = create_forecaster(
+            "baseline",
+            time_metric_baseline=baseline_1,
+            forecasterequivalentdate=baseline_2,
+            forecasterequivalentdate_n_offsets=baseline_3,
+        )
         baseline_forecaster.fit(y=dataset_selected_features.loc[:end_validation, value])
         backtest_predictions = baseline_forecaster.predict(steps=backtest_steps)
-        backtest_predictions = backtest_predictions.to_frame(name='pred')
-        backtest_error = calculate_error(y_test, backtest_predictions[:len(y_test)], y_train, error_type=metric)
+        backtest_predictions = backtest_predictions.to_frame(name="pred")
+        backtest_error = calculate_error(
+            y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
+        )
         coverage, _ = "NA"
         baseline_forecaster.fit(y=dataset_selected_features[value])
         forecast = baseline_forecaster.predict(steps=forecasting_steps)
 
-        return {
-            'model_name': model_name,
-            'sampling_freq': sampling_freq,
-            'differentiation': differentiation,
-            'selected_lags': None,
-            'selected_exog': None,
-            'dataset_selected_features': dataset_selected_features,
-            'selected_hyperparameters': None,
-            'backtest_steps': backtest_steps,
-            'backtest_prediction_interval': None,
-            'backtest_error': backtest_error,
-            'backtest_interval_coverage': coverage,
-            'backtest_predictions':backtest_predictions,
-            'model_trained_on_all_data': baseline_forecaster,
-            'forecasting_steps': forecasting_steps,
-            'forecast': forecast
-        }
-    #add the linear regressors here
+        return ForecastModelResult(
+            model_name=model_name,
+            sampling_freq=sampling_freq,
+            differentiation=differentiation,
+            selected_lags=selected_lags,
+            selected_exog=selected_exog,
+            dataset_selected_features=dataset_selected_features,
+            selected_hyperparameters=None,  # baseline doesn't use hyperparameters
+            backtest_steps=backtest_steps,
+            backtest_prediction_interval=interval,
+            backtest_predictions=backtest_predictions,
+            backtest_error=backtest_error,
+            backtest_interval_coverage=coverage,
+            model_trained_on_all_data=baseline_forecaster,
+            forecasting_steps=forecasting_steps,
+            forecast=forecast,
+        )
+    # add the linear regressors here
     elif model_name.lower() == "arima":
         sampling_timedelta = pd.Timedelta(sampling_freq)
         day_timedelta = pd.Timedelta(days=1)
@@ -647,7 +811,7 @@ def model_create_train_test_and_predict(
             if sampling_timedelta <= pd.Timedelta(hours=1):
                 m = forecasting_steps * 7
             else:
-                multiplier = max( 1, int(day_timedelta / sampling_timedelta))
+                multiplier = max(1, int(day_timedelta / sampling_timedelta))
                 m = 7 * multiplier
             seasonal = True
         else:
@@ -658,90 +822,116 @@ def model_create_train_test_and_predict(
         # seasonal = False
 
         arima_forecaster = create_forecaster(
-            model_type='arima',
+            model_type="arima",
             y=dataset_selected_features.loc[:end_validation, value],
-            start_p=forecasting_steps, # no.of lags at the beginning of the parameter search
-            start_q=0, # no.of moving averages at the beginnning of the parameter search
-            max_p=forecasting_steps, # max no.of lags
-            max_q=1, # max no.of moving averages # can change to 1 if it takes longer to test
-            seasonal=seasonal, # was True
-            test='adf', # 'adf' test used to determine trend non-stationarity
-            m=m, # was 24
+            start_p=forecasting_steps,  # no.of lags at the beginning of the parameter search
+            start_q=0,  # no.of moving averages at the beginnning of the parameter search
+            max_p=forecasting_steps,  # max no.of lags
+            max_q=1,  # max no.of moving averages # can change to 1 if it takes longer to test
+            seasonal=seasonal,  # was True
+            test="adf",  # 'adf' test used to determine trend non-stationarity
+            m=m,  # was 24
             d=None,
-            D=None
+            D=None,
         )
 
-        arima_forecaster.fit(y=dataset_selected_features.loc[:end_validation, value], suppress_warnings=True)
+        arima_forecaster.fit(
+            y=dataset_selected_features.loc[:end_validation, value],
+            suppress_warnings=True,
+        )
 
-        backtest_predictions = arima_forecaster.predict_interval(steps=backtest_steps, interval=interval)
-        backtest_error = calculate_error(y_test, backtest_predictions[:len(y_test)], y_train, error_type=metric)
+        backtest_predictions = arima_forecaster.predict_interval(
+            steps=backtest_steps, interval=interval
+        )
+        backtest_error = calculate_error(
+            y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
+        )
 
         # Calculate interval coverage
-        coverage, _ = calculate_interval_coverage(dataset_selected_features, backtest_predictions, end_validation, end_test, value)
+        coverage, _ = calculate_interval_coverage(
+            dataset_selected_features,
+            backtest_predictions,
+            end_validation,
+            end_test,
+            value,
+        )
 
         arima_forecaster.fit(y=dataset_selected_features[value], suppress_warnings=True)
 
         arima_predictions = predict_interval_custom(
-            forecaster=arima_forecaster,
-            steps=forecasting_steps,
-            alpha=0.05
+            forecaster=arima_forecaster, steps=forecasting_steps, alpha=0.05
         )
 
-        return {
-            'model_name': model_name,
-            'sampling_freq': sampling_freq,
-            'differentiation': differentiation,
-            'selected_lags': None,
-            'selected_exog': None,
-            'dataset_selected_features': None,
-            'selected_hyperparameters': None,
-            'backtest_steps': backtest_steps,
-            'backtest_prediction_interval': None,
-            'backtest_error': backtest_error,
-            'backtest_interval_coverage': None,
-            'backtest_predictions':backtest_predictions,
-            'model_trained_on_all_data': arima_forecaster,
-            'forecasting_steps': forecasting_steps,
-            'forecast': arima_predictions
-        }
+        return ForecastModelResult(
+            model_name=model_name,
+            sampling_freq=sampling_freq,
+            differentiation=differentiation,
+            selected_lags=selected_lags,
+            selected_exog=selected_exog,
+            dataset_selected_features=dataset_selected_features,
+            selected_hyperparameters=None,  # ARIMA doesn't use hyperparameters in this implementation
+            backtest_steps=backtest_steps,
+            backtest_prediction_interval=interval,
+            backtest_predictions=backtest_predictions,
+            backtest_error=backtest_error,
+            backtest_interval_coverage=coverage,
+            model_trained_on_all_data=arima_forecaster,
+            forecasting_steps=forecasting_steps,
+            forecast=arima_predictions,
+        )
 
-    elif model_name[:3].lower() == 'skt':
+    elif model_name[:3].lower() == "skt":
 
-        if model_name.lower() == 'skt_lstm_deeplearning':
-            forecaster = NeuralForecastLSTM(
-                freq=sampling_freq, max_steps=10
+        if model_name.lower() == "skt_lstm_deeplearning":
+            forecaster = NeuralForecastLSTM(freq=sampling_freq, max_steps=10)
+
+        elif model_name.lower() == "skt_prophet_additive":
+            forecaster = Prophet(
+                seasonality_mode="additive",
+                daily_seasonality="auto",
+                weekly_seasonality="auto",
+                yearly_seasonality="auto",
             )
 
-        elif model_name.lower() == 'skt_prophet_additive':
-            forecaster = Prophet(
-                seasonality_mode='additive',
-                daily_seasonality='auto',
-                weekly_seasonality='auto',
-                yearly_seasonality='auto'
-                )
-
-        elif model_name.lower() == 'skt_prophet_hyper':
+        elif model_name.lower() == "skt_prophet_hyper":
             param_grid = {
-                'growth': optuna.distributions.CategoricalDistribution(['linear', 'logistic']),
-                'n_changepoints': optuna.distributions.IntDistribution(5, 20),
-                'changepoint_range': optuna.distributions.FloatDistribution(0.7, 0.9),
-                'seasonality_mode': optuna.distributions.CategoricalDistribution(['additive', 'multiplicative']),
-                'seasonality_prior_scale': optuna.distributions.LogUniformDistribution(0.01, 10.0),
-                'changepoint_prior_scale': optuna.distributions.LogUniformDistribution(0.001, 0.5),
-                'holidays_prior_scale': optuna.distributions.LogUniformDistribution(0.01, 10.0),
-                'daily_seasonality': optuna.distributions.CategoricalDistribution(['auto']),
-                'weekly_seasonality': optuna.distributions.CategoricalDistribution(['auto']),
-                'yearly_seasonality': optuna.distributions.CategoricalDistribution(['auto'])
+                "growth": optuna.distributions.CategoricalDistribution(
+                    ["linear", "logistic"]
+                ),
+                "n_changepoints": optuna.distributions.IntDistribution(5, 20),
+                "changepoint_range": optuna.distributions.FloatDistribution(0.7, 0.9),
+                "seasonality_mode": optuna.distributions.CategoricalDistribution(
+                    ["additive", "multiplicative"]
+                ),
+                "seasonality_prior_scale": optuna.distributions.LogUniformDistribution(
+                    0.01, 10.0
+                ),
+                "changepoint_prior_scale": optuna.distributions.LogUniformDistribution(
+                    0.001, 0.5
+                ),
+                "holidays_prior_scale": optuna.distributions.LogUniformDistribution(
+                    0.01, 10.0
+                ),
+                "daily_seasonality": optuna.distributions.CategoricalDistribution(
+                    ["auto"]
+                ),
+                "weekly_seasonality": optuna.distributions.CategoricalDistribution(
+                    ["auto"]
+                ),
+                "yearly_seasonality": optuna.distributions.CategoricalDistribution(
+                    ["auto"]
+                ),
             }
 
             forecaster_initial = Prophet()
 
-
             # Set up a more efficient time series cross-validation
             cv = SlidingWindowSplitter(
-                initial_window=int(len(y_train) * 0.6),  # Use 60% of data for initial training
-                step_length=int(len(y_train) * 0.2),     # Move forward by 20% each time
-                fh=np.arange(1, forecasting_steps + 1)                      # Forecast horizon of 12 steps
+                initial_window=int(
+                    len(y_train) * 0.6
+                ),  # Use 60% of data for initial training
+                step_length=int(len(y_train) * 0.2),  # Move forward by 20% each time
+                fh=np.arange(1, forecasting_steps + 1),  # Forecast horizon of 12 steps
             )
 
             fos = ForecastingOptunaSearchCV(
@@ -751,55 +941,59 @@ def model_create_train_test_and_predict(
                 n_evals=50,
                 strategy="refit",
                 scoring=MeanAbsoluteScaledError(sp=1),
-                verbose=1
-                )
+                verbose=1,
+            )
 
             fos.fit(y_train)
             forecaster = fos.best_forecaster_
 
-        elif model_name.lower() == 'skt_ets': # faster implementation available and should be implemented in the future
+        elif (
+            model_name.lower() == "skt_ets"
+        ):  # faster implementation available and should be implemented in the future
             print("entered")
-            forecaster = AutoETS(error='add',
-                     trend=None,
-                     damped_trend=False,
-                     seasonal=None,
-                     sp=forecasting_steps,
-                     initialization_method='estimated',
-                     initial_level=None,
-                     initial_trend=None,
-                     initial_seasonal=None,
-                     bounds=None,
-                     dates=None,
-                     freq=None,
-                     missing='none',
-                     start_params=None,
-                     maxiter=1000,
-                     full_output=True,
-                     disp=False,
-                     callback=None,
-                     return_params=False,
-                     auto=True,
-                     information_criterion='aic',
-                     allow_multiplicative_trend=True,
-                     restrict=True,
-                     additive_only=False,
-                     ignore_inf_ic=True,
-                     n_jobs=-1,
-                     random_state=random_state_hyper)
+            forecaster = AutoETS(
+                error="add",
+                trend=None,
+                damped_trend=False,
+                seasonal=None,
+                sp=forecasting_steps,
+                initialization_method="estimated",
+                initial_level=None,
+                initial_trend=None,
+                initial_seasonal=None,
+                bounds=None,
+                dates=None,
+                freq=None,
+                missing="none",
+                start_params=None,
+                maxiter=1000,
+                full_output=True,
+                disp=False,
+                callback=None,
+                return_params=False,
+                auto=True,
+                information_criterion="aic",
+                allow_multiplicative_trend=True,
+                restrict=True,
+                additive_only=False,
+                ignore_inf_ic=True,
+                n_jobs=-1,
+                random_state=random_state_hyper,
+            )
 
-        elif model_name[:9].lower() == 'skt_tbats':
-            splist=[]
+        elif model_name[:9].lower() == "skt_tbats":
+            splist = []
             sampling_timedelta = pd.Timedelta(sampling_freq)
             day_timedelta = pd.Timedelta(days=1)
             use_box_cox = None
-            if  model_name.lower() == 'skt_tbats_quick':
+            if model_name.lower() == "skt_tbats_quick":
                 use_box_cox = False
             if differentiation == 0:
                 use_trend = False
                 use_damped_trend = False
             else:
                 use_trend = True
-                if model_name.lower() == 'skt_tbats_damped':
+                if model_name.lower() == "skt_tbats_damped":
                     use_damped_trend = True
                 else:
                     use_damped_trend = False
@@ -815,31 +1009,34 @@ def model_create_train_test_and_predict(
                 print("inside")
                 if sampling_timedelta <= pd.Timedelta(hours=1):
                     multiplier = 7
-                    splist.append(forecasting_steps*multiplier)
+                    splist.append(forecasting_steps * multiplier)
                 else:
-                    multiplier = max( 1, int(day_timedelta / sampling_timedelta))
-                    splist.append(7*multiplier)
+                    multiplier = max(1, int(day_timedelta / sampling_timedelta))
+                    splist.append(7 * multiplier)
 
-            if week_seasonality == True: # calculation of week seasonality test to determine seasonal period of a year can be improved in the future by using day_of_year instead of week_of_year
+            if (
+                week_seasonality == True
+            ):  # calculation of week seasonality test to determine seasonal period of a year can be improved in the future by using day_of_year instead of week_of_year
                 print("inside")
                 if sampling_timedelta <= pd.Timedelta(hours=1):
                     multiplier = 365.25
-                    splist.append(forecasting_steps*multiplier)
+                    splist.append(forecasting_steps * multiplier)
                 else:
-                    multiplier = max( 1, int(day_timedelta / sampling_timedelta))
-                    splist.append(365.25*multiplier)
+                    multiplier = max(1, int(day_timedelta / sampling_timedelta))
+                    splist.append(365.25 * multiplier)
 
             print(splist)
-            forecaster = TBATS(use_box_cox=use_box_cox,
-                  box_cox_bounds=(0, 1),
-                  use_trend=use_trend,
-                  use_damped_trend=use_damped_trend,
-                  sp=splist,
-                  use_arma_errors=True,
-                  show_warnings=True,
-                  n_jobs=-1,
-                  multiprocessing_start_method='spawn',
-                  context=None
+            forecaster = TBATS(
+                use_box_cox=use_box_cox,
+                box_cox_bounds=(0, 1),
+                use_trend=use_trend,
+                use_damped_trend=use_damped_trend,
+                sp=splist,
+                use_arma_errors=True,
+                show_warnings=True,
+                n_jobs=-1,
+                multiprocessing_start_method="spawn",
+                context=None,
             )
 
         rounded_index = y_test.index.floor(sampling_freq)
@@ -849,60 +1046,77 @@ def model_create_train_test_and_predict(
         y_train.index = y_train.index.floor(sampling_freq)
         time_delta = pd.Timedelta(minutes=float(difference_minutes[0]))
 
-        if model_name.lower() == 'skt_lstm_deeplearning':
+        if model_name.lower() == "skt_lstm_deeplearning":
             forecaster.fit(y_train, fh=list(range(1, backtest_steps + 1)))
             y_pred_backtest = forecaster.predict(list(range(1, backtest_steps + 1)))
-            backtest_prediction = y_pred_backtest.to_frame(name='pred')
-            error = calculate_error(y_test, backtest_prediction[:len(y_test)], y_train, error_type=metric)
+            backtest_prediction = y_pred_backtest.to_frame(name="pred")
+            error = calculate_error(
+                y_test, backtest_prediction[: len(y_test)], y_train, error_type=metric
+            )
             backtest_prediction.index = backtest_prediction.index + time_delta
-            coverage = 'NA'
+            coverage = "NA"
             forecaster.fit(y, fh=list(range(1, forecasting_steps + 1)))
             y_pred_future = forecaster.predict(list(range(1, forecasting_steps + 1)))
-            forecast = y_pred_future.to_frame(name='pred')
+            forecast = y_pred_future.to_frame(name="pred")
             forecast.index = forecast.index + time_delta
 
         else:
             forecaster.fit(y_train)
             y_pred_backtest = forecaster.predict(list(range(1, backtest_steps + 1)))
             lower, upper = interval
-            y_pred_backtest_interval = forecaster.predict_interval(fh=list(range(1, backtest_steps + 1)), coverage=[(upper - lower) / 100])
-            y_pred_backtest_df = y_pred_backtest.to_frame(name='pred')
-            backtest_prediction = pd.concat([y_pred_backtest_df, y_pred_backtest_interval], axis=1)
-            backtest_prediction.columns = ['pred', 'lower_bound', 'upper_bound']
-            error = calculate_error(y_test, backtest_prediction[:len(y_test)], y_train, error_type=metric)
+            y_pred_backtest_interval = forecaster.predict_interval(
+                fh=list(range(1, backtest_steps + 1)), coverage=[(upper - lower) / 100]
+            )
+            y_pred_backtest_df = y_pred_backtest.to_frame(name="pred")
+            backtest_prediction = pd.concat(
+                [y_pred_backtest_df, y_pred_backtest_interval], axis=1
+            )
+            backtest_prediction.columns = ["pred", "lower_bound", "upper_bound"]
+            error = calculate_error(
+                y_test, backtest_prediction[: len(y_test)], y_train, error_type=metric
+            )
             # dataset_feature_selection.index = dataset_feature_selection.index - time_delta
             backtest_prediction.index = backtest_prediction.index + time_delta
-            coverage, _ = calculate_interval_coverage(dataset_selected_features, backtest_prediction, end_validation, end_test, value)
+            coverage, _ = calculate_interval_coverage(
+                dataset_selected_features,
+                backtest_prediction,
+                end_validation,
+                end_test,
+                value,
+            )
             forecaster.fit(y)
             y_pred_future = forecaster.predict(list(range(1, forecasting_steps + 1)))
-            y_pred_future_interval = forecaster.predict_interval(fh=list(range(1, forecasting_steps + 1)), coverage=[(upper - lower) / 100])
+            y_pred_future_interval = forecaster.predict_interval(
+                fh=list(range(1, forecasting_steps + 1)),
+                coverage=[(upper - lower) / 100],
+            )
             # y_pred_future.index = y_pred_future.index + time_delta
-            y_pred_df = y_pred_future.to_frame(name='pred')
+            y_pred_df = y_pred_future.to_frame(name="pred")
             forecast = pd.concat([y_pred_df, y_pred_future_interval], axis=1)
-            forecast.columns = ['pred', 'lower_bound', 'upper_bound']
+            forecast.columns = ["pred", "lower_bound", "upper_bound"]
             forecast.index = forecast.index + time_delta
 
-        return {
-            'model_name': model_name,
-            'sampling_freq': sampling_freq,
-            'differentiation': differentiation,
-            'selected_lags': None,
-            'selected_exog': None,
-            'dataset_selected_features': None,
-            'selected_hyperparameters': None,
-            'backtest_steps': backtest_steps,
-            'backtest_prediction_interval': interval,
-            'backtest_error': error,
-            'backtest_interval_coverage': coverage,
-            'backtest_predictions':backtest_prediction,
-            'model_trained_on_all_data': forecaster,
-            'forecasting_steps': forecasting_steps,
-            'forecast': forecast
-        }
+        return ForecastModelResult(
+            model_name=model_name,
+            sampling_freq=sampling_freq,
+            differentiation=differentiation,
+            selected_lags=selected_lags,
+            selected_exog=selected_exog,
+            dataset_selected_features=dataset_selected_features,
+            selected_hyperparameters=None,  # SKT models don't use hyperparameters in this implementation
+            backtest_steps=backtest_steps,
+            backtest_prediction_interval=interval,
+            backtest_predictions=backtest_prediction,
+            backtest_error=error,
+            backtest_interval_coverage=coverage,
+            model_trained_on_all_data=forecaster,
+            forecasting_steps=forecasting_steps,
+            forecast=forecast,
+        )
 
     else:
 
-        if model_name[:6].lower() == 'direct':
+        if model_name[:6].lower() == "direct":
 
             if model_name == "direct_linearregression":
                 random_state = None
@@ -939,11 +1153,11 @@ def model_create_train_test_and_predict(
             steps=steps,
             weight=weight,
             differentiation=differentiation,
-            if_exog=if_exog
+            if_exog=if_exog,
         )
 
         print(random_state_hyper)
-        if model_name.lower() != 'direct_linearregression':
+        if model_name.lower() != "direct_linearregression":
             # # Hyperparameter search if required
             if select_hyperparameters:
                 forecaster_search = GeneralizedHyperparameterSearch(
@@ -952,20 +1166,19 @@ def model_create_train_test_and_predict(
                     lags=selected_lags,
                     exog=dataset_selected_features.loc[:end_validation, selected_exog],
                     steps=forecasting_steps,
-                    initial_train_size=len(dataset_train), #dataset with features
+                    initial_train_size=len(dataset_train),  # dataset with features
                     # metric=metric,
                 )
                 results_search, _ = forecaster_search.bayesian_search(
                     param_ranges=default_hyperparameters,
                     n_trials=20,
-                    random_state=random_state_hyper
+                    random_state=random_state_hyper,
                 )
-                selected_hyperparameters = results_search['params'].iat[0]
+                selected_hyperparameters = results_search["params"].iat[0]
             else:
                 selected_hyperparameters = default_hyperparameters
         else:
             selected_hyperparameters = None
-
 
         # # Create final forecaster with best parameters
         final_forecaster = create_forecaster(
@@ -977,7 +1190,7 @@ def model_create_train_test_and_predict(
             weight=weight,
             differentiation=differentiation,
             custom_params=selected_hyperparameters,
-            if_exog=if_exog
+            if_exog=if_exog,
         )
 
         if len(selected_exog) == 0:
@@ -987,34 +1200,46 @@ def model_create_train_test_and_predict(
         else:
             final_forecaster.fit(
                 y=dataset_selected_features.loc[:end_validation, value],
-                exog=dataset_selected_features.loc[:end_validation, selected_exog]
+                exog=dataset_selected_features.loc[:end_validation, selected_exog],
             )
 
         if len(selected_exog) == 0:
-            backtest_predictions = final_forecaster.predict_interval(steps=backtest_steps, interval=interval)
+            backtest_predictions = final_forecaster.predict_interval(
+                steps=backtest_steps, interval=interval
+            )
         else:
-            backtest_predictions = final_forecaster.predict_interval(steps=backtest_steps, exog=dataset_selected_features.loc[dataset_selected_features.index > end_validation, selected_exog], interval=interval)
+            backtest_predictions = final_forecaster.predict_interval(
+                steps=backtest_steps,
+                exog=dataset_selected_features.loc[
+                    dataset_selected_features.index > end_validation, selected_exog
+                ],
+                interval=interval,
+            )
 
+        backtest_error = calculate_error(
+            y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
+        )
 
-
-        backtest_error = calculate_error(y_test, backtest_predictions[:len(y_test)], y_train, error_type=metric)
-
-        coverage, _ = calculate_interval_coverage(dataset_selected_features, backtest_predictions, end_validation, end_test, value)
+        coverage, _ = calculate_interval_coverage(
+            dataset_selected_features,
+            backtest_predictions,
+            end_validation,
+            end_test,
+            value,
+        )
 
         if len(selected_exog) == 0:
-            final_forecaster.fit(
-                y=dataset_selected_features[value]
-            )
+            final_forecaster.fit(y=dataset_selected_features[value])
         else:
             final_forecaster.fit(
                 y=dataset_selected_features[value],
-                exog=dataset_selected_features.loc[:end_test, selected_exog]
+                exog=dataset_selected_features.loc[:end_test, selected_exog],
             )
 
         if len(selected_exog) == 0:
-            exog=None
+            exog = None
         else:
-            exog=forecast_calendar_features[selected_exog]
+            exog = forecast_calendar_features[selected_exog]
 
         # Make the forecast
         forecast = predict_interval_custom(
@@ -1022,23 +1247,23 @@ def model_create_train_test_and_predict(
             exog=exog,
             steps=forecasting_steps,
             interval=interval,
-            n_boot=20
+            n_boot=20,
         )
 
-        return {
-            'model_name': model_name,
-            'sampling_freq': sampling_freq,
-            'differentiation': differentiation,
-            'selected_lags': selected_lags,
-            'selected_exog': selected_exog,
-            'dataset_selected_features': dataset_selected_features,
-            'selected_hyperparameters': selected_hyperparameters,
-            'backtest_steps': backtest_steps,
-            'backtest_prediction_interval': interval,
-            'backtest_predictions':backtest_predictions,
-            'backtest_error': backtest_error,
-            'backtest_interval_coverage': coverage,
-            'model_trained_on_all_data': final_forecaster,
-            'forecasting_steps': forecasting_steps,
-            'forecast': forecast
-        }
+        return ForecastModelResult(
+            model_name=model_name,
+            sampling_freq=sampling_freq,
+            differentiation=differentiation,
+            selected_lags=selected_lags,
+            selected_exog=selected_exog,
+            dataset_selected_features=dataset_selected_features,
+            selected_hyperparameters=selected_hyperparameters,
+            backtest_steps=backtest_steps,
+            backtest_prediction_interval=interval,
+            backtest_predictions=backtest_predictions,
+            backtest_error=backtest_error,
+            backtest_interval_coverage=coverage,
+            model_trained_on_all_data=final_forecaster,
+            forecasting_steps=forecasting_steps,
+            forecast=forecast,
+        )

@@ -86,7 +86,7 @@ from model_creation import model_create_train_test_and_predict
 # )
 
 # print(model['model_name'])
-# print(model['backtest_error'])
+# print(model.backtest_error)
 
 # quickstart = demonstration(processedData, features, model)
 # stable = quickstart
@@ -237,11 +237,12 @@ def Engine(
     except Exception as e:
         return 4, f"An error occurred: {str(e)}"  # Additional status code for unexpected errors
 
-model1 = Engine(
+status, model1 = Engine(
     "modifiedkaggletraffic2.csv",
     ['baseline']
 )
 
 print("***************************************************")
 
-print(model1[1][0]['backtest_error'])
+print(model1[0].model_name)
+print(model1[0].backtest_error)
