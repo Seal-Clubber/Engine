@@ -1788,7 +1788,7 @@ def model_create_train_test_and_predict(
             'selected_lags': None,
             'selected_exog': None,
             'dataset_selected_features': dataset_selected_features,
-            'Selected_hyperparameters': None,
+            'selected_hyperparameters': None,
             'backtest_steps': backtest_steps,
             'backtest_prediction_interval': None,
             'backtest_error': backtest_error,
@@ -1858,7 +1858,7 @@ def model_create_train_test_and_predict(
             'selected_lags': None,
             'selected_exog': None,
             'dataset_selected_features': None,
-            'Selected_hyperparameters': None,
+            'selected_hyperparameters': None,
             'backtest_steps': backtest_steps,
             'backtest_prediction_interval': None,
             'backtest_error': backtest_error,
@@ -2053,7 +2053,7 @@ def model_create_train_test_and_predict(
             'selected_lags': None,
             'selected_exog': None,
             'dataset_selected_features': None,
-            'Selected_hyperparameters': None,
+            'selected_hyperparameters': None,
             'backtest_steps': backtest_steps,
             'backtest_prediction_interval': interval,
             'backtest_error': error,
@@ -2124,11 +2124,11 @@ def model_create_train_test_and_predict(
                     n_trials=20,
                     random_state=random_state_hyper
                 )
-                Selected_hyperparameters = results_search['params'].iat[0]
+                selected_hyperparameters = results_search['params'].iat[0]
             else:
-                Selected_hyperparameters = default_hyperparameters
+                selected_hyperparameters = default_hyperparameters
         else:
-            Selected_hyperparameters = None
+            selected_hyperparameters = None
 
 
         # # Create final forecaster with best parameters
@@ -2140,7 +2140,7 @@ def model_create_train_test_and_predict(
             steps=steps,
             weight=weight,
             differentiation=differentiation,
-            custom_params=Selected_hyperparameters,
+            custom_params=selected_hyperparameters,
             if_exog=if_exog
         )
 
@@ -2196,7 +2196,7 @@ def model_create_train_test_and_predict(
             'selected_lags': selected_lags,
             'selected_exog': selected_exog,
             'dataset_selected_features': dataset_selected_features,
-            'Selected_hyperparameters': Selected_hyperparameters,
+            'selected_hyperparameters': selected_hyperparameters,
             'backtest_steps': backtest_steps,
             'backtest_prediction_interval': interval,
             'backtest_predictions':backtest_predictions,
