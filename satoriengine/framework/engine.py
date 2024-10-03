@@ -20,10 +20,11 @@ from satoriengine.framework.demonstration import demonstration
 
 streamId = StreamId(source='test', stream='test', target='test', author='test')
 path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
+#
+quickstart = demonstration(...)
 processedData = process_data(filename=path)
 features = determine_feature_set(processedData)
 model = model_create_train_test_and_predict(features)
-quickstart = demonstration(...)
 stable = quickstart
 # for loop:
 #    heavymodel = demonstration(...)

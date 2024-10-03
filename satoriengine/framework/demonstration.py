@@ -2207,15 +2207,18 @@ def model_create_train_test_and_predict(
             'forecast': forecast
         }
 
-def demonstration(filename,
-                  col_names,
-                  list_of_models,
-                  interval=[10,90],
-                  feature_set_reduction=False,
-                  exogenous_feature_type='ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative',
-                  feature_set_reduction_method='RFECV',
-                  random_state_hyperr = 123,
-                  metric='mase'):
+def demonstration(
+    filename,
+    col_names,
+    list_of_models,
+    interval=[10,90],
+    feature_set_reduction=False,
+    exogenous_feature_type='ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative',
+    feature_set_reduction_method='RFECV',
+    random_state_hyperr = 123,
+    metric='mase'
+):
+    ''' Demonstration function for the Satori Engine '''
 
     list_of_models = [model.lower() for model in list_of_models]
 
