@@ -262,19 +262,13 @@ class DataManager(Cached):
                     logging.info(
                         'outgoing realtime prediction:',
                         f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
-                    # send predictions to server, not pubsub now
-                    # self.getStart().publish(
-                    #    topic=streamId.topic(),
-                    #    data=data,
-                    #    observationTime=timestamp,
-                    #    observationHash=observationHash)
-                    start.server.publish(
+                    start.publish(
                         topic=streamId.topic(),
                         data=data,
                         observationTime=timestamp,
                         observationHash=observationHash,
-                        isPrediction=True,
-                        useAuthorizedCall=start.version[1] >= 2 and start.version[2] >= 6)
+                        toCentral=True,
+                        isPrediction=True)
 
                 # data = self.predictions.get(model.key)
                 if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
