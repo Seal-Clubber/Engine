@@ -11,26 +11,23 @@
 # Engine training process one stream:
 
 # from satorilib.api.disk.filetypes.csv import CSVManager # df = CSVManager.read(filePath=path)
-
-# from satorilib.api.hash import generatePathId
-# from satorilib.concepts import StreamId
-# from satoriengine.framework.determine_feature_set import determine_feature_set
-# from satoriengine.framework.model_creation import model_create_train_test_and_predict
-# from satoriengine.framework.process import process_data
-# from satoriengine.framework.demonstration import demonstration
+import threading
+from satorilib.api.hash import generatePathId
+from satorilib.concepts import Stream, StreamId
 
 # Data processing
 # ==============================================================================
 
 from datetime import datetime
 import random
+from typing import Union
 
 from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
 
-streamId = StreamId(source='test', stream='test', target='test', author='test')
-path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
+# streamId = StreamId(source='test', stream='test', target='test', author='test')
+# path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
 #
 # proc_data = process_data(filename='modifiedkaggletraffic2.csv')
 
@@ -112,18 +109,60 @@ def check_model_suitability(list_of_models, allowed_models, dataset_length):
 
 
 class Engine:
+    def __init__(self, streams: list[Stream]):
+        ''' build all the models '''
+        # fill in
+        self.trigger()
 
-    def __init__(self):
-        self.stable = None
+    def trigger(self):
+        ''' setup our BehaviorSubject streams for inter-thread communication '''
+        # fill in
+        # on new data pass to necessary models
+
+
+class Model:
+
+    def __init__(self, streamId: StreamId, datapath_override: str = None, modelpath_override: str = None):
+        self.streamId = streamId
+        self.datapath = datapath_override or self.data_path()
+        self.modelpath = modelpath_override or self.model_path()
+        self.stable: list = self.load()
+
+    def data_path(self) -> str:
+        return f'./data/{generatePathId(streamId=self.streamId)}/aggregate.csv'
+
+    def model_path(self) -> str:
+        return f'./models/{generatePathId(streamId=self.streamId)}'
+
+    def load(self) -> Union[None, list]:
+        ''' loads the stable model from disk if present'''
+        # self.modelpath
+        # self = joblib.load(self, self.modelpath)
+        # self.stable = joblib.load(self, self.modelpath)
+        # fill in
+        return None  # if not present
+
+    def save(self):
+        ''' saves the stable model to disk '''
+        # joblib - saving Pythons objects
+        # joblib.dump(self, self.modelpath)
+        # joblib.dump(self.stable, self.modelpath)
+        # self.modelpath
+        # fill in
 
     def replace(self):
         ''' replace the stable model '''
+        # fill in
 
-    def compare(self):
+    def compare(self, model) -> bool:
         ''' compare the stable model to the heavy model '''
+        # backtest error comparison
+        # fill in
+        return True  # replace - model is better
 
     def predict(self, data=None):
         ''' prediction without training '''
+        # fill in
 
     def run(self):
         '''
@@ -131,7 +170,18 @@ class Engine:
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         '''
+        status, model = engine(self.datapath, ['quick_start'])
+        if status == 1 and self.stable is None:
+            self.stable = model
         while True:
+            status, pilot = engine(self.datapath, ['random_model'])
+            if self.compare(pilot):
+                self.replace()
+                self.save()
+
+    def runForever(self):
+        self.thread = threading.Thread(target=self.run, args=(), daemon=True)
+        self.thread.start()
 
 
 def engine(
@@ -268,25 +318,20 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 
-<<<<<<< HEAD
 status, model1 = engine(
-    "modifiedkaggletraffic2.csv",
-    ['baseline']
-=======
-status, model1 = Engine(
     "NATGAS1D.csv",
     ['quick_start']
->>>>>>> 4840d77103230cc47fdd5f41060370adae85e901
 )
 
 print("***************************************************")
 
 print(model1[0].model_name)
 print(model1[0].backtest_error)
-<<<<<<< HEAD
-=======
 print(model1[0].forecast)
 
 
 # make an endless loop and constantly compare and find the best model
->>>>>>> 4840d77103230cc47fdd5f41060370adae85e901
+# e = Model(
+#   streamId=StreamId(source='test', stream='test', target='test', author='test'),
+#   datapath_override="NATGAS1D.csv")
+# e.runForever()
