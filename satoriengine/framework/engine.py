@@ -29,8 +29,8 @@ from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
 
-# streamId = StreamId(source='test', stream='test', target='test', author='test')
-# path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
+streamId = StreamId(source='test', stream='test', target='test', author='test')
+path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
 #
 # proc_data = process_data(filename='modifiedkaggletraffic2.csv')
 
@@ -268,12 +268,25 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 
+<<<<<<< HEAD
 status, model1 = engine(
     "modifiedkaggletraffic2.csv",
     ['baseline']
+=======
+status, model1 = Engine(
+    "NATGAS1D.csv",
+    ['quick_start']
+>>>>>>> 4840d77103230cc47fdd5f41060370adae85e901
 )
 
 print("***************************************************")
 
 print(model1[0].model_name)
 print(model1[0].backtest_error)
+<<<<<<< HEAD
+=======
+print(model1[0].forecast)
+
+
+# make an endless loop and constantly compare and find the best model
+>>>>>>> 4840d77103230cc47fdd5f41060370adae85e901
