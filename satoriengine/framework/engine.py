@@ -95,6 +95,7 @@ from model_creation import model_create_train_test_and_predict
 #    # compare to stable
 #    #   replace if better
 
+
 def check_model_suitability(list_of_models, allowed_models, dataset_length):
     suitable_models = []
     unsuitable_models = []
@@ -110,14 +111,37 @@ def check_model_suitability(list_of_models, allowed_models, dataset_length):
     return suitable_models, unsuitable_models
 
 
-def Engine(
+class Engine:
+
+    def __init__(self):
+        self.stable = None
+
+    def replace(self):
+        ''' replace the stable model '''
+
+    def compare(self):
+        ''' compare the stable model to the heavy model '''
+
+    def predict(self, data=None):
+        ''' prediction without training '''
+
+    def run(self):
+        '''
+        main loop for generating models and comparing them to the best known
+        model so far in order to replace it if the new model is better, always
+        using the best known model to make predictions on demand.
+        '''
+        while True:
+
+
+def engine(
     filename,
     list_of_models,
-    interval=[10,90],
+    interval=[10, 90],
     feature_set_reduction=False,
     exogenous_feature_type='ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative',
     feature_set_reduction_method='RFECV',
-    random_state_hyperr = 123,
+    random_state_hyperr=123,
     metric='mase'
 ):
     ''' Engine function for the Satori Engine '''
@@ -135,7 +159,8 @@ def Engine(
     )
 
     if quick_start_present and random_model_present:
-        warnings.warn("Both 'quick_start' and 'random_model' are present. 'quick_start' will take precedence.")
+        warnings.warn(
+            "Both 'quick_start' and 'random_model' are present. 'quick_start' will take precedence.")
 
     if random_model_present and not quick_start_present:
         current_time = datetime.now()
@@ -145,12 +170,14 @@ def Engine(
 
         # Randomly select options
         feature_set_reduction = random.choice([True, False])
-        exogenous_feature_type = random.choice(["NoExogenousFeatures", "Additive", "AdditiveandMultiplicativeExogenousFeatures", "ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative"])
+        exogenous_feature_type = random.choice(["NoExogenousFeatures", "Additive", "AdditiveandMultiplicativeExogenousFeatures",
+                                               "ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative"])
         feature_set_reduction_method = random.choice(["RFECV", "RFE"])
         random_state_hyper = random.randint(0, 2**32 - 1)
 
         # Replace 'random_model' with a randomly selected model from allowed_models
-        list_of_models = [random.choice(proc_data.allowed_models) if model == "random_model" else model for model in list_of_models]
+        list_of_models = [random.choice(
+            proc_data.allowed_models) if model == "random_model" else model for model in list_of_models]
         print(f"Randomly selected models: {list_of_models}")
         print(f"feature_set_reduction: {feature_set_reduction}")
         print(f"exogenous_feature_type: {exogenous_feature_type}")
@@ -166,7 +193,8 @@ def Engine(
         return 2, "Status = 2 (insufficient amount of data)"
 
     # Check if the requested models are suitable based on the allowed_models
-    suitable_models, unsuitable_models = check_model_suitability(list_of_models, proc_data.allowed_models, len(proc_data.dataset))
+    suitable_models, unsuitable_models = check_model_suitability(
+        list_of_models, proc_data.allowed_models, len(proc_data.dataset))
 
     if unsuitable_models:
         print("The following models are not allowed due to insufficient data:")
@@ -177,7 +205,8 @@ def Engine(
         return 3, "Status = 3 (none of the requested models are suitable for the available data)"
 
     # Filter the list_of_models to include only suitable models
-    list_of_models = [model for model, is_suitable in zip(list_of_models, suitable_models) if is_suitable]
+    list_of_models = [model for model, is_suitable in zip(
+        list_of_models, suitable_models) if is_suitable]
 
     try:
         features = determine_feature_set(
@@ -235,9 +264,11 @@ def Engine(
         return 1, list_of_results  # Status = 1 (ran correctly)
 
     except Exception as e:
-        return 4, f"An error occurred: {str(e)}"  # Additional status code for unexpected errors
+        # Additional status code for unexpected errors
+        return 4, f"An error occurred: {str(e)}"
 
-status, model1 = Engine(
+
+status, model1 = engine(
     "modifiedkaggletraffic2.csv",
     ['baseline']
 )
