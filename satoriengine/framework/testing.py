@@ -1,7 +1,22 @@
+# AIEngine
+#   for each model
+#       get it's own data
+#       get train and retrain model
+#           quickstart (first stable)
+#           heavy model (pilot)
+#       provide predictions on demand
+
+# Engine communication ZeroMQ ? or BehaviorSubjects?
+
+# Engine training process one stream:
+
 # from satorilib.api.disk.filetypes.csv import CSVManager # df = CSVManager.read(filePath=path)
 import threading
-from satorilib.api.hash import generatePathId
-from satorilib.concepts import Stream, StreamId
+# from satorilib.api.hash import generatePathId
+# from satorilib.concepts import Stream, StreamId
+
+# Data processing
+# ==============================================================================
 
 from datetime import datetime
 import random
@@ -10,6 +25,73 @@ from typing import Union, List
 from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
+
+# streamId = StreamId(source='test', stream='test', target='test', author='test')
+# path = f'./data/{generatePathId(streamId=streamId)}/aggregate.csv'
+#
+# proc_data = process_data(filename='modifiedkaggletraffic2.csv')
+
+# features = determine_feature_set(
+#     dataset=proc_data.dataset,
+#     data_train=proc_data.data_subsets['train'],
+#     end_validation=proc_data.end_times['validation'],
+#     end_train=proc_data.end_times['train'],
+#     dataset_start_time=proc_data.dataset_start_time,
+#     dataset_end_time=proc_data.dataset_end_time,
+#     dataset_with_features=proc_data.dataset_withfeatures,
+#     weight_para=proc_data.use_weight,
+#     initial_lags=proc_data.lags,
+#     exogenous_feature_type=None,
+#     feature_set_reduction=False,
+#     feature_set_reduction_method=None,
+#     bayesian_trial=20,
+#     frequency=proc_data.sampling_frequency,
+#     backtest_steps=proc_data.backtest_steps,
+#     prediction_steps=proc_data.forecasting_steps
+#     )
+
+# # print(features.dataset_selected_features.head())
+# # print(features.differentiation)
+
+# model = model_create_train_test_and_predict(
+#     model_name= 'baseline',
+#     dataset= proc_data.dataset,
+#     dataset_train=proc_data.data_subsets['train'],
+#     end_validation=proc_data.end_times['validation'],
+#     end_test=proc_data.end_times['test'],
+#     sampling_freq=proc_data.sampling_frequency,
+#     differentiation=features.differentiation,
+#     selected_lags=features.selected_lags,
+#     selected_exog=features.selected_exog,
+#     dataset_selected_features=features.dataset_selected_features,
+#     data_missing=features.missing_values,
+#     weight=features.weight,
+#     select_hyperparameters=True,
+#     default_hyperparameters=None,
+#     random_state_hyper=123,
+#     backtest_steps=proc_data.backtest_steps,
+#     interval=[10, 90],
+#     metric='mase',
+#     forecast_calendar_features=features.forecast_calendar_features,
+#     forecasting_steps=proc_data.forecasting_steps,
+#     hour_seasonality=features.hour_seasonality,
+#     dayofweek_seasonality=features.dow_seasonality,
+#     week_seasonality=features.week_seasonality,
+#     baseline_1=proc_data.time_metric_baseline,
+#     baseline_2=proc_data.forecasterequivalentdate,
+#     baseline_3=proc_data.forecasterequivalentdate_n_offsets
+# )
+
+# print(model['model_name'])
+# print(model.backtest_error)
+
+# quickstart = demonstration(processedData, features, model)
+# stable = quickstart
+# for loop:
+#    heavymodel = demonstration(...)
+#    # compare to stable
+#    #   replace if better
+
 
 def check_model_suitability(list_of_models, allowed_models, dataset_length):
     suitable_models = []
@@ -26,31 +108,37 @@ def check_model_suitability(list_of_models, allowed_models, dataset_length):
     return suitable_models, unsuitable_models
 
 
-class Engine:
-    def __init__(self, streams: list[Stream]):
-        ''' build all the models '''
-        # fill in
-        self.trigger()
+# class Engine:
+#     def __init__(self, streams: list[Stream]):
+#         ''' build all the models '''
+#         # fill in
+#         self.trigger()
 
-    def trigger(self):
-        ''' setup our BehaviorSubject streams for inter-thread communication '''
-        # fill in
-        # on new data pass to necessary models
+#     def trigger(self):
+#         ''' setup our BehaviorSubject streams for inter-thread communication '''
+#         # fill in
+#         # on new data pass to necessary models
 
 
 class Model:
 
-    def __init__(self, streamId: StreamId, datapath_override: str = None, modelpath_override: str = None):
+    # def __init__(self, streamId: StreamId, datapath_override: str = None, modelpath_override: str = None):
+    #     self.streamId = streamId
+    #     self.datapath = datapath_override or self.data_path()
+    #     self.modelpath = modelpath_override or self.model_path()
+    #     self.stable: list = self.load()
+
+    def __init__(self, streamId: str = None, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
         self.stable: list = self.load()
 
-    def data_path(self) -> str:
-        return f'./data/{generatePathId(streamId=self.streamId)}/aggregate.csv'
+    # def data_path(self) -> str:
+    #     return f'./data/{generatePathId(streamId=self.streamId)}/aggregate.csv'
 
-    def model_path(self) -> str:
-        return f'./models/{generatePathId(streamId=self.streamId)}'
+    # def model_path(self) -> str:
+    #     return f'./models/{generatePathId(streamId=self.streamId)}'
 
     def load(self) -> Union[None, list]:
         ''' loads the stable model from disk if present'''
@@ -58,6 +146,7 @@ class Model:
         # self = joblib.load(self, self.modelpath)
         # self.stable = joblib.load(self, self.modelpath)
         # fill in
+        # print("ith aano")
         return None  # if not present
 
     def save(self):
@@ -67,6 +156,7 @@ class Model:
         # joblib.dump(self.stable, self.modelpath)
         # self.modelpath
         # fill in
+        pass
 
     def replace(self, model):
         ''' replace the stable model '''
@@ -74,6 +164,7 @@ class Model:
 
     def compare(self, model) -> bool:
         ''' compare the stable model to the heavy model '''
+        # backtest error comparison
         print("******************************************************************************************************")
         print(f"Pilot Score : {model[0].backtest_error}")
         print(f"Stable Score : {self.stable[0].backtest_error}")
@@ -82,31 +173,45 @@ class Model:
             return True
         return False
 
-    def predict(self, data=None):
+
+    def predict(self, data=None): # only needs to fit the whole data ( rn fit for training + fit for the whole dataset )
         ''' prediction without training '''
-        status, predictor_model = engine( filename=self.data_path, 
+        status, predictor_model = engine( filename=self.datapath, 
                                list_of_models=[self.stable[0].model_name])
         print(predictor_model[0].model_name)
         print(predictor_model[0].forecast)
 
-    def run(self):
+    def run(self): # it only needs to fit the training set ( rn fit for training + fit for the whole dataset )
         '''
         main loop for generating models and comparing them to the best known
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         '''
         status, model = engine(self.datapath, ['quick_start'])
+        i=0
         if status == 1 and self.stable is None:
             self.stable = model
-        while True:
+            print(model[0].backtest_error)
+        while i<3:
             status, pilot = engine(self.datapath, ['random_model'])
             if self.compare(pilot):
+                print('yesss')
                 self.replace(pilot)
                 self.save()
+            i += 1
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
         self.thread.start()
+
+    def run_specific(self):
+        ''' To pass in a model and run only that ( testing purposes) '''
+        status, model = engine(self.datapath, [self.modelpath])
+        self.stable = model
+        # print(status)
+        # print(model[0].model_name)
+        # print(model[0].backtest_error)
+        # print(type(model[0]))
 
 def engine(
     filename: str,
@@ -132,9 +237,9 @@ def engine(
         quick_start=quick_start_present
     )
 
-    if quick_start_present and random_model_present:
-        warnings.warn(
-            "Both 'quick_start' and 'random_model' are present. 'quick_start' will take precedence.")
+    # if quick_start_present and random_model_present:
+    #     warnings.warn(
+    #         "Both 'quick_start' and 'random_model' are present. 'quick_start' will take precedence.")
 
     if random_model_present and not quick_start_present:
         current_time = datetime.now()
@@ -242,9 +347,28 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 
+# status, model1 = engine(
+#     "NATGAS1D.csv",
+#     ['quick_start']
+# )
+
+# print("***************************************************")
+
+# print(model1[0].model_name)
+# print(model1[0].backtest_error)
+# print(model1[0].forecast)
+
+
 # make an endless loop and constantly compare and find the best model
 e = Model(
 #   streamId=StreamId(source='test', stream='test', target='test', author='test'),
   datapath_override="NATGAS1D.csv",
   modelpath_override='baseline')
+print("test")
+# e.run()
+e.run_specific()
+print(e.stable[0].model_name)
+print(e.stable[0].backtest_error)
+e.predict()
+print(type(e.stable[0]))
 # e.runForever()
