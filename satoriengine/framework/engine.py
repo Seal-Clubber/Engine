@@ -68,26 +68,24 @@ class Model:
         # self.modelpath
         # fill in
 
-    def replace(self, model):
-        ''' replace the stable model '''
-        self.stable = model
-
-    def compare(self, model) -> bool:
+    def compare(self, model, replace:bool = False) -> bool:
         ''' compare the stable model to the heavy model '''
-        print("******************************************************************************************************")
-        print(f"Pilot Score : {model[0].backtest_error}")
-        print(f"Stable Score : {self.stable[0].backtest_error}")
-        print("******************************************************************************************************")
-        if model[0].backtest_error < self.stable[0].backtest_error:
+        compared  = model[0].backtest_error < self.stable[0].backtest_error
+        if replace and compared:
+            self.stable = model
             return True
-        return False
+        return compared
 
     def predict(self, data=None):
         ''' prediction without training '''
-        status, predictor_model = engine( filename=self.data_path, 
-                               list_of_models=[self.stable[0].model_name])
-        print(predictor_model[0].model_name)
-        print(predictor_model[0].forecast)
+        status, predictor_model = engine( filename=self.datapath, 
+                               list_of_models=[self.stable[0].model_name],
+                               mode='predict',
+                               unfitted_forecaster=self.stable[0].unfitted_forecaster
+                               )
+        if status == 1:
+            print(predictor_model[0].forecast)
+
 
     def run(self):
         '''
@@ -96,12 +94,13 @@ class Model:
         using the best known model to make predictions on demand.
         '''
         status, model = engine(self.datapath, ['quick_start'])
+        i=0
         if status == 1 and self.stable is None:
             self.stable = model
+            print(model[0].backtest_error)
         while True:
             status, pilot = engine(self.datapath, ['random_model'])
-            if self.compare(pilot):
-                self.replace(pilot)
+            if self.compare(pilot, replace=True):
                 self.save()
 
     def run_forever(self):
@@ -132,9 +131,9 @@ def engine(
         quick_start=quick_start_present
     )
 
-    if quick_start_present and random_model_present:
-        warnings.warn(
-            "Both 'quick_start' and 'random_model' are present. 'quick_start' will take precedence.")
+    # if quick_start_present and random_model_present:
+    #     warnings.warn(
+    #         "Both 'quick_start' and 'random_model' are present. 'quick_start' will take precedence.")
 
     if random_model_present and not quick_start_present:
         current_time = datetime.now()

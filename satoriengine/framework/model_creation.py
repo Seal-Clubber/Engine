@@ -1,4 +1,5 @@
-from typing import Callable, Union, Any, Dict, List
+from typing import Callable, Union, Any, Dict, List, Optional
+import copy
 
 # Data processing
 # ==============================================================================
@@ -52,23 +53,27 @@ from sktime.performance_metrics.forecasting import (
 )  # check if this is needed
 import optuna
 
+
 class ForecastModelResult:
-    def __init__(self, 
-                 model_name: str,
-                 sampling_freq: str,
-                 differentiation: int,
-                 selected_lags: int,
-                 selected_exog: list,
-                 dataset_selected_features: pd.DataFrame,
-                 selected_hyperparameters: Union[Dict[str, Any], None],
-                 backtest_steps: int,
-                 backtest_prediction_interval: List[int],
-                 backtest_predictions: pd.DataFrame,
-                 backtest_error: float,
-                 backtest_interval_coverage: Union[float, str],
-                 model_trained_on_all_data: Any,
-                 forecasting_steps: int,
-                 forecast: pd.DataFrame):
+    def __init__(
+        self,
+        model_name: str,
+        sampling_freq: str,
+        differentiation: int,
+        selected_lags: int,
+        selected_exog: list,
+        dataset_selected_features: pd.DataFrame,
+        selected_hyperparameters: Union[Dict[str, Any], None],
+        backtest_steps: Optional[int] = None,
+        backtest_prediction_interval: Optional[List[int]] = None,
+        backtest_predictions: Optional[pd.DataFrame] = None,
+        backtest_error: Optional[float] = None,
+        backtest_interval_coverage: Optional[Union[float, str]] = None,
+        model_trained_on_all_data: Optional[Any] = None,
+        forecasting_steps: Optional[int] = None,
+        forecast: Optional[pd.DataFrame] = None,
+        unfitted_forecaster: Optional[Any] = None,
+    ):
         self.model_name = model_name
         self.sampling_freq = sampling_freq
         self.differentiation = differentiation
@@ -84,6 +89,7 @@ class ForecastModelResult:
         self.model_trained_on_all_data = model_trained_on_all_data
         self.forecasting_steps = forecasting_steps
         self.forecast = forecast
+        self.unfitted_forecaster = unfitted_forecaster
 
 
 def create_forecaster(
@@ -749,6 +755,8 @@ def model_create_train_test_and_predict(
     hour_seasonality: bool = False,
     dayofweek_seasonality: bool = False,
     week_seasonality: bool = False,
+    mode: str = "train",
+    forecaster: Optional[Any] = None,
 ):
 
     if data_missing:
@@ -764,22 +772,35 @@ def model_create_train_test_and_predict(
     y_test = y.iloc[split_index + 1 :]
 
     if model_name.lower() == "baseline":
-
         baseline_forecaster = create_forecaster(
             "baseline",
             time_metric_baseline=baseline_1,
             forecasterequivalentdate=baseline_2,
             forecasterequivalentdate_n_offsets=baseline_3,
         )
-        baseline_forecaster.fit(y=dataset_selected_features.loc[:end_validation, value])
-        backtest_predictions = baseline_forecaster.predict(steps=backtest_steps)
-        backtest_predictions = backtest_predictions.to_frame(name="pred")
-        backtest_error = calculate_error(
-            y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
-        )
-        coverage, _ = "NA"
-        baseline_forecaster.fit(y=dataset_selected_features[value])
-        forecast = baseline_forecaster.predict(steps=forecasting_steps)
+
+        backtest_predictions = None
+        backtest_error = None
+        coverage = None
+        forecast = None
+
+        if mode == "all" or mode == "train":
+            baseline_forecaster.fit(
+                y=dataset_selected_features.loc[:end_validation, value]
+            )
+            backtest_predictions = baseline_forecaster.predict(steps=backtest_steps)
+            backtest_predictions = backtest_predictions.to_frame(name="pred")
+            backtest_error = calculate_error(
+                y_test,
+                backtest_predictions[: len(y_test)],
+                y_train,
+                error_type=metric,
+            )
+            coverage = "NA"
+
+        if mode == "all" or mode == "predict":
+            baseline_forecaster.fit(y=dataset_selected_features[value])
+            forecast = baseline_forecaster.predict(steps=forecasting_steps)
 
         return ForecastModelResult(
             model_name=model_name,
@@ -788,7 +809,7 @@ def model_create_train_test_and_predict(
             selected_lags=selected_lags,
             selected_exog=selected_exog,
             dataset_selected_features=dataset_selected_features,
-            selected_hyperparameters=None,  # baseline doesn't use hyperparameters
+            selected_hyperparameters=None,
             backtest_steps=backtest_steps,
             backtest_prediction_interval=interval,
             backtest_predictions=backtest_predictions,
@@ -798,11 +819,11 @@ def model_create_train_test_and_predict(
             forecasting_steps=forecasting_steps,
             forecast=forecast,
         )
-    # add the linear regressors here
+
     elif model_name.lower() == "arima":
         sampling_timedelta = pd.Timedelta(sampling_freq)
         day_timedelta = pd.Timedelta(days=1)
-        # Run baseline forecasting
+        
         seasonal = False
         if hour_seasonality:
             m = forecasting_steps
@@ -819,48 +840,53 @@ def model_create_train_test_and_predict(
 
         m = int(m)
         print(m)
-        # seasonal = False
 
         arima_forecaster = create_forecaster(
             model_type="arima",
             y=dataset_selected_features.loc[:end_validation, value],
-            start_p=forecasting_steps,  # no.of lags at the beginning of the parameter search
-            start_q=0,  # no.of moving averages at the beginnning of the parameter search
-            max_p=forecasting_steps,  # max no.of lags
-            max_q=1,  # max no.of moving averages # can change to 1 if it takes longer to test
-            seasonal=seasonal,  # was True
-            test="adf",  # 'adf' test used to determine trend non-stationarity
-            m=m,  # was 24
+            start_p=forecasting_steps,
+            start_q=0,
+            max_p=forecasting_steps,
+            max_q=1,
+            seasonal=seasonal,
+            test="adf",
+            m=m,
             d=None,
             D=None,
         )
 
-        arima_forecaster.fit(
-            y=dataset_selected_features.loc[:end_validation, value],
-            suppress_warnings=True,
-        )
+        backtest_predictions = None
+        backtest_error = None
+        coverage = None
+        forecast = None
 
-        backtest_predictions = arima_forecaster.predict_interval(
-            steps=backtest_steps, interval=interval
-        )
-        backtest_error = calculate_error(
-            y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
-        )
+        if mode == "all" or mode == "train":
+            arima_forecaster.fit(
+                y=dataset_selected_features.loc[:end_validation, value],
+                suppress_warnings=True
+            )
+            backtest_predictions = arima_forecaster.predict_interval(
+                steps=backtest_steps, interval=interval
+            )
+            backtest_error = calculate_error(
+                y_test,
+                backtest_predictions[: len(y_test)],
+                y_train,
+                error_type=metric,
+            )
+            coverage, _ = calculate_interval_coverage(
+                dataset_selected_features,
+                backtest_predictions,
+                end_validation,
+                end_test,
+                value,
+            )
 
-        # Calculate interval coverage
-        coverage, _ = calculate_interval_coverage(
-            dataset_selected_features,
-            backtest_predictions,
-            end_validation,
-            end_test,
-            value,
-        )
-
-        arima_forecaster.fit(y=dataset_selected_features[value], suppress_warnings=True)
-
-        arima_predictions = predict_interval_custom(
-            forecaster=arima_forecaster, steps=forecasting_steps, alpha=0.05
-        )
+        if mode == "all" or mode == "predict":
+            arima_forecaster.fit(y=dataset_selected_features[value], suppress_warnings=True)
+            forecast = predict_interval_custom(
+                forecaster=arima_forecaster, steps=forecasting_steps, alpha=0.05
+            )
 
         return ForecastModelResult(
             model_name=model_name,
@@ -877,13 +903,13 @@ def model_create_train_test_and_predict(
             backtest_interval_coverage=coverage,
             model_trained_on_all_data=arima_forecaster,
             forecasting_steps=forecasting_steps,
-            forecast=arima_predictions,
+            forecast=forecast,
         )
 
     elif model_name[:3].lower() == "skt":
 
         if model_name.lower() == "skt_lstm_deeplearning":
-            forecaster = NeuralForecastLSTM(freq=sampling_freq, max_steps=10)
+            forecaster = NeuralForecastLSTM(freq=sampling_freq, max_steps=200)
 
         elif model_name.lower() == "skt_prophet_additive":
             forecaster = Prophet(
@@ -1046,55 +1072,63 @@ def model_create_train_test_and_predict(
         y_train.index = y_train.index.floor(sampling_freq)
         time_delta = pd.Timedelta(minutes=float(difference_minutes[0]))
 
-        if model_name.lower() == "skt_lstm_deeplearning":
-            forecaster.fit(y_train, fh=list(range(1, backtest_steps + 1)))
-            y_pred_backtest = forecaster.predict(list(range(1, backtest_steps + 1)))
-            backtest_prediction = y_pred_backtest.to_frame(name="pred")
-            error = calculate_error(
-                y_test, backtest_prediction[: len(y_test)], y_train, error_type=metric
-            )
-            backtest_prediction.index = backtest_prediction.index + time_delta
-            coverage = "NA"
-            forecaster.fit(y, fh=list(range(1, forecasting_steps + 1)))
-            y_pred_future = forecaster.predict(list(range(1, forecasting_steps + 1)))
-            forecast = y_pred_future.to_frame(name="pred")
-            forecast.index = forecast.index + time_delta
+        lower, upper = interval
+        backtest_prediction = None
+        error = None
+        coverage = None
+        forecast = None
 
-        else:
-            forecaster.fit(y_train)
-            y_pred_backtest = forecaster.predict(list(range(1, backtest_steps + 1)))
-            lower, upper = interval
-            y_pred_backtest_interval = forecaster.predict_interval(
-                fh=list(range(1, backtest_steps + 1)), coverage=[(upper - lower) / 100]
-            )
-            y_pred_backtest_df = y_pred_backtest.to_frame(name="pred")
-            backtest_prediction = pd.concat(
-                [y_pred_backtest_df, y_pred_backtest_interval], axis=1
-            )
-            backtest_prediction.columns = ["pred", "lower_bound", "upper_bound"]
-            error = calculate_error(
-                y_test, backtest_prediction[: len(y_test)], y_train, error_type=metric
-            )
-            # dataset_feature_selection.index = dataset_feature_selection.index - time_delta
-            backtest_prediction.index = backtest_prediction.index + time_delta
-            coverage, _ = calculate_interval_coverage(
-                dataset_selected_features,
-                backtest_prediction,
-                end_validation,
-                end_test,
-                value,
-            )
-            forecaster.fit(y)
-            y_pred_future = forecaster.predict(list(range(1, forecasting_steps + 1)))
-            y_pred_future_interval = forecaster.predict_interval(
-                fh=list(range(1, forecasting_steps + 1)),
-                coverage=[(upper - lower) / 100],
-            )
-            # y_pred_future.index = y_pred_future.index + time_delta
-            y_pred_df = y_pred_future.to_frame(name="pred")
-            forecast = pd.concat([y_pred_df, y_pred_future_interval], axis=1)
-            forecast.columns = ["pred", "lower_bound", "upper_bound"]
-            forecast.index = forecast.index + time_delta
+        if mode == "all" or mode == "train":
+            if model_name.lower() == "skt_lstm_deeplearning":
+                forecaster.fit(y_train, fh=list(range(1, backtest_steps + 1)))
+                y_pred_backtest = forecaster.predict(list(range(1, backtest_steps + 1)))
+                backtest_prediction = y_pred_backtest.to_frame(name="pred")
+                error = calculate_error(
+                    y_test, backtest_prediction[: len(y_test)], y_train, error_type=metric
+                )
+                backtest_prediction.index = backtest_prediction.index + time_delta
+                coverage = "NA"
+            else:
+                forecaster.fit(y_train)
+                y_pred_backtest = forecaster.predict(list(range(1, backtest_steps + 1)))
+                
+                y_pred_backtest_interval = forecaster.predict_interval(
+                    fh=list(range(1, backtest_steps + 1)), coverage=[(upper - lower) / 100]
+                )
+                y_pred_backtest_df = y_pred_backtest.to_frame(name="pred")
+                backtest_prediction = pd.concat(
+                    [y_pred_backtest_df, y_pred_backtest_interval], axis=1
+                )
+                backtest_prediction.columns = ["pred", "lower_bound", "upper_bound"]
+                error = calculate_error(
+                    y_test, backtest_prediction[: len(y_test)], y_train, error_type=metric
+                )
+                backtest_prediction.index = backtest_prediction.index + time_delta
+                coverage, _ = calculate_interval_coverage(
+                    dataset_selected_features,
+                    backtest_prediction,
+                    end_validation,
+                    end_test,
+                    value,
+                )
+
+        if mode == "all" or mode == "predict":
+            if model_name.lower() == "skt_lstm_deeplearning":
+                forecaster.fit(y, fh=list(range(1, forecasting_steps + 1)))
+                y_pred_future = forecaster.predict(list(range(1, forecasting_steps + 1)))
+                forecast = y_pred_future.to_frame(name="pred")
+                forecast.index = forecast.index + time_delta
+            else:
+                forecaster.fit(y)
+                y_pred_future = forecaster.predict(list(range(1, forecasting_steps + 1)))
+                y_pred_future_interval = forecaster.predict_interval(
+                    fh=list(range(1, forecasting_steps + 1)),
+                    coverage=[(upper - lower) / 100],
+                )
+                y_pred_df = y_pred_future.to_frame(name="pred")
+                forecast = pd.concat([y_pred_df, y_pred_future_interval], axis=1)
+                forecast.columns = ["pred", "lower_bound", "upper_bound"]
+                forecast.index = forecast.index + time_delta
 
         return ForecastModelResult(
             model_name=model_name,
@@ -1144,111 +1178,122 @@ def model_create_train_test_and_predict(
         else:
             if_exog = StandardScaler()
 
+        backtest_predictions = None
+        backtest_error = None
+        coverage = None
+        forecast = None
+        unfitted_forecaster = None
+        selected_hyperparameters = None
+
+        if mode == "all" or mode == "train":
         # Create forecaster
-        forecaster = create_forecaster(
-            model_name,
-            random_state=random_state,
-            verbose=verbose,
-            lags=selected_lags,
-            steps=steps,
-            weight=weight,
-            differentiation=differentiation,
-            if_exog=if_exog,
-        )
+            forecaster = create_forecaster(
+                model_name,
+                random_state=random_state,
+                verbose=verbose,
+                lags=selected_lags,
+                steps=steps,
+                weight=weight,
+                differentiation=differentiation,
+                if_exog=if_exog,
+            )
 
-        print(random_state_hyper)
-        if model_name.lower() != "direct_linearregression":
-            # # Hyperparameter search if required
-            if select_hyperparameters:
-                forecaster_search = GeneralizedHyperparameterSearch(
-                    forecaster=forecaster,
-                    y=dataset_selected_features.loc[:end_validation, value],
-                    lags=selected_lags,
-                    exog=dataset_selected_features.loc[:end_validation, selected_exog],
-                    steps=forecasting_steps,
-                    initial_train_size=len(dataset_train),  # dataset with features
-                    # metric=metric,
-                )
-                results_search, _ = forecaster_search.bayesian_search(
-                    param_ranges=default_hyperparameters,
-                    n_trials=20,
-                    random_state=random_state_hyper,
-                )
-                selected_hyperparameters = results_search["params"].iat[0]
+            if model_name.lower() != "direct_linearregression":
+                # # Hyperparameter search if required
+                if select_hyperparameters:
+                    forecaster_search = GeneralizedHyperparameterSearch(
+                        forecaster=forecaster,
+                        y=dataset_selected_features.loc[:end_validation, value],
+                        lags=selected_lags,
+                        exog=dataset_selected_features.loc[:end_validation, selected_exog],
+                        steps=forecasting_steps,
+                        initial_train_size=len(dataset_train),  # dataset with features
+                        # metric=metric,
+                    )
+                    results_search, _ = forecaster_search.bayesian_search(
+                        param_ranges=default_hyperparameters,
+                        n_trials=20,
+                        random_state=random_state_hyper,
+                    )
+                    selected_hyperparameters = results_search["params"].iat[0]
+                else:
+                    selected_hyperparameters = default_hyperparameters
             else:
-                selected_hyperparameters = default_hyperparameters
-        else:
-            selected_hyperparameters = None
+                selected_hyperparameters = None
 
-        # # Create final forecaster with best parameters
-        final_forecaster = create_forecaster(
-            model_name,
-            random_state=random_state,
-            verbose=verbose,
-            lags=selected_lags,
-            steps=steps,
-            weight=weight,
-            differentiation=differentiation,
-            custom_params=selected_hyperparameters,
-            if_exog=if_exog,
-        )
-
-        if len(selected_exog) == 0:
-            final_forecaster.fit(
-                y=dataset_selected_features.loc[:end_validation, value]
-            )
-        else:
-            final_forecaster.fit(
-                y=dataset_selected_features.loc[:end_validation, value],
-                exog=dataset_selected_features.loc[:end_validation, selected_exog],
+            # # Create final forecaster with best parameters
+            final_forecaster = create_forecaster(
+                model_name,
+                random_state=random_state,
+                verbose=verbose,
+                lags=selected_lags,
+                steps=steps,
+                weight=weight,
+                differentiation=differentiation,
+                custom_params=selected_hyperparameters,
+                if_exog=if_exog,
             )
 
-        if len(selected_exog) == 0:
-            backtest_predictions = final_forecaster.predict_interval(
-                steps=backtest_steps, interval=interval
+            unfitted_forecaster = copy.deepcopy(final_forecaster)
+
+            if len(selected_exog) == 0:
+                final_forecaster.fit(
+                    y=dataset_selected_features.loc[:end_validation, value]
+                )
+            else:
+                final_forecaster.fit(
+                    y=dataset_selected_features.loc[:end_validation, value],
+                    exog=dataset_selected_features.loc[:end_validation, selected_exog],
+                )
+
+            if len(selected_exog) == 0:
+                backtest_predictions = final_forecaster.predict_interval(
+                    steps=backtest_steps, interval=interval
+                )
+            else:
+                backtest_predictions = final_forecaster.predict_interval(
+                    steps=backtest_steps,
+                    exog=dataset_selected_features.loc[
+                        dataset_selected_features.index > end_validation, selected_exog
+                    ],
+                    interval=interval,
+                )
+
+            backtest_error = calculate_error(
+                y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
             )
-        else:
-            backtest_predictions = final_forecaster.predict_interval(
-                steps=backtest_steps,
-                exog=dataset_selected_features.loc[
-                    dataset_selected_features.index > end_validation, selected_exog
-                ],
+
+            coverage, _ = calculate_interval_coverage(
+                dataset_selected_features,
+                backtest_predictions,
+                end_validation,
+                end_test,
+                value,
+            )
+
+        if mode == "all" or mode == "predict":
+            final_forecaster = forecaster
+            if len(selected_exog) == 0:
+                final_forecaster.fit(y=dataset_selected_features[value])
+            else:
+                final_forecaster.fit(
+                    y=dataset_selected_features[value],
+                    exog=dataset_selected_features.loc[:end_test, selected_exog],
+                )
+
+            if len(selected_exog) == 0:
+                exog = None
+            else:
+                exog = forecast_calendar_features[selected_exog]
+
+            # Make the forecast
+            forecast = predict_interval_custom(
+                forecaster=final_forecaster,
+                exog=exog,
+                steps=forecasting_steps,
                 interval=interval,
+                n_boot=20,
             )
-
-        backtest_error = calculate_error(
-            y_test, backtest_predictions[: len(y_test)], y_train, error_type=metric
-        )
-
-        coverage, _ = calculate_interval_coverage(
-            dataset_selected_features,
-            backtest_predictions,
-            end_validation,
-            end_test,
-            value,
-        )
-
-        if len(selected_exog) == 0:
-            final_forecaster.fit(y=dataset_selected_features[value])
-        else:
-            final_forecaster.fit(
-                y=dataset_selected_features[value],
-                exog=dataset_selected_features.loc[:end_test, selected_exog],
-            )
-
-        if len(selected_exog) == 0:
-            exog = None
-        else:
-            exog = forecast_calendar_features[selected_exog]
-
-        # Make the forecast
-        forecast = predict_interval_custom(
-            forecaster=final_forecaster,
-            exog=exog,
-            steps=forecasting_steps,
-            interval=interval,
-            n_boot=20,
-        )
 
         return ForecastModelResult(
             model_name=model_name,
@@ -1264,6 +1309,7 @@ def model_create_train_test_and_predict(
             backtest_error=backtest_error,
             backtest_interval_coverage=coverage,
             model_trained_on_all_data=final_forecaster,
+            unfitted_forecaster=unfitted_forecaster,
             forecasting_steps=forecasting_steps,
             forecast=forecast,
         )
