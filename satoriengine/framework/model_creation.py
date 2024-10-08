@@ -281,7 +281,7 @@ class GeneralizedHyperparameterSearch:
         fixed_train_size=False,
         refit=False,
         return_best=True,
-        n_jobs="auto",
+        n_jobs=1, # was "auto" ( consideration for future )
         verbose=False,
         show_progress=True,
     ):
@@ -847,7 +847,7 @@ def model_create_train_test_and_predict(
             start_p=forecasting_steps,
             start_q=0,
             max_p=forecasting_steps,
-            max_q=1,
+            max_q=2, # was 1
             seasonal=seasonal,
             test="adf",
             m=m,
@@ -1003,7 +1003,7 @@ def model_create_train_test_and_predict(
                 restrict=True,
                 additive_only=False,
                 ignore_inf_ic=True,
-                n_jobs=-1,
+                # n_jobs=-1,
                 random_state=random_state_hyper,
             )
 
@@ -1059,8 +1059,8 @@ def model_create_train_test_and_predict(
                 use_damped_trend=use_damped_trend,
                 sp=splist,
                 use_arma_errors=True,
-                show_warnings=True,
-                n_jobs=-1,
+                show_warnings=False,
+                # n_jobs=-1,
                 multiprocessing_start_method="spawn",
                 context=None,
             )

@@ -1,22 +1,13 @@
-# AIEngine
-#   for each model
-#       get it's own data
-#       get train and retrain model
-#           quickstart (first stable)
-#           heavy model (pilot)
-#       provide predictions on demand
-
-# Engine communication ZeroMQ ? or BehaviorSubjects?
-
-# Engine training process one stream:
-
 # from satorilib.api.disk.filetypes.csv import CSVManager # df = CSVManager.read(filePath=path)
-import threading
+# import threading
+import joblib
 # from satorilib.api.hash import generatePathId
 # from satorilib.concepts import Stream, StreamId
 
-# Data processing
-# ==============================================================================
+# testing purposes
+import time
+import os
+# end
 
 from datetime import datetime
 import random
@@ -67,35 +58,35 @@ class Model:
         self.modelpath = modelpath_override or self.model_path()
         self.stable: list = self.load()
 
-    # def data_path(self) -> str:
-    #     return f'./data/{generatePathId(streamId=self.streamId)}/aggregate.csv'
+    def data_path(self) -> str:
+        return f'./data/{self.streamId}/aggregate.csv'
 
-    # def model_path(self) -> str:
-    #     return f'./models/{generatePathId(streamId=self.streamId)}'
+    def model_path(self) -> str:
+        return f'./models/{self.streamId}'
 
     def load(self) -> Union[None, list]:
         ''' loads the stable model from disk if present'''
-        # self.modelpath
-        # self = joblib.load(self, self.modelpath)
-        # self.stable = joblib.load(self, self.modelpath)
-        # fill in
-        # print("ith aano")
-        return None  # if not present
+        try:
+            self.stable = joblib.load(self.modelpath)
+            return self.stable
+        except FileNotFoundError:
+            return None
 
     def save(self):
         ''' saves the stable model to disk '''
-        # joblib - saving Pythons objects
-        # joblib.dump(self, self.modelpath)
-        # joblib.dump(self.stable, self.modelpath)
-        # self.modelpath
-        # fill in
-        pass
+        os.makedirs(os.path.dirname(self.modelpath), exist_ok=True)
+        joblib.dump(self.stable, self.modelpath)
 
     def compare(self, model, replace:bool = False) -> bool:
         ''' compare the stable model to the heavy model '''
+        print("******************************************************************************************")
+        print(f"Pilot score : {model[0].backtest_error}")
+        print(f"Stable score : {self.stable[0].backtest_error}")
+        print("******************************************************************************************")
         compared  = model[0].backtest_error < self.stable[0].backtest_error
         if replace and compared:
             self.stable = model
+            print(f"The New Stable model is : {self.stable[0].model_name}")
             return True
         return compared
 
@@ -118,28 +109,44 @@ class Model:
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         '''
-        status, model = engine(self.datapath, ['quick_start'])
-        i=0
-        if status == 1 and self.stable is None:
-            self.stable = model
-            print(model[0].backtest_error)
-        while i<3:
+        if self.stable is None:
+            status, model = engine(self.datapath, ['quick_start'])
+            if status == 1:
+                self.stable = model
+                self.save()
+                print(model[0].backtest_error)
+                print(f"The Stable model is : {self.stable[0].model_name}")
+
+        i = 0
+        while i<0:
+            start_time = time.time()
             status, pilot = engine(self.datapath, ['random_model'])
+            end_time = time.time()
+            print("----------------------------------------------------------------------------------------------")
+            random_model_time = end_time - start_time
+            print(f"Time taken for {pilot[0].model_name} (iteration {i+1}): {random_model_time:.2f} seconds")
+            print("----------------------------------------------------------------------------------------------")
             if self.compare(pilot, replace=True):
                 self.save()
             i += 1
 
-    def run_forever(self):
-        self.thread = threading.Thread(target=self.run, args=(), daemon=True)
-        self.thread.start()
+    # def run_forever(self):
+    #     self.thread = threading.Thread(target=self.run, args=(), daemon=True)
+    #     self.thread.start()
 
     def run_specific(self):
         ''' To pass in a model and run only that ( testing purposes) '''
+        # start_time = time.time()
         status, model = engine(self.datapath, [self.modelpath])
+        # end_time = time.time()
+        # print("----------------------------------------------------------------------------------------------")
+        # random_model_time = end_time - start_time
+        # print(f"Time taken for {pilot[0].model_name} (iteration {i+1}): {random_model_time:.2f} seconds")
+        # print("----------------------------------------------------------------------------------------------")
         self.stable = model
         print(status)
         print(model)
-        print(model[0].model_name)
+        # print(model[0].model_name)
         print(model[0].backtest_error)
         # print(type(model[0]))
 
@@ -283,13 +290,14 @@ def engine(
 
 e = Model(
 #   streamId=StreamId(source='test', stream='test', target='test', author='test'),
-  datapath_override="NATGAS1D.csv",
-  modelpath_override='skt_prophet_hyper')
+  streamId='NATGAS1D',
+  datapath_override="NATGAS1D.csv"
+  )
 
-print("test")
-# e.run()
-e.run_specific()
-# print(e.stable[0].model_name)
-# print(e.stable[0].backtest_error)
+e.run()
+# e.run_specific()
 e.predict()
 # e.runForever()
+
+print(e.stable[0].backtest_error)
+

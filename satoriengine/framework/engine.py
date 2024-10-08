@@ -1,33 +1,21 @@
 # from satorilib.api.disk.filetypes.csv import CSVManager # df = CSVManager.read(filePath=path)
 import threading
+import joblib
+import os
 from satorilib.api.hash import generatePathId
 from satorilib.concepts import Stream, StreamId
 
 from datetime import datetime
 import random
-from typing import Union, List
+from typing import Union, Optional, List, Any
 
 from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
 
-def check_model_suitability(list_of_models, allowed_models, dataset_length):
-    suitable_models = []
-    unsuitable_models = []
-
-    for model in list_of_models:
-        if model in allowed_models:
-            suitable_models.append(True)
-        else:
-            suitable_models.append(False)
-            reason = f"Not allowed for dataset size of {dataset_length}"
-            unsuitable_models.append((model, reason))
-
-    return suitable_models, unsuitable_models
-
 
 class Engine:
-    def __init__(self, streams: list[Stream]):
+    def __init__(self, streams: list[Stream] = None):
         ''' build all the models '''
         # fill in
         self.trigger()
@@ -40,7 +28,7 @@ class Engine:
 
 class Model:
 
-    def __init__(self, streamId: StreamId, datapath_override: str = None, modelpath_override: str = None):
+    def __init__(self, streamId: StreamId = None, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
@@ -54,19 +42,16 @@ class Model:
 
     def load(self) -> Union[None, list]:
         ''' loads the stable model from disk if present'''
-        # self.modelpath
-        # self = joblib.load(self, self.modelpath)
-        # self.stable = joblib.load(self, self.modelpath)
-        # fill in
-        return None  # if not present
+        try:
+            self.stable = joblib.load(self.modelpath)
+            return self.stable
+        except FileNotFoundError:
+            return None
 
     def save(self):
         ''' saves the stable model to disk '''
-        # joblib - saving Pythons objects
-        # joblib.dump(self, self.modelpath)
-        # joblib.dump(self.stable, self.modelpath)
-        # self.modelpath
-        # fill in
+        os.makedirs(os.path.dirname(self.modelpath), exist_ok=True)
+        joblib.dump(self.stable, self.modelpath)
 
     def compare(self, model, replace:bool = False) -> bool:
         ''' compare the stable model to the heavy model '''
@@ -93,11 +78,12 @@ class Model:
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         '''
-        status, model = engine(self.datapath, ['quick_start'])
-        i=0
-        if status == 1 and self.stable is None:
-            self.stable = model
-            print(model[0].backtest_error)
+        if self.stable is None:
+            status, model = engine(self.datapath, ['quick_start'])
+            if status == 1:
+                self.stable = model
+                self.save()
+
         while True:
             status, pilot = engine(self.datapath, ['random_model'])
             if self.compare(pilot, replace=True):
@@ -107,6 +93,21 @@ class Model:
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
         self.thread.start()
 
+
+def check_model_suitability(list_of_models, allowed_models, dataset_length):
+    suitable_models = []
+    unsuitable_models = []
+
+    for model in list_of_models:
+        if model in allowed_models:
+            suitable_models.append(True)
+        else:
+            suitable_models.append(False)
+            reason = f"Not allowed for dataset size of {dataset_length}"
+            unsuitable_models.append((model, reason))
+
+    return suitable_models, unsuitable_models
+
 def engine(
     filename: str,
     list_of_models: List[str],
@@ -115,7 +116,9 @@ def engine(
     exogenous_feature_type: str = 'ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative',
     feature_set_reduction_method: str = 'RFECV',
     random_state_hyperr: int = 123,
-    metric: str = 'mase'
+    metric: str = 'mase',
+    mode: str = 'train',
+    unfitted_forecaster: Optional[Any] = None
 ):
     ''' Engine function for the Satori Engine '''
 
@@ -230,7 +233,9 @@ def engine(
                 week_seasonality=features.week_seasonality,
                 baseline_1=proc_data.time_metric_baseline,
                 baseline_2=proc_data.forecasterequivalentdate,
-                baseline_3=proc_data.forecasterequivalentdate_n_offsets
+                baseline_3=proc_data.forecasterequivalentdate_n_offsets,
+                mode=mode,
+                forecaster=unfitted_forecaster
             )
             list_of_results.append(result)
 
@@ -241,9 +246,7 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 
-# make an endless loop and constantly compare and find the best model
 e = Model(
-#   streamId=StreamId(source='test', stream='test', target='test', author='test'),
+  streamId=StreamId(source='test', stream='test', target='test', author='test'),
   datapath_override="NATGAS1D.csv",
   modelpath_override='baseline')
-# e.runForever()
