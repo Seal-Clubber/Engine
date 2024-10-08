@@ -2,6 +2,7 @@
 import threading
 import joblib
 import os
+from reactivex.subject import BehaviorSubject
 from satorilib.api.hash import generatePathId
 from satorilib.concepts import Stream, StreamId
 
@@ -15,20 +16,21 @@ from model_creation import model_create_train_test_and_predict
 
 
 class Engine:
-    def __init__(self, streams: list[Stream] = None):
+    def __init__(self, streams: list[Stream]):
         ''' build all the models '''
-        # fill in
+        self.streams = streams 
+        self.models = {}
+        for stream in self.streams:
+            self.models[stream.isd] = Model(streamId=stream.id)
         self.trigger()
 
     def trigger(self):
         ''' setup our BehaviorSubject streams for inter-thread communication '''
-        # fill in
-        # on new data pass to necessary models
+        self.modelUpdated = BehaviorSubject(None)
 
 
 class Model:
-
-    def __init__(self, streamId: StreamId = None, datapath_override: str = None, modelpath_override: str = None):
+    def __init__(self, streamId: StreamId, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()

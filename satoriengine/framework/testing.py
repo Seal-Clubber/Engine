@@ -1,6 +1,8 @@
 # from satorilib.api.disk.filetypes.csv import CSVManager # df = CSVManager.read(filePath=path)
-# import threading
+import threading
 import joblib
+# import reactivex
+# from reactivex.subject import BehaviorSubject
 # from satorilib.api.hash import generatePathId
 # from satorilib.concepts import Stream, StreamId
 
@@ -32,16 +34,18 @@ def check_model_suitability(list_of_models, allowed_models, dataset_length):
     return suitable_models, unsuitable_models
 
 
-# class Engine:
-#     def __init__(self, streams: list[Stream]):
-#         ''' build all the models '''
-#         # fill in
-#         self.trigger()
+class Engine:
+    def __init__(self, streams: list[Stream]):
+        ''' build all the models '''
+        self.streams = streams 
+        self.models = {}
+        for stream in self.streams:
+            self.models[stream.id] = Model(streamId=stream.id)
+        self.trigger()
 
-#     def trigger(self):
-#         ''' setup our BehaviorSubject streams for inter-thread communication '''
-#         # fill in
-#         # on new data pass to necessary models
+    def trigger(self):
+        ''' setup our BehaviorSubject streams for inter-thread communication '''
+        self.modelUpdated = BehaviorSubject(None)
 
 
 class Model:
@@ -130,9 +134,9 @@ class Model:
                 self.save()
             i += 1
 
-    # def run_forever(self):
-    #     self.thread = threading.Thread(target=self.run, args=(), daemon=True)
-    #     self.thread.start()
+    def run_forever(self):
+        self.thread = threading.Thread(target=self.run, args=(), daemon=True)
+        self.thread.start()
 
     def run_specific(self):
         ''' To pass in a model and run only that ( testing purposes) '''
