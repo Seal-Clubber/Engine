@@ -14,19 +14,45 @@ from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
 
-
 class Engine:
     def __init__(self, streams: list[Stream]):
         ''' build all the models '''
         self.streams = streams 
         self.models = {}
-        for stream in self.streams:
-            self.models[stream.isd] = Model(streamId=stream.id)
+        self.threads = {}
+        self.run()
         self.trigger()
+
+    def initialize_models(self):
+        for stream in self.streams:
+            # stream_id = os.path.splitext(os.path.basename(stream))[0]
+            self.models[stream] = Model(
+                streamId=stream
+                )
 
     def trigger(self):
         ''' setup our BehaviorSubject streams for inter-thread communication '''
         self.modelUpdated = BehaviorSubject(None)
+    
+    def run_model(self, stream: str):
+        model = self.models[stream]
+        model.run()
+        model.predict()
+
+    def start_threads(self):
+        for stream, _ in self.models.items():
+            thread = threading.Thread(target=self.run_model, args=(stream,))
+            self.threads[stream] = thread
+            thread.start()
+
+    def wait_for_completion(self):
+        for thread in self.threads.values():
+            thread.join()
+
+    def run(self):
+        self.initialize_models()
+        self.start_threads()
+        self.wait_for_completion()
 
 
 class Model:
@@ -60,6 +86,7 @@ class Model:
         compared  = model[0].backtest_error < self.stable[0].backtest_error
         if replace and compared:
             self.stable = model
+            self.modelUpdated.on_next(self.stable)
             return True
         return compared
 
@@ -248,7 +275,16 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 
-e = Model(
-  streamId=StreamId(source='test', stream='test', target='test', author='test'),
-  datapath_override="NATGAS1D.csv",
-  modelpath_override='baseline')
+# e = Model(
+#   streamId=StreamId(source='test', stream='test', target='test', author='test'),
+#   datapath_override="NATGAS1D.csv",
+#   modelpath_override='baseline')
+
+# e.run()
+
+e = Engine(
+    streams = [StreamId(source='test', stream='test', target='test', author='test'), 
+              StreamId(source='test', stream='test', target='test', author='test')]
+)
+
+print("All Executed well")

@@ -1,0 +1,14 @@
+
+# AI - Engine
+lightgbm
+catboost
+statsmodels
+skforecast
+pmdarima
+linear-tree
+sktime
+#sktime[all_extras]
+optuna
+prophet
+tbats
+#

@@ -2,7 +2,7 @@
 import threading
 import joblib
 # import reactivex
-# from reactivex.subject import BehaviorSubject
+from reactivex.subject import BehaviorSubject
 # from satorilib.api.hash import generatePathId
 # from satorilib.concepts import Stream, StreamId
 
@@ -19,48 +19,55 @@ from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
 
-def check_model_suitability(list_of_models, allowed_models, dataset_length):
-    suitable_models = []
-    unsuitable_models = []
-
-    for model in list_of_models:
-        if model in allowed_models:
-            suitable_models.append(True)
-        else:
-            suitable_models.append(False)
-            reason = f"Not allowed for dataset size of {dataset_length}"
-            unsuitable_models.append((model, reason))
-
-    return suitable_models, unsuitable_models
-
 
 class Engine:
-    def __init__(self, streams: list[Stream]):
+    def __init__(self, streams: list[str]):
         ''' build all the models '''
         self.streams = streams 
         self.models = {}
-        for stream in self.streams:
-            self.models[stream.id] = Model(streamId=stream.id)
+        self.threads = {}
+        self.run()
         self.trigger()
+
+    def initialize_models(self):
+        for stream in self.streams:
+            stream_id = os.path.splitext(os.path.basename(stream))[0]
+            self.models[stream_id] = Model(
+                streamId=stream_id,
+                datapath_override=stream)
 
     def trigger(self):
         ''' setup our BehaviorSubject streams for inter-thread communication '''
         self.modelUpdated = BehaviorSubject(None)
+    
+    def run_model(self, stream_id: str):
+        model = self.models[stream_id]
+        model.run()
+        model.predict()
 
+    def start_threads(self):
+        for stream_id, _ in self.models.items():
+            thread = threading.Thread(target=self.run_model, args=(stream_id,))
+            self.threads[stream_id] = thread
+            thread.start()
+
+    def wait_for_completion(self):
+        for thread in self.threads.values():
+            thread.join()
+
+    def run(self):
+        self.initialize_models()
+        self.start_threads()
+        self.wait_for_completion()
 
 class Model:
-
-    # def __init__(self, streamId: StreamId, datapath_override: str = None, modelpath_override: str = None):
-    #     self.streamId = streamId
-    #     self.datapath = datapath_override or self.data_path()
-    #     self.modelpath = modelpath_override or self.model_path()
-    #     self.stable: list = self.load()
 
     def __init__(self, streamId: str = None, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
         self.stable: list = self.load()
+        self.modelUpdated = BehaviorSubject(None)
 
     def data_path(self) -> str:
         return f'./data/{self.streamId}/aggregate.csv'
@@ -80,6 +87,7 @@ class Model:
         ''' saves the stable model to disk '''
         os.makedirs(os.path.dirname(self.modelpath), exist_ok=True)
         joblib.dump(self.stable, self.modelpath)
+        self.modelUpdated.on_next(self.stable)
 
     def compare(self, model, replace:bool = False) -> bool:
         ''' compare the stable model to the heavy model '''
@@ -122,14 +130,11 @@ class Model:
                 print(f"The Stable model is : {self.stable[0].model_name}")
 
         i = 0
-        while i<0:
-            start_time = time.time()
+        while i<2:
             status, pilot = engine(self.datapath, ['random_model'])
-            end_time = time.time()
-            print("----------------------------------------------------------------------------------------------")
-            random_model_time = end_time - start_time
-            print(f"Time taken for {pilot[0].model_name} (iteration {i+1}): {random_model_time:.2f} seconds")
-            print("----------------------------------------------------------------------------------------------")
+            print(pilot)
+            print(pilot[0].model_name)
+            # if status 1 only then below
             if self.compare(pilot, replace=True):
                 self.save()
             i += 1
@@ -142,17 +147,26 @@ class Model:
         ''' To pass in a model and run only that ( testing purposes) '''
         # start_time = time.time()
         status, model = engine(self.datapath, [self.modelpath])
-        # end_time = time.time()
-        # print("----------------------------------------------------------------------------------------------")
-        # random_model_time = end_time - start_time
-        # print(f"Time taken for {pilot[0].model_name} (iteration {i+1}): {random_model_time:.2f} seconds")
-        # print("----------------------------------------------------------------------------------------------")
         self.stable = model
         print(status)
         print(model)
         # print(model[0].model_name)
         print(model[0].backtest_error)
         # print(type(model[0]))
+
+def check_model_suitability(list_of_models, allowed_models, dataset_length):
+    suitable_models = []
+    unsuitable_models = []
+
+    for model in list_of_models:
+        if model in allowed_models:
+            suitable_models.append(True)
+        else:
+            suitable_models.append(False)
+            reason = f"Not allowed for dataset size of {dataset_length}"
+            unsuitable_models.append((model, reason))
+
+    return suitable_models, unsuitable_models
 
 def engine(
     filename: str,
@@ -291,17 +305,8 @@ def engine(
         # Additional status code for unexpected errors
         return 4, f"An error occurred: {str(e)}"
 
+csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
+engine = Engine(csv_files)
 
-e = Model(
-#   streamId=StreamId(source='test', stream='test', target='test', author='test'),
-  streamId='NATGAS1D',
-  datapath_override="NATGAS1D.csv"
-  )
 
-e.run()
-# e.run_specific()
-e.predict()
-# e.runForever()
-
-print(e.stable[0].backtest_error)
 
