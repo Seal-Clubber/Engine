@@ -13,7 +13,7 @@ import os
 
 from datetime import datetime
 import random
-from typing import Union, Optional, Any, List
+from typing import Union, Optional, Any, List, Dict
 
 from process import process_data
 from determine_features import determine_feature_set
@@ -22,33 +22,59 @@ from model_creation import model_create_train_test_and_predict
 
 class Engine:
     def __init__(self, streams: list[str]):
-        ''' build all the models '''
         self.streams = streams 
-        self.models = {}
-        self.threads = {}
+        self.models: Dict[str, Model] = {}
+        self.threads: Dict[str, threading.Thread] = {}
+        self.model_updated_subjects: Dict[str, BehaviorSubject] = {}
+        self.setup_subjects()
+        self.setup_subscriptions()
+        self.initialize_models()
         self.run()
-        self.trigger()
+
+    def setup_subjects(self):
+        for stream in self.streams:
+            self.model_updated_subjects[stream] = BehaviorSubject(None)
+
+    def setup_subscriptions(self):
+        for stream, subject in self.model_updated_subjects.items():
+            subject.subscribe(
+                on_next=lambda x, s=stream: self.handle_model_update(s, x),
+                on_error=lambda e, s=stream: self.handle_error(s, e),
+                on_completed=lambda s=stream: self.handle_completion(s)
+            )
 
     def initialize_models(self):
         for stream in self.streams:
             stream_id = os.path.splitext(os.path.basename(stream))[0]
-            self.models[stream_id] = Model(
+            self.models[stream] = Model(
                 streamId=stream_id,
-                datapath_override=stream)
+                modelUpdated=self.model_updated_subjects[stream],
+                datapath_override=stream
+            )
 
-    def trigger(self):
-        ''' setup our BehaviorSubject streams for inter-thread communication '''
-        self.modelUpdated = BehaviorSubject(None)
-    
-    def run_model(self, stream_id: str):
-        model = self.models[stream_id]
+    def handle_model_update(self, stream: str, updated_model):
+        if updated_model is not None:
+            print(f"Model updated for stream {stream}: {updated_model[0].model_name}")
+            self.models[stream].predict(updated_model)
+
+    def handle_error(self, stream: str, error):
+        print(f"An error occurred in stream {stream}: {error}")
+
+    def handle_completion(self, stream: str):
+        print(f'''
+              ******************************************************
+              Model update stream completed for {stream}
+              ******************************************************
+              ''')
+
+    def run_model(self, stream: str):
+        model = self.models[stream]
         model.run()
-        model.predict()
 
     def start_threads(self):
-        for stream_id, _ in self.models.items():
-            thread = threading.Thread(target=self.run_model, args=(stream_id,))
-            self.threads[stream_id] = thread
+        for stream, _ in self.models.items():
+            thread = threading.Thread(target=self.run_model, args=(stream,))
+            self.threads[stream] = thread
             thread.start()
 
     def wait_for_completion(self):
@@ -56,18 +82,16 @@ class Engine:
             thread.join()
 
     def run(self):
-        self.initialize_models()
         self.start_threads()
         self.wait_for_completion()
 
 class Model:
-
-    def __init__(self, streamId: str = None, datapath_override: str = None, modelpath_override: str = None):
+    def __init__(self, streamId: str, modelUpdated: BehaviorSubject, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
         self.stable: list = self.load()
-        self.modelUpdated = BehaviorSubject(None)
+        self.modelUpdated = modelUpdated
 
     def data_path(self) -> str:
         return f'./data/{self.streamId}/aggregate.csv'
@@ -111,6 +135,9 @@ class Model:
                                mode='predict',
                                unfitted_forecaster=self.stable[0].unfitted_forecaster
                                )
+        if status == 1:
+            print(predictor_model[0].forecast)
+
         print(predictor_model)
         print(predictor_model[0].model_name)
         print(predictor_model[0].forecast)
@@ -132,11 +159,15 @@ class Model:
         i = 0
         while i<2:
             status, pilot = engine(self.datapath, ['random_model'])
-            print(pilot)
-            print(pilot[0].model_name)
-            # if status 1 only then below
-            if self.compare(pilot, replace=True):
-                self.save()
+            if status == 4:
+                print("*************** Error ******************")
+                print(pilot)
+                print("*************** Error ******************")
+                
+            if status == 1:
+                # if status 1 only then below
+                if self.compare(pilot, replace=True):
+                    self.save()
             i += 1
 
     def run_forever(self):
