@@ -136,11 +136,11 @@ class Model:
                                unfitted_forecaster=self.stable[0].unfitted_forecaster
                                )
         if status == 1:
+            print(predictor_model[0].model_name)
             print(predictor_model[0].forecast)
 
-        print(predictor_model)
-        print(predictor_model[0].model_name)
-        print(predictor_model[0].forecast)
+        if status == 4:
+            print(predictor_model)
 
     def run(self): # it only needs to fit the training set ( rn fit for training + fit for the whole dataset )
         '''
@@ -337,6 +337,7 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
+# csv_files = ["NATGAS1D.csv"]
 engine = Engine(csv_files)
 
 

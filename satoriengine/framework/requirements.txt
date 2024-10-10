@@ -11,4 +11,5 @@ sktime
 optuna
 prophet
 tbats
+neuralforecast
 #
