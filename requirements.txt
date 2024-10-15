@@ -15,6 +15,21 @@ IPython==8.7.0 # should remove this dependency
 torch>=2.3.1 # 2.3.1
 transformers>=4.41.2 # 4.41.2
 
+# AI - Engine
+lightgbm
+catboost
+statsmodels
+skforecast
+pmdarima
+linear-tree
+sktime
+#sktime[all_extras]
+optuna
+prophet
+tbats
+neuralforecast
+#
+
 # needed for data managemnet
 pyarrow==10.0.1 # 6.0.1
 fastparquet==2022.12.0 # 0.7.2 # fastparquet-2022.12.0

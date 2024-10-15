@@ -839,7 +839,7 @@ def model_create_train_test_and_predict(
             m = 1
 
         m = int(m)
-        print(m)
+        # print(m)
 
         arima_forecaster = create_forecaster(
             model_type="arima",

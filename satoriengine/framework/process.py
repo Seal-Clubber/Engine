@@ -588,10 +588,13 @@ def process_data(
                   'skt_lstm_deeplearning', 'autoreg_randomforest', 'direct_xgb', 'direct_catboost', 'direct_histgradient']
 
     allowed_models = ['baseline', 'direct_linearregression', 'direct_ridge', 'direct_lasso', 'direct_linearboost',
-                      'direct_lightgbm', 'autoreg_linearregression', 'autoreg_ridge', 'autoreg_lasso', 'autoreg_linearboost',
+                       'autoreg_linearregression', 'autoreg_ridge', 'autoreg_lasso', 'autoreg_linearboost',
                       'autoreg_lightgbm', 'autoreg_histgradient', 'autoreg_xgb', 'autoreg_catboost', 'arima',
                       'skt_ets', 'skt_tbats_damped', 'skt_prophet_additive', 'skt_prophet_hyper', 'skt_tbats_standard', 'skt_tbats_quick',
                       'skt_lstm_deeplearning']
+
+    # for testing purposes
+    # allowed_models = ['direct_lightgbm']
 
     dataset_duration = dataset_end_time - dataset_start_time
     sampling_timedelta = pd.Timedelta(sampling_frequency)
