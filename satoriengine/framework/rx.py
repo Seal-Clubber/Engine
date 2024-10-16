@@ -1,13 +1,10 @@
-# from satorilib.api.disk.filetypes.csv import CSVManager # df = CSVManager.read(filePath=path)
 import threading
 import joblib
-# import reactivex
 from reactivex.subject import BehaviorSubject
 # from satorilib.api.hash import generatePathId
 # from satorilib.concepts import Stream, StreamId
 
 # testing purposes
-import time
 import os
 # end
 
@@ -276,25 +273,50 @@ def engine(
         list_of_models, suitable_models) if is_suitable]
 
     try:
-        features = determine_feature_set(
-            dataset=proc_data.dataset,
-            data_train=proc_data.data_subsets['train'],
-            end_validation=proc_data.end_times['validation'],
-            end_train=proc_data.end_times['train'],
-            dataset_with_features=proc_data.dataset_withfeatures,
-            dataset_start_time=proc_data.dataset_start_time,
-            dataset_end_time=proc_data.dataset_end_time,
-            initial_lags=proc_data.lags,
-            weight_para=proc_data.use_weight,
-            exogenous_feature_type=exogenous_feature_type,
-            feature_set_reduction=feature_set_reduction,
-            feature_set_reduction_method=feature_set_reduction_method,
-            bayesian_trial=20,
-            random_state_hyper=random_state_hyper,
-            frequency=proc_data.sampling_frequency,
-            backtest_steps=proc_data.backtest_steps,
-            prediction_steps=proc_data.forecasting_steps
-        )
+        features = None
+        for model_name in list_of_models:
+            if model_name in ['baseline', 'arima']:
+                features = determine_feature_set(
+                    dataset=proc_data.dataset,
+                    data_train=proc_data.data_subsets['train'],
+                    end_validation=proc_data.end_times['validation'],
+                    end_train=proc_data.end_times['train'],
+                    dataset_with_features=proc_data.dataset_withfeatures,
+                    dataset_start_time=proc_data.dataset_start_time,
+                    dataset_end_time=proc_data.dataset_end_time,
+                    initial_lags=proc_data.lags,
+                    weight_para=proc_data.use_weight,
+                    exogenous_feature_type=exogenous_feature_type,
+                    feature_set_reduction=feature_set_reduction,
+                    feature_set_reduction_method=feature_set_reduction_method,
+                    bayesian_trial=20,
+                    random_state_hyper=random_state_hyper,
+                    frequency=proc_data.sampling_frequency,
+                    backtest_steps=proc_data.backtest_steps,
+                    prediction_steps=proc_data.forecasting_steps,
+                    hyper_flag=False
+                )
+            else:
+                features = determine_feature_set(
+                    dataset=proc_data.dataset,
+                    data_train=proc_data.data_subsets['train'],
+                    end_validation=proc_data.end_times['validation'],
+                    end_train=proc_data.end_times['train'],
+                    dataset_with_features=proc_data.dataset_withfeatures,
+                    dataset_start_time=proc_data.dataset_start_time,
+                    dataset_end_time=proc_data.dataset_end_time,
+                    initial_lags=proc_data.lags,
+                    weight_para=proc_data.use_weight,
+                    exogenous_feature_type=exogenous_feature_type,
+                    feature_set_reduction=feature_set_reduction,
+                    feature_set_reduction_method=feature_set_reduction_method,
+                    bayesian_trial=20,
+                    random_state_hyper=random_state_hyper,
+                    frequency=proc_data.sampling_frequency,
+                    backtest_steps=proc_data.backtest_steps,
+                    prediction_steps=proc_data.forecasting_steps,
+                    hyper_flag=True
+                )
 
         list_of_results = []
         for model_name in list_of_models:
@@ -305,7 +327,7 @@ def engine(
                 end_validation=proc_data.end_times['validation'],
                 end_test=proc_data.end_times['test'],
                 sampling_freq=proc_data.sampling_frequency,
-                differentiation=features.differentiation,
+                differentiation= features.differentiation,
                 selected_lags=features.selected_lags,
                 selected_exog=features.selected_exog,
                 dataset_selected_features=features.dataset_selected_features,
