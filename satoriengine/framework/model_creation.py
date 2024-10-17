@@ -801,6 +801,7 @@ def model_create_train_test_and_predict(
         if mode == "all" or mode == "predict":
             baseline_forecaster.fit(y=dataset_selected_features[value])
             forecast = baseline_forecaster.predict(steps=forecasting_steps)
+            forecast = forecast.to_frame(name="pred")
 
         return ForecastModelResult(
             model_name=model_name,

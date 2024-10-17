@@ -18,6 +18,7 @@ from model_creation import model_create_train_test_and_predict
 
 
 class Engine:
+    # behaviour subject to send the prediction back to the neuron
     def __init__(self, streams: list[str]):
         self.streams = streams 
         self.models: Dict[str, Model] = {}
@@ -135,6 +136,7 @@ class Model:
         if status == 1:
             print(predictor_model[0].model_name)
             print(predictor_model[0].forecast)
+            print(predictor_model[0].forecast['pred'].iloc[0])
 
         if status == 4:
             print(predictor_model)
@@ -358,8 +360,8 @@ def engine(
         # Additional status code for unexpected errors
         return 4, f"An error occurred: {str(e)}"
 
-# csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
-csv_files = ["NATGAS1D.csv"]
+csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
+# csv_files = ["NATGAS1D.csv"]
 engine = Engine(csv_files)
 
 
