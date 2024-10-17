@@ -13,10 +13,10 @@ from datetime import datetime
 import random
 from typing import Union, Optional, List, Any, Dict
 
-from process import process_data
-from determine_features import determine_feature_set
-from model_creation import model_create_train_test_and_predict
-from structs import StreamForecast
+from satoriengine.framework.process import process_data
+from satoriengine.framework.determine_features import determine_feature_set
+from satoriengine.framework.model_creation import model_create_train_test_and_predict
+from satoriengine.framework.structs import StreamForecast
 
 
 class Engine:
@@ -29,7 +29,7 @@ class Engine:
         self.setup_subjects()
         self.setup_subscriptions()
         self.initialize_models()
-        self.run()
+        # self.run()
 
     def setup_subjects(self):
         for stream in self.streams:
@@ -46,7 +46,7 @@ class Engine:
     def initialize_models(self):
         for stream in self.streams:
             self.models[stream] = Model(
-                streamId=stream,
+                streamId=stream.streamId,
                 modelUpdated=self.model_updated_subjects[stream],
             )
 
@@ -113,6 +113,7 @@ class Model:
         self.modelUpdated = modelUpdated
 
     def data_path(self) -> str:
+        print(f"./data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
         return f"./data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
 
     def model_path(self) -> str:
@@ -378,11 +379,11 @@ def engine(
 
 # e.run()
 
-e = Engine(
-    streams=[
-        StreamId(source="test", stream="test", target="test", author="test"),
-        StreamId(source="test", stream="test", target="test", author="test"),
-    ]
-)
+# e = Engine(
+#     streams=[
+#         StreamId(source="test", stream="test", target="test", author="test"),
+#         StreamId(source="test", stream="test", target="test", author="test"),
+#     ]
+# )
 
 print("All Executed well")
