@@ -1,96 +1,130 @@
 import threading
 import joblib
-import os
-from reactivex.subject import BehaviorSubject
-from satorilib.api.hash import generatePathId
-from satorilib.concepts import Stream, StreamId
-
+import zmq
 from datetime import datetime
 import random
-from typing import Union, Optional, List, Any, Dict
+from typing import Union, Optional, Any, List, Dict
+import os
+import signal
+import sys
+import time
 
 from process import process_data
 from determine_features import determine_feature_set
 from model_creation import model_create_train_test_and_predict
 
-
 class Engine:
-    def __init__(self, streams: list[Stream]):
+    def __init__(self, streams: list[str]):
         self.streams = streams 
         self.models: Dict[str, Model] = {}
         self.threads: Dict[str, threading.Thread] = {}
-        self.model_updated_subjects: Dict[str, BehaviorSubject] = {}
-        self.setup_subjects()
-        self.setup_subscriptions()
+        self.context = zmq.Context()
+        self.sockets: Dict[str, zmq.Socket] = {}
+        self.running = True
+        self.initialize_sockets()
         self.initialize_models()
-        self.run()    
+        self.setup_signal_handling()
+        self.run()
 
-    def setup_subjects(self):
+    def initialize_sockets(self):
         for stream in self.streams:
-            self.model_updated_subjects[stream] = BehaviorSubject(None)
-
-    def setup_subscriptions(self):
-        for stream, subject in self.model_updated_subjects.items():
-            subject.subscribe(
-                on_next=lambda x, s=stream: self.handle_model_update(s, x),
-                on_error=lambda e, s=stream: self.handle_error(s, e),
-                on_completed=lambda s=stream: self.handle_completion(s)
-            )
-        
+            socket = self.context.socket(zmq.PAIR)
+            socket.bind(f"inproc://{stream}")
+            self.sockets[stream] = socket
 
     def initialize_models(self):
         for stream in self.streams:
+            stream_id = os.path.splitext(os.path.basename(stream))[0]
             self.models[stream] = Model(
-                streamId=stream,
-                modelUpdated=self.model_updated_subjects[stream],
-                )
+                streamId=stream_id,
+                socket=self.context.socket(zmq.PAIR),
+                datapath_override=stream
+            )
+            self.models[stream].socket.connect(f"inproc://{stream}")
 
-    def handle_model_update(self, stream: str, updated_model):
-        if updated_model is not None:
-            print(f"Model updated for stream {stream}: {updated_model[0].model_name}")
-            self.models[stream].predict(updated_model)
+    def setup_signal_handling(self):
+        signal.signal(signal.SIGINT, self.signal_handler)
+        signal.signal(signal.SIGTERM, self.signal_handler)
 
-    def handle_error(self, stream: str, error):
-        print(f"An error occurred in stream {stream}: {error}")
+    def signal_handler(self, signum, frame):
+        print("\nShutting down gracefully...")
+        self.running = False
+        for model in self.models.values():
+            model.stop()
+        self.context.term()
+        sys.exit(0)
 
-    def handle_completion(self, stream: str):
-        print(f"Model update stream completed for {stream}")
-    
+    def handle_model_update(self, stream: str):
+        try:
+            message = self.sockets[stream].recv_string(flags=zmq.NOBLOCK)
+            print(f"Model updated for stream {stream}: {message}")
+            self.models[stream].predict()
+        except zmq.Again:
+            pass  
+
     def run_model(self, stream: str):
         model = self.models[stream]
         model.run()
 
+    def listen_for_updates(self, stream: str):
+        while self.running:
+            self.handle_model_update(stream)
+            time.sleep(0.1)  # Small delay to prevent CPU overuse
+
     def start_threads(self):
         for stream, _ in self.models.items():
-            thread = threading.Thread(target=self.run_model, args=(stream,))
-            self.threads[stream] = thread
-            thread.start()
+            model_thread = threading.Thread(target=self.run_model, args=(stream,))
+            update_thread = threading.Thread(target=self.listen_for_updates, args=(stream,))
+            self.threads[stream] = (model_thread, update_thread)
+            model_thread.start()
+            update_thread.start()
 
     def wait_for_completion(self):
-        for thread in self.threads.values():
-            thread.join()
+        try:
+            while self.running:
+                all_finished = True
+                for model_thread, _ in self.threads.values():
+                    if model_thread.is_alive():
+                        all_finished = False
+                        break
+                if all_finished:
+                    print("All models have completed execution.")
+                    self.running = False
+                time.sleep(1)  # Check every second
+        except KeyboardInterrupt:
+            print("\nKeyboard interrupt received. Shutting down...")
+            self.running = False
+
+        # Wait for all threads to finish
+        for model_thread, update_thread in self.threads.values():
+            model_thread.join()
+            update_thread.join()
 
     def run(self):
         self.start_threads()
         self.wait_for_completion()
+        print("Engine shutdown complete.")
 
 
 class Model:
-    def __init__(self, streamId: StreamId, modelUpdated: BehaviorSubject, datapath_override: str = None, modelpath_override: str = None):
+    def __init__(self, streamId: str, socket: zmq.Socket = None, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
         self.stable: list = self.load()
-        self.modelUpdated = modelUpdated
+        self.socket = socket
+        self.running = True
+
+    def stop(self):
+        self.running = False
 
     def data_path(self) -> str:
-        return f'./data/{generatePathId(streamId=self.streamId)}/aggregate.csv'
+        return f'./data/{self.streamId}/aggregate.csv'
 
     def model_path(self) -> str:
-        return f'./models/{generatePathId(streamId=self.streamId)}'
+        return f'./models/{self.streamId}'
 
     def load(self) -> Union[None, list]:
-        ''' loads the stable model from disk if present'''
         try:
             self.stable = joblib.load(self.modelpath)
             return self.stable
@@ -98,52 +132,77 @@ class Model:
             return None
 
     def save(self):
-        ''' saves the stable model to disk '''
         os.makedirs(os.path.dirname(self.modelpath), exist_ok=True)
         joblib.dump(self.stable, self.modelpath)
-        self.modelUpdated.on_next(self.stable)
+        self.socket.send_string(f"Model updated: {self.stable[0].model_name}")
 
     def compare(self, model, replace:bool = False) -> bool:
-        ''' compare the stable model to the heavy model '''
-        compared  = model[0].backtest_error < self.stable[0].backtest_error
+        print(f"***** Comparison for {self.streamId} *****")
+        print(f"Pilot score : {model[0].backtest_error}")
+        print(f"Stable score : {self.stable[0].backtest_error}")
+        print("*****************************************")
+        compared = model[0].backtest_error < self.stable[0].backtest_error
         if replace and compared:
             self.stable = model
-            self.modelUpdated.on_next(self.stable)
+            print(f"The New Stable model for {self.streamId} is : {self.stable[0].model_name}")
             return True
         return compared
 
-    def predict(self, data=None):
-        ''' prediction without training '''
-        status, predictor_model = engine( filename=self.datapath, 
-                               list_of_models=[self.stable[0].model_name],
-                               mode='predict',
-                               unfitted_forecaster=self.stable[0].unfitted_forecaster
-                               )
+    def predict(self):
+        print(f"Predicting with model for {self.streamId}: {self.stable[0].model_name}")
+        status, predictor_model = engine(
+            filename=self.datapath, 
+            list_of_models=[self.stable[0].model_name],
+            mode='predict',
+            unfitted_forecaster=self.stable[0].unfitted_forecaster
+        )
         if status == 1:
-            print(predictor_model[0].forecast)
-
+            print(f"Prediction for {self.streamId}:")
+            print(f"Model: {predictor_model[0].model_name}")
+            print(f"Forecast: {predictor_model[0].forecast}")
+        if status == 4:
+            print(f"Error in prediction for {self.streamId}:")
+            print(predictor_model)
 
     def run(self):
-        '''
-        main loop for generating models and comparing them to the best known
-        model so far in order to replace it if the new model is better, always
-        using the best known model to make predictions on demand.
-        '''
         if self.stable is None:
+            print(f"Initializing model for {self.streamId}")
             status, model = engine(self.datapath, ['quick_start'])
             if status == 1:
                 self.stable = model
                 self.save()
+                print(f"Initial stable model for {self.streamId}:")
+                print(f"Model: {model[0].model_name}")
+                print(f"Backtest error: {model[0].backtest_error}")
 
-        while True:
+        iterations = 0
+        while iterations < 3 and self.running: 
+            print(f"Running iteration {iterations + 1} for {self.streamId}")
             status, pilot = engine(self.datapath, ['random_model'])
-            if status == 1:
+            if status == 4:
+                print(f"Error in model creation for {self.streamId}:")
+                print(pilot)
+            elif status == 1:
                 if self.compare(pilot, replace=True):
                     self.save()
+                    self.predict()
+            iterations += 1
+            time.sleep(1)  # Add a small delay between iterations
+
+        print(f"Model run complete for {self.streamId}")
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
         self.thread.start()
+
+    def run_specific(self):
+        status, model = engine(self.datapath, [self.modelpath])
+        self.stable = model
+        print(status)
+        print(model)
+        print(model[0].backtest_error)
+        # Trigger a prediction after running a specific model
+        self.predict()
 
 
 def check_model_suitability(list_of_models, allowed_models, dataset_length):
@@ -322,17 +381,18 @@ def engine(
         # Additional status code for unexpected errors
         return 4, f"An error occurred: {str(e)}"
 
+if __name__ == "__main__":
+    
+    streams = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
+    # streams = ["NATGAS1D.csv"]
+    engine1 = Engine(streams)
 
-# e = Model(
-#   streamId=StreamId(source='test', stream='test', target='test', author='test'),
-#   datapath_override="NATGAS1D.csv",
-#   modelpath_override='baseline')
+    # model1 = Model(streamId="NATGAS1D",
+    #                datapath_override="NATGAS1D.csv",
+    #                modelpath_override="baseline")
+    # model1.run_specific()
 
-# e.run()
+    print("Main program exiting.")
 
-e = Engine(
-    streams = [StreamId(source='test', stream='test', target='test', author='test'), 
-              StreamId(source='test', stream='test', target='test', author='test')]
-)
 
-print("All Executed well")
+

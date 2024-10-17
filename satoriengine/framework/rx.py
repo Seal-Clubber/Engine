@@ -1,13 +1,16 @@
 import threading
 import joblib
-import os
 from reactivex.subject import BehaviorSubject
-from satorilib.api.hash import generatePathId
-from satorilib.concepts import Stream, StreamId
+# from satorilib.api.hash import generatePathId
+# from satorilib.concepts import Stream, StreamId
+
+# testing purposes
+import os
+# end
 
 from datetime import datetime
 import random
-from typing import Union, Optional, List, Any, Dict
+from typing import Union, Optional, Any, List, Dict
 
 from process import process_data
 from determine_features import determine_feature_set
@@ -15,7 +18,7 @@ from model_creation import model_create_train_test_and_predict
 
 
 class Engine:
-    def __init__(self, streams: list[Stream]):
+    def __init__(self, streams: list[str]):
         self.streams = streams 
         self.models: Dict[str, Model] = {}
         self.threads: Dict[str, threading.Thread] = {}
@@ -23,7 +26,7 @@ class Engine:
         self.setup_subjects()
         self.setup_subscriptions()
         self.initialize_models()
-        self.run()    
+        self.run()
 
     def setup_subjects(self):
         for stream in self.streams:
@@ -36,14 +39,15 @@ class Engine:
                 on_error=lambda e, s=stream: self.handle_error(s, e),
                 on_completed=lambda s=stream: self.handle_completion(s)
             )
-        
 
     def initialize_models(self):
         for stream in self.streams:
+            stream_id = os.path.splitext(os.path.basename(stream))[0]
             self.models[stream] = Model(
-                streamId=stream,
+                streamId=stream_id,
                 modelUpdated=self.model_updated_subjects[stream],
-                )
+                datapath_override=stream
+            )
 
     def handle_model_update(self, stream: str, updated_model):
         if updated_model is not None:
@@ -54,8 +58,12 @@ class Engine:
         print(f"An error occurred in stream {stream}: {error}")
 
     def handle_completion(self, stream: str):
-        print(f"Model update stream completed for {stream}")
-    
+        print(f'''
+              ******************************************************
+              Model update stream completed for {stream}
+              ******************************************************
+              ''')
+
     def run_model(self, stream: str):
         model = self.models[stream]
         model.run()
@@ -74,9 +82,8 @@ class Engine:
         self.start_threads()
         self.wait_for_completion()
 
-
 class Model:
-    def __init__(self, streamId: StreamId, modelUpdated: BehaviorSubject, datapath_override: str = None, modelpath_override: str = None):
+    def __init__(self, streamId: str, modelUpdated: BehaviorSubject, datapath_override: str = None, modelpath_override: str = None):
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
@@ -84,10 +91,10 @@ class Model:
         self.modelUpdated = modelUpdated
 
     def data_path(self) -> str:
-        return f'./data/{generatePathId(streamId=self.streamId)}/aggregate.csv'
+        return f'./data/{self.streamId}/aggregate.csv'
 
     def model_path(self) -> str:
-        return f'./models/{generatePathId(streamId=self.streamId)}'
+        return f'./models/{self.streamId}'
 
     def load(self) -> Union[None, list]:
         ''' loads the stable model from disk if present'''
@@ -105,25 +112,34 @@ class Model:
 
     def compare(self, model, replace:bool = False) -> bool:
         ''' compare the stable model to the heavy model '''
+        print("******************************************************************************************")
+        print(f"Pilot score : {model[0].backtest_error}")
+        print(f"Stable score : {self.stable[0].backtest_error}")
+        print("******************************************************************************************")
         compared  = model[0].backtest_error < self.stable[0].backtest_error
         if replace and compared:
             self.stable = model
-            self.modelUpdated.on_next(self.stable)
+            print(f"The New Stable model is : {self.stable[0].model_name}")
             return True
         return compared
 
-    def predict(self, data=None):
+
+    def predict(self, data=None): # only needs to fit the whole data ( rn fit for training + fit for the whole dataset )
         ''' prediction without training '''
+        # print(self.stable[0].unfitted_forecaster)
         status, predictor_model = engine( filename=self.datapath, 
                                list_of_models=[self.stable[0].model_name],
                                mode='predict',
                                unfitted_forecaster=self.stable[0].unfitted_forecaster
                                )
         if status == 1:
+            print(predictor_model[0].model_name)
             print(predictor_model[0].forecast)
 
+        if status == 4:
+            print(predictor_model)
 
-    def run(self):
+    def run(self): # it only needs to fit the training set ( rn fit for training + fit for the whole dataset )
         '''
         main loop for generating models and comparing them to the best known
         model so far in order to replace it if the new model is better, always
@@ -134,17 +150,37 @@ class Model:
             if status == 1:
                 self.stable = model
                 self.save()
+                print(model[0].backtest_error)
+                print(f"The Stable model is : {self.stable[0].model_name}")
 
-        while True:
+        i = 0
+        while i<2:
             status, pilot = engine(self.datapath, ['random_model'])
+            if status == 4:
+                print("*************** Error ******************")
+                print(pilot)
+                print("*************** Error ******************")
+                
             if status == 1:
+                # if status 1 only then below
                 if self.compare(pilot, replace=True):
                     self.save()
+            i += 1
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
         self.thread.start()
 
+    def run_specific(self):
+        ''' To pass in a model and run only that ( testing purposes) '''
+        # start_time = time.time()
+        status, model = engine(self.datapath, [self.modelpath])
+        self.stable = model
+        print(status)
+        print(model)
+        # print(model[0].model_name)
+        print(model[0].backtest_error)
+        # print(type(model[0]))
 
 def check_model_suitability(list_of_models, allowed_models, dataset_length):
     suitable_models = []
@@ -322,17 +358,9 @@ def engine(
         # Additional status code for unexpected errors
         return 4, f"An error occurred: {str(e)}"
 
+# csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
+csv_files = ["NATGAS1D.csv"]
+engine = Engine(csv_files)
 
-# e = Model(
-#   streamId=StreamId(source='test', stream='test', target='test', author='test'),
-#   datapath_override="NATGAS1D.csv",
-#   modelpath_override='baseline')
 
-# e.run()
 
-e = Engine(
-    streams = [StreamId(source='test', stream='test', target='test', author='test'), 
-              StreamId(source='test', stream='test', target='test', author='test')]
-)
-
-print("All Executed well")

@@ -886,7 +886,8 @@ def determine_feature_set(
     random_state_hyper: int = 123, 
     frequency: str = '1h',
     backtest_steps: int = 24,
-    prediction_steps: int = 24
+    prediction_steps: int = 24,
+    hyper_flag: bool = True
 ) -> Features:
 
     differentiation, data_diff = determine_differentiation(dataset) # Maybe changed later
@@ -933,6 +934,9 @@ def determine_feature_set(
                                                                                              sampling_frequency=frequency
                                                                                             )
 
+    if not hyper_flag:
+        feature_set_reduction = False
+        
     if feature_set_reduction == True:
 
         if exog_features == []:
