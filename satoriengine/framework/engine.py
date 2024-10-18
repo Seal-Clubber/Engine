@@ -59,7 +59,7 @@ class Engine:
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)
                 observationHash = hashIt(
-                    getHashBefore(observationTime)
+                    getHashBefore(pd.DataFrame(), observationTime) # TypeError: getHashBefore() missing 1 required positional argument: 'time'
                     + str(observationTime)
                     + str(prediction)
                 )
