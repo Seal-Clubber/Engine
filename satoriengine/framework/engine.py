@@ -113,11 +113,11 @@ class Model:
         self.modelUpdated = modelUpdated
 
     def data_path(self) -> str:
-        print(f"./data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
-        return f"./data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
+        print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
+        return f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
 
     def model_path(self) -> str:
-        return f"./models/{generatePathId(streamId=self.streamId)}"
+        return f"../../models/{generatePathId(streamId=self.streamId)}"
 
     def load(self) -> Union[None, list]:
         """loads the stable model from disk if present"""
