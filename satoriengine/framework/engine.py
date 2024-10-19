@@ -52,7 +52,7 @@ class Engine:
 
     def handle_model_update(self, stream: Stream, updated_model):
         if updated_model is not None:
-            print(f"Model updated for stream {stream}: {updated_model[0].model_name}")
+            # print(f"Model updated for stream {stream}: {updated_model[0].model_name}")
             forecast = self.models[stream].predict(updated_model)
 
             if isinstance(forecast, pd.DataFrame):
@@ -63,15 +63,17 @@ class Engine:
                     + str(observationTime)
                     + str(prediction)
                 )
-                self.prediction_produced.on_next(
-                    StreamForecast(
+                streamforecast = StreamForecast(
                         streamId=stream.streamId,
                         forecast=forecast,
                         # these need to happen before we save the prediction to disk
                         observationTime=observationTime,
                         observationHash=observationHash,
                     )
-                )
+                print("**************************")
+                print(streamforecast)
+                print("**************************")
+                self.prediction_produced.on_next(streamforecast)
 
     def handle_error(self, stream: str, error):
         print(f"An error occurred in stream {stream}: {error}")
@@ -151,7 +153,6 @@ class Model:
             unfitted_forecaster=self.stable[0].unfitted_forecaster,
         )
         if status == 1:
-            print(predictor_model[0].forecast)
             return predictor_model[0].forecast
         return None
 

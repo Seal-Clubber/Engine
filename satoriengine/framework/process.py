@@ -809,7 +809,7 @@ def process_data(
 
         elif (dataset_duration.total_seconds() / 3600) >= 12 and len(dataset) >= 12:
             # quick_start : baseline with no_exog, feature_set_reduction = False
-            allowed_models = ["baseline", "autoreg_lightgbm"]  # testing
+            allowed_models = ["baseline", "direct_linearregression", "autoreg_lightgbm"]  # testing
             if quick_start:
                 allowed_models = ["baseline"]
             # print("Hits the >= 12 length dataset case and >= 12 hours")
@@ -825,11 +825,11 @@ def process_data(
 
             forecasterequivalentdate = 1
             # forecasting_steps = lags
-        elif len(dataset) >= 6:
+        elif len(dataset) >= 3:
             # print("Hits the >= 6 length dataset case")
             # quick_start : Baseline with no_exog, feature_set_reduction = False
             # print("inside smaller dataset size < 12 hours")
-            allowed_models = ["baseline"]
+            allowed_models = ["baseline", "direct_linearregression"]
             if quick_start:
                 allowed_models = ["baseline"]
             lags = 1
@@ -840,19 +840,19 @@ def process_data(
                 time_metric_baseline = "hours"
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = 1
-        elif len(dataset) >= 1:
-            # todo: add stupid model - last value or average
-            allowed_models = ["baseline"]
-            if quick_start:
-                allowed_models = ["baseline"]
-            lags = 1
-            forecasting_steps = 1
-            if sampling_timedelta > pd.Timedelta(hours=1):
-                time_metric_baseline = "days"
-            else:
-                time_metric_baseline = "hours"
-            forecasterequivalentdate = 1
-            forecasterequivalentdate_n_offsets = 1
+        # elif len(dataset) >= 1:
+        #     # todo: add stupid model - last value or average
+        #     allowed_models = ["stupid_model"]
+        #     if quick_start:
+        #         allowed_models = ["stupid_model"]
+        #     lags = 1
+        #     forecasting_steps = 1
+        #     if sampling_timedelta > pd.Timedelta(hours=1):
+        #         time_metric_baseline = "days"
+        #     else:
+        #         time_metric_baseline = "hours"
+        #     forecasterequivalentdate = 1
+        #     forecasterequivalentdate_n_offsets = 1
         else:
             # print("Hits the invalid dataset case")
             if_small_dataset = True
