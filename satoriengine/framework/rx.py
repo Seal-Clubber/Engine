@@ -1,6 +1,7 @@
 import threading
 import joblib
 from reactivex.subject import BehaviorSubject
+import pandas as pd
 # from satorilib.api.hash import generatePathId
 # from satorilib.concepts import Stream, StreamId
 
@@ -108,6 +109,8 @@ class Model:
     def save(self):
         ''' saves the stable model to disk '''
         os.makedirs(os.path.dirname(self.modelpath), exist_ok=True)
+        print(self.stable)
+        print(self.modelpath)
         joblib.dump(self.stable, self.modelpath)
         self.modelUpdated.on_next(self.stable)
 
@@ -151,10 +154,11 @@ class Model:
             status, model = engine(self.datapath, ['quick_start'])
             if status == 1:
                 self.stable = model
-                self.save()
                 print(model[0].backtest_error)
                 print(f"The Stable model is : {self.stable[0].model_name}")
-
+                if self.stable[0].model_name != "starter_dataset_model":
+                    self.save()
+                
         i = 0
         while i<2:
             status, pilot = engine(self.datapath, ['random_model'])
@@ -211,6 +215,35 @@ def engine(
     unfitted_forecaster: Optional[Any] = None
 ):
     ''' Engine function for the Satori Engine '''
+
+    col_names_starter = ['date_time', 'value', 'id']
+    starter_dataset = pd.read_csv(filename, names=col_names_starter, header=None)
+    if len(starter_dataset) < 3:
+        from collections import namedtuple
+        Result = namedtuple('Result', ['forecast', 'backtest_error', 'model_name'])
+        if len(starter_dataset) == 1:
+            # If dataset has only 1 row, return the same value in the forecast dataframe
+            value = starter_dataset.iloc[0, 1]  
+            forecast = pd.DataFrame({
+                'ds': [pd.Timestamp.now() + pd.Timedelta(days=1)],
+                'pred': [value]
+            })
+        elif len(starter_dataset) == 2:
+            # If dataset has 2 rows, return their average
+            value = starter_dataset.iloc[:, 1].mean()  
+            forecast = pd.DataFrame({
+                'ds': [pd.Timestamp.now() + pd.Timedelta(days=1)],
+                'pred': [value]
+            })
+        
+        # Create a mock result with backtest_error of 10
+        starter_result = Result(
+            forecast=forecast,
+            backtest_error=10,
+            model_name='starter_dataset_model'
+        )
+        
+        return 1, [starter_result]
 
     list_of_models = [model.lower() for model in list_of_models]
 
@@ -360,8 +393,8 @@ def engine(
         # Additional status code for unexpected errors
         return 4, f"An error occurred: {str(e)}"
 
-csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
-# csv_files = ["NATGAS1D.csv"]
+# csv_files = ["NATGAS1D.csv", "modifiedkaggletraffic2.csv"]
+csv_files = ["aggregate.csv"]
 engine = Engine(csv_files)
 
 

@@ -166,13 +166,16 @@ class Model:
             status, model = engine(self.datapath, ["quick_start"])
             if status == 1:
                 self.stable = model
-                self.save()
+                if self.stable[0].model_name != "starter_dataset_model":
+                    self.save()
 
         while True:
             status, pilot = engine(self.datapath, ["random_model"])
             if status == 1:
                 if self.compare(pilot, replace=True):
                     self.save()
+                else:
+                    self.modelUpdated.on_next(self.stable)
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
@@ -207,6 +210,38 @@ def engine(
     unfitted_forecaster: Optional[Any] = None,
 ):
     """Engine function for the Satori Engine"""
+
+
+    col_names_starter = ['date_time', 'value', 'id']
+    starter_dataset = pd.read_csv(filename, names=col_names_starter, header=None)
+    if len(starter_dataset) < 3:
+        from collections import namedtuple
+        Result = namedtuple('Result', ['forecast', 'backtest_error', 'model_name', 'unfitted_forecaster'])
+        if len(starter_dataset) == 1:
+            # If dataset has only 1 row, return the same value in the forecast dataframe
+            value = starter_dataset.iloc[0, 1]  
+            forecast = pd.DataFrame({
+                'ds': [pd.Timestamp.now() + pd.Timedelta(days=1)],
+                'pred': [value]
+            })
+        elif len(starter_dataset) == 2:
+            # If dataset has 2 rows, return their average
+            value = starter_dataset.iloc[:, 1].mean()  
+            forecast = pd.DataFrame({
+                'ds': [pd.Timestamp.now() + pd.Timedelta(days=1)],
+                'pred': [value]
+            })
+        
+        # Create a mock result with backtest_error of 10
+        starter_result = Result(
+            forecast=forecast,
+            backtest_error=10,
+            model_name='starter_dataset_model',
+            unfitted_forecaster=None
+        )
+        
+        return 1, [starter_result]
+
 
     list_of_models = [model.lower() for model in list_of_models]
 
@@ -260,7 +295,7 @@ def engine(
         exogenous_feature_type = "NoExogenousFeatures"
         list_of_models = proc_data.allowed_models
 
-    if proc_data.if_small_dataset:
+    if proc_data.if_invalid_dataset:
         return 2, "Status = 2 (insufficient amount of data)"
 
     # Check if the requested models are suitable based on the allowed_models

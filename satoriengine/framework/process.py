@@ -25,7 +25,7 @@ class ProcessedData:
         time_metric_baseline: str,
         forecasterequivalentdate: int,
         forecasterequivalentdate_n_offsets: int,
-        if_small_dataset: bool,
+        if_invalid_dataset: bool,
         allowed_models: list,
     ):
         self.end_times = end_times
@@ -43,7 +43,7 @@ class ProcessedData:
         self.time_metric_baseline = time_metric_baseline
         self.forecasterequivalentdate = forecasterequivalentdate
         self.forecasterequivalentdate_n_offsets = forecasterequivalentdate_n_offsets
-        self.if_small_dataset = if_small_dataset
+        self.if_invalid_dataset = if_invalid_dataset
         self.allowed_models = allowed_models
 
 
@@ -740,7 +740,7 @@ def process_data(
     else:
         lags = round(min(0.3 * len(dataset), steps_in_week))
 
-    if_small_dataset = False
+    if_invalid_dataset = False
     time_metric_baseline = "hours"
     forecasterequivalentdate = 1
     forecasterequivalentdate_n_offsets = 1
@@ -840,22 +840,22 @@ def process_data(
                 time_metric_baseline = "hours"
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = 1
-        # elif len(dataset) >= 1:
-        #     # todo: add stupid model - last value or average
-        #     allowed_models = ["stupid_model"]
-        #     if quick_start:
-        #         allowed_models = ["stupid_model"]
-        #     lags = 1
-        #     forecasting_steps = 1
-        #     if sampling_timedelta > pd.Timedelta(hours=1):
-        #         time_metric_baseline = "days"
-        #     else:
-        #         time_metric_baseline = "hours"
-        #     forecasterequivalentdate = 1
-        #     forecasterequivalentdate_n_offsets = 1
+        elif len(dataset) >= 1:
+            # todo: add stupid model - last value or average
+            allowed_models = ["stupid_model"]
+            if quick_start:
+                allowed_models = ["stupid_model"]
+            lags = 1
+            forecasting_steps = 1
+            if sampling_timedelta > pd.Timedelta(hours=1):
+                time_metric_baseline = "days"
+            else:
+                time_metric_baseline = "hours"
+            forecasterequivalentdate = 1
+            forecasterequivalentdate_n_offsets = 1
         else:
             # print("Hits the invalid dataset case")
-            if_small_dataset = True
+            if_invalid_dataset = True
 
         use_weight = False
 
@@ -883,6 +883,6 @@ def process_data(
         time_metric_baseline,
         forecasterequivalentdate,
         forecasterequivalentdate_n_offsets,
-        if_small_dataset,
+        if_invalid_dataset,
         allowed_models,
     )
