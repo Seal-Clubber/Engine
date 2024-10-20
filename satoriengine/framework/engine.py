@@ -4,7 +4,7 @@ import os
 from reactivex.subject import BehaviorSubject
 from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.api.hash import generatePathId
-from satorilib.concepts import Stream, StreamId
+from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.api.hash import hashIt
 from satorilib.api.disk import getHashBefore
 
@@ -22,97 +22,90 @@ from satoriengine.framework.structs import StreamForecast
 class Engine:
     def __init__(self, streams: list[Stream]):
         self.streams = streams
-        self.models: Dict[str, Model] = {}
-        self.threads: Dict[str, threading.Thread] = {}
-        self.model_updated_subjects: Dict[str, BehaviorSubject] = {}
+        self.streamModels: Dict[StreamId, StreamModel] = {}
+        self.new_observation: BehaviorSubject = BehaviorSubject(None)
         self.prediction_produced: BehaviorSubject = BehaviorSubject(None)
-        self.setup_subjects()
         self.setup_subscriptions()
         self.initialize_models()
-        # self.run()
-
-    def setup_subjects(self):
-        for stream in self.streams:
-            self.model_updated_subjects[stream] = BehaviorSubject(None)
 
     def setup_subscriptions(self):
-        for stream, subject in self.model_updated_subjects.items():
-            subject.subscribe(
-                on_next=lambda x, s=stream: self.handle_model_update(s, x),
-                on_error=lambda e, s=stream: self.handle_error(s, e),
-                on_completed=lambda s=stream: self.handle_completion(s),
-            )
+        self.new_observation.subscribe(
+            on_next=lambda x: self.handle_new_observation(x) if x is not None else None,
+            on_error=lambda e: self.handle_error(e),
+            on_completed=lambda: self.handle_completion(),
+        )
 
     def initialize_models(self):
         for stream in self.streams:
-            self.models[stream] = Model(
+            self.streamModels[stream.streamId] = StreamModel(
                 streamId=stream.streamId,
-                modelUpdated=self.model_updated_subjects[stream],
+                prediction_produced=self.prediction_produced,
             )
 
-    def handle_model_update(self, stream: Stream, updated_model):
+    def handle_new_observation(self, observation: Observation):
+        print(f"new_observation: {observation}")
+        streamModel = self.streamModels.get(observation.streamId)
+        if streamModel.thread is None or not streamModel.thread.is_alive():
+            streamModel.run_forever()
+        if streamModel is not None:
+            streamModel.produce_prediction()
+        else:
+            print(f"No model found for stream {observation.streamId}")
+
+    def handle_error(self, error):
+        print(f"An error occurred new_observaiton: {error}")
+
+    def handle_completion(self):
+        print(f"new_observation completed")
+
+
+class StreamModel:
+    def __init__(
+        self,
+        streamId: StreamId,
+        prediction_produced: BehaviorSubject,
+        datapath_override: str = None,
+        modelpath_override: str = None,
+    ):
+        self.thread = None
+        self.streamId = streamId
+        self.datapath = datapath_override or self.data_path()
+        self.modelpath = modelpath_override or self.model_path()
+        self.stable: list = self.load()
+        self.prediction_produced = prediction_produced
+
+    def produce_prediction(self, updated_model=None):
+        """
+        triggered by
+            - stable model replaced with a better one
+            - new observation on the stream
+        """
+        updated_model = updated_model or self.stable
         if updated_model is not None:
-            # print(f"Model updated for stream {stream}: {updated_model[0].model_name}")
-            forecast = self.models[stream].predict(updated_model)
+            # print(f"StreamModel updated for stream {self.streamId}: {updated_model[0].model_name}")
+            forecast = self.predict(updated_model)
 
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)
                 observationHash = hashIt(
-                    getHashBefore(pd.DataFrame(), observationTime) # TypeError: getHashBefore() missing 1 required positional argument: 'time'
+                    getHashBefore(
+                        pd.DataFrame(), observationTime
+                    )  # TypeError: getHashBefore() missing 1 required positional argument: 'time'
                     + str(observationTime)
                     + str(prediction)
                 )
                 streamforecast = StreamForecast(
-                        streamId=stream.streamId,
-                        forecast=forecast,
-                        # these need to happen before we save the prediction to disk
-                        observationTime=observationTime,
-                        observationHash=observationHash,
-                    )
+                    streamId=self.streamId,
+                    forecast=forecast,
+                    # these need to happen before we save the prediction to disk
+                    observationTime=observationTime,
+                    observationHash=observationHash,
+                )
                 print("**************************")
                 print(streamforecast)
                 print("**************************")
                 self.prediction_produced.on_next(streamforecast)
-
-    def handle_error(self, stream: str, error):
-        print(f"An error occurred in stream {stream}: {error}")
-
-    def handle_completion(self, stream: str):
-        print(f"Model update stream completed for {stream}")
-
-    def run_model(self, stream: str):
-        model = self.models[stream]
-        model.run()
-
-    def start_threads(self):
-        for stream, _ in self.models.items():
-            thread = threading.Thread(target=self.run_model, args=(stream,))
-            self.threads[stream] = thread
-            thread.start()
-
-    def wait_for_completion(self):
-        for thread in self.threads.values():
-            thread.join()
-
-    def run(self):
-        self.start_threads()
-        self.wait_for_completion()
-
-
-class Model:
-    def __init__(
-        self,
-        streamId: StreamId,
-        modelUpdated: BehaviorSubject,
-        datapath_override: str = None,
-        modelpath_override: str = None,
-    ):
-        self.streamId = streamId
-        self.datapath = datapath_override or self.data_path()
-        self.modelpath = modelpath_override or self.model_path()
-        self.stable: list = self.load()
-        self.modelUpdated = modelUpdated
 
     def data_path(self) -> str:
         print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
@@ -133,14 +126,13 @@ class Model:
         """saves the stable model to disk"""
         os.makedirs(os.path.dirname(self.modelpath), exist_ok=True)
         joblib.dump(self.stable, self.modelpath)
-        self.modelUpdated.on_next(self.stable)
+        self.produce_prediction(self.stable)
 
     def compare(self, model, replace: bool = False) -> bool:
         """compare the stable model to the heavy model"""
         compared = model[0].backtest_error < self.stable[0].backtest_error
         if replace and compared:
             self.stable = model
-            self.modelUpdated.on_next(self.stable)
             return True
         return compared
 
@@ -167,7 +159,7 @@ class Model:
             if status == 1:
                 self.stable = model
                 if self.stable[0].model_name == "starter_dataset_model":
-                    self.modelUpdated.on_next(self.stable)
+                    self.produce_prediction(self.stable)
                 else:
                     self.save()
 
@@ -176,8 +168,6 @@ class Model:
             if status == 1:
                 if self.compare(pilot, replace=True):
                     self.save()
-
-                
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
@@ -213,36 +203,36 @@ def engine(
 ):
     """Engine function for the Satori Engine"""
 
-
-    col_names_starter = ['date_time', 'value', 'id']
+    col_names_starter = ["date_time", "value", "id"]
     starter_dataset = pd.read_csv(filename, names=col_names_starter, header=None)
     if len(starter_dataset) < 3:
         from collections import namedtuple
-        Result = namedtuple('Result', ['forecast', 'backtest_error', 'model_name', 'unfitted_forecaster'])
+
+        Result = namedtuple(
+            "Result",
+            ["forecast", "backtest_error", "model_name", "unfitted_forecaster"],
+        )
         if len(starter_dataset) == 1:
             # If dataset has only 1 row, return the same value in the forecast dataframe
-            value = starter_dataset.iloc[0, 1]  
-            forecast = pd.DataFrame({
-                'ds': [pd.Timestamp.now() + pd.Timedelta(days=1)],
-                'pred': [value]
-            })
+            value = starter_dataset.iloc[0, 1]
+            forecast = pd.DataFrame(
+                {"ds": [pd.Timestamp.now() + pd.Timedelta(days=1)], "pred": [value]}
+            )
         elif len(starter_dataset) == 2:
             # If dataset has 2 rows, return their average
-            value = starter_dataset.iloc[:, 1].mean()  
-            forecast = pd.DataFrame({
-                'ds': [pd.Timestamp.now() + pd.Timedelta(days=1)],
-                'pred': [value]
-            })
-        
+            value = starter_dataset.iloc[:, 1].mean()
+            forecast = pd.DataFrame(
+                {"ds": [pd.Timestamp.now() + pd.Timedelta(days=1)], "pred": [value]}
+            )
+
         starter_result = Result(
             forecast=forecast,
             backtest_error=20,
-            model_name='starter_dataset_model',
-            unfitted_forecaster=None
+            model_name="starter_dataset_model",
+            unfitted_forecaster=None,
         )
-        
-        return 1, [starter_result]
 
+        return 1, [starter_result]
 
     list_of_models = [model.lower() for model in list_of_models]
 
@@ -409,7 +399,7 @@ def engine(
         return 4, f"An error occurred: {str(e)}"
 
 
-# e = Model(
+# e = StreamModel(
 #   streamId=StreamId(source='test', stream='test', target='test', author='test'),
 #   datapath_override="NATGAS1D.csv",
 #   modelpath_override='baseline')
