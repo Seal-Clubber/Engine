@@ -152,11 +152,13 @@ class StableModel(StableModelInterface):
             # df = coerceAndFill(df)
             df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
 
-            lookback_len = next((param.value for param in self.hyperParameters if param.name=='lookback_len'), 1)
+            lookback_len = next(
+                (param.value for param in self.hyperParameters if param.name == 'lookback_len'), 1)
             data = df.to_numpy(dtype=np.float64).flatten()
             data = data[-lookback_len:]
             if self.manager.predictor == 'xgboost' and data.shape[0] < lookback_len:
-                data = np.pad(data, (lookback_len - data.shape[0], 0), mode='constant', constant_values=0.0)
+                data = np.pad(
+                    data, (lookback_len - data.shape[0], 0), mode='constant', constant_values=0.0)
             self.current = pd.DataFrame([data])
             # self.current = pd.DataFrame(
             #     self.featureSet.iloc[-1, :]).T  # .dropna(axis=1)
@@ -190,10 +192,13 @@ class StableModel(StableModelInterface):
         # df = coerceAndFill(df)
         df = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
 
-        lookback_len = next((param.value for param in self.hyperParameters if param.name=='lookback_len'), 1)
+        lookback_len = next(
+            (param.value for param in self.hyperParameters if param.name == 'lookback_len'), 1)
         data = df.to_numpy(dtype=np.float64).flatten()
-        data = np.concatenate([np.zeros((lookback_len,), dtype=data.dtype), data])
-        data = [data[i-lookback_len:i] for i in range(lookback_len, data.shape[0])]
+        data = np.concatenate(
+            [np.zeros((lookback_len,), dtype=data.dtype), data])
+        data = [data[i-lookback_len:i]
+                for i in range(lookback_len, data.shape[0])]
         df = pd.DataFrame(data)
 
         df_target = self.target.iloc[0:df.shape[0], :]
@@ -234,13 +239,18 @@ class StableModel(StableModelInterface):
             eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
             verbose=False)
         # self.xgbStable = copy.deepcopy(self.xgb) ## didn't fix it.
-        if self.manager.predictor == 'xgboost': self.xgbStable = self.xgb # turns on pilot
+        if self.manager.predictor == 'xgboost':
+            self.xgbStable = self.xgb  # turns on pilot
         self.xgbInUse = False
 
     ### MAIN PROCESSES #################################################################
 
     def build(self):
-        if self.dataset is not None and not self.dataset.empty and self.dataset.shape[0] > 10:
+        if (
+            self.dataset is not None and
+            not self.dataset.empty and
+            self.dataset.shape[0] > 10
+        ):
             self._produceTarget()
             self._produceFeatureStructure()
             self._produceFeatureSet()
