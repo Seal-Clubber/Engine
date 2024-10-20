@@ -166,7 +166,9 @@ class Model:
             status, model = engine(self.datapath, ["quick_start"])
             if status == 1:
                 self.stable = model
-                if self.stable[0].model_name != "starter_dataset_model":
+                if self.stable[0].model_name == "starter_dataset_model":
+                    self.modelUpdated.on_next(self.stable)
+                else:
                     self.save()
 
         while True:
@@ -174,8 +176,8 @@ class Model:
             if status == 1:
                 if self.compare(pilot, replace=True):
                     self.save()
-                else:
-                    self.modelUpdated.on_next(self.stable)
+
+                
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
@@ -232,10 +234,9 @@ def engine(
                 'pred': [value]
             })
         
-        # Create a mock result with backtest_error of 10
         starter_result = Result(
             forecast=forecast,
-            backtest_error=10,
+            backtest_error=20,
             model_name='starter_dataset_model',
             unfitted_forecaster=None
         )
