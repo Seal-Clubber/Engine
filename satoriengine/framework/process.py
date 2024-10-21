@@ -840,19 +840,6 @@ def process_data(
                 time_metric_baseline = "hours"
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = 1
-        elif len(dataset) >= 1:
-            # todo: add stupid model - last value or average
-            allowed_models = ["stupid_model"]
-            if quick_start:
-                allowed_models = ["stupid_model"]
-            lags = 1
-            forecasting_steps = 1
-            if sampling_timedelta > pd.Timedelta(hours=1):
-                time_metric_baseline = "days"
-            else:
-                time_metric_baseline = "hours"
-            forecasterequivalentdate = 1
-            forecasterequivalentdate_n_offsets = 1
         else:
             # print("Hits the invalid dataset case")
             if_invalid_dataset = True
