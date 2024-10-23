@@ -1025,10 +1025,7 @@ def model_create_train_test_and_predict(
                 else:
                     use_damped_trend = False
 
-            print("testing")
-            # print(use_trend)
-            # print(use_damped_trend)
-            # print(use_box_cox)
+            
             if hour_seasonality == True:
                 splist.append(forecasting_steps)
 
