@@ -74,7 +74,6 @@ class StreamModel:
         self.modelpath = modelpath_override or self.model_path()
         self.stable: PipelineInterface = None
         self.prediction_produced = prediction_produced
-        # Add tracking variables for stagnation detection
         self.last_backtest_error = None
         self.stagnation_count = 0
 
@@ -137,14 +136,14 @@ class StreamModel:
             self.last_backtest_error = current_error
             return False
         
-        if abs(current_error - self.last_backtest_error) < 1e-10:  # Using small epsilon for float comparison
+        if abs(current_error - self.last_backtest_error) < 1e-10: 
             self.stagnation_count += 1
         else:
             self.stagnation_count = 0
             
         self.last_backtest_error = current_error
         
-        return self.stagnation_count >= 3
+        return self.stagnation_count >= 5
 
     def run(self):
         """
@@ -197,7 +196,6 @@ class PipelineInterface:
 
         Args:
             stable: The current stable model
-            pilot: The pilot model to compare against
             replace: Whether to replace stable with pilot if pilot performs better
 
         Returns:
