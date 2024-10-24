@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+service DataService {
+    rpc GetData (DataRequest) returns (DataResponse);
+}
+
+message DataRequest {
+    string query = 1;  // SQL query to fetch data
+}
+
+message DataResponse {
+    bytes dataframe = 1;  // Serialized DataFrame
+}
