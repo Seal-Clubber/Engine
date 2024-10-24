@@ -61,7 +61,6 @@ class Engine:
 
 
 class StreamModel:
-    # todo: make general logic here
     def __init__(
         self,
         streamId: StreamId,
@@ -75,6 +74,9 @@ class StreamModel:
         self.modelpath = modelpath_override or self.model_path()
         self.stable: PipelineInterface = None
         self.prediction_produced = prediction_produced
+        # Add tracking variables for stagnation detection
+        self.last_backtest_error = None
+        self.stagnation_count = 0
 
     def produce_prediction(self, updated_model=None):
         """
@@ -97,7 +99,6 @@ class StreamModel:
                 streamforecast = StreamForecast(
                     streamId=self.streamId,
                     forecast=forecast,
-                    # these need to happen before we save the prediction to disk
                     observationTime=observationTime,
                     observationHash=observationHash,
                 )
@@ -122,14 +123,35 @@ class StreamModel:
             return None
 
     def compare(self, pilot: Optional[Any] = None) -> bool:
+        if self.stable is None:
+            return True
         compared = pilot[0].backtest_error < self.stable[0].backtest_error
         return compared
+
+    def check_stagnation(self, current_error: float) -> bool:
+        """
+        Check if the backtest error has remained the same for multiple iterations
+        Returns True if training should stop due to stagnation
+        """
+        if self.last_backtest_error is None:
+            self.last_backtest_error = current_error
+            return False
+        
+        if abs(current_error - self.last_backtest_error) < 1e-10:  # Using small epsilon for float comparison
+            self.stagnation_count += 1
+        else:
+            self.stagnation_count = 0
+            
+        self.last_backtest_error = current_error
+        
+        return self.stagnation_count >= 3
 
     def run(self):
         """
         main loop for generating models and comparing them to the best known
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
+        Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
             trainingResult = PipelineModel.train(
@@ -137,6 +159,14 @@ class StreamModel:
             )
 
             if trainingResult.status == 1:
+                print(trainingResult.model)
+                current_error = trainingResult.model[0].backtest_error
+                
+                # Check for stagnation
+                if self.check_stagnation(current_error):
+                    print("Training stopped due to backtest_error stagnation after 3 iterations")
+                    break
+                
                 if PipelineModel.compare(
                     self.stable, self.compare(trainingResult.model), replace=True
                 ):
