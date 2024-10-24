@@ -73,7 +73,6 @@ class StreamModel:
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
-        # self.stable: list = self.load()
         self.stable: PipelineInterface = None
         self.prediction_produced = prediction_produced
 
@@ -85,17 +84,13 @@ class StreamModel:
         """
         updated_model = updated_model or self.stable
         if updated_model is not None:
-            forecast = PipelineModel.predict(
-                kwargs={"stable": self.stable, "datapath": self.datapath}
-                )
+            forecast = PipelineModel.predict(stable=self.stable, datapath=self.datapath)
 
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)
                 observationHash = hashIt(
-                    getHashBefore(
-                        pd.DataFrame(), observationTime
-                    )  # TypeError: getHashBefore() missing 1 required positional argument: 'time'
+                    getHashBefore(pd.DataFrame(), observationTime)
                     + str(observationTime)
                     + str(prediction)
                 )
@@ -126,6 +121,10 @@ class StreamModel:
         except FileNotFoundError:
             return None
 
+    def compare(self, pilot: Optional[Any] = None) -> bool:
+        compared = pilot[0].backtest_error < self.stable[0].backtest_error
+        return compared
+
     def run(self):
         """
         main loop for generating models and comparing them to the best known
@@ -134,21 +133,16 @@ class StreamModel:
         """
         while True:
             trainingResult = PipelineModel.train(
-                kwargs={"stable": self.stable, "datapath": self.datapath}
+                stable=self.stable, datapath=self.datapath
             )
-            # if trainingResult.status == 1:
-            #     # change the below after updating compare inside the PipelineModel
-            #     if self.compare(trainingResult.model, replace=True):
-            #         self.save()
-            #     if trainingResult.triggerPrediction:
-            #         self.produce_prediction(self.stable)
 
             if trainingResult.status == 1:
-                if PipelineModel.compare(self.stable, trainingResult.model, replace=True):
-                    if PipelineModel.save(trainingResult.model, self.model_path):
+                if PipelineModel.compare(
+                    self.stable, self.compare(trainingResult.model), replace=True
+                ):
+                    if PipelineModel.save(trainingResult.model, self.modelpath):
+                        self.stable = trainingResult.model
                         self.produce_prediction(self.stable)
-                    
-                
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
@@ -158,22 +152,24 @@ class StreamModel:
 class TrainingResult:
 
     def __init__(self, status, model, predictionTrigger):
-        status = status
-        model = model
-        predictionTrigger = predictionTrigger
+        self.status = status
+        self.model = model
+        self.predictionTrigger = predictionTrigger
 
 
 class PipelineInterface:
     @staticmethod
-    def compare(stable: Optional[Any], pilot: Optional[Any], replace: bool = False) -> bool:
+    def compare(
+        stable: Optional[Any], comparison: bool = False, replace: bool = False
+    ) -> bool:
         """
         Compare stable and pilot models based on their backtest error.
-        
+
         Args:
             stable: The current stable model
             pilot: The pilot model to compare against
             replace: Whether to replace stable with pilot if pilot performs better
-            
+
         Returns:
             bool: True if pilot should replace stable, False otherwise
         """
@@ -183,10 +179,10 @@ class PipelineInterface:
     def predict(**kwargs) -> Union[None, pd.DataFrame]:
         """
         Make predictions using the stable model
-        
+
         Args:
             **kwargs: Keyword arguments including datapath and stable model
-            
+
         Returns:
             Optional[pd.DataFrame]: Predictions if successful, None otherwise
         """
@@ -196,42 +192,27 @@ class PipelineInterface:
     def save(model: Optional[Any], modelpath: str) -> bool:
         """
         Save the model to disk.
-        
+
         Args:
             model: The model to save
             modelpath: Path where the model should be saved
-            
+
         Returns:
             bool: True if save successful, False otherwise
         """
         pass
-    
+
     @staticmethod
     def train(**kwargs) -> TrainingResult:
         """
         Train a new model.
-        
+
         Args:
             **kwargs: Keyword arguments including datapath and stable model
-            
+
         Returns:
             TrainingResult: Object containing training status and model
         """
-        pass
-
-    @staticmethod
-    def enginePipeline(
-        filename: str,
-        list_of_models: List[str],
-        interval: List[int] = [10, 90],
-        feature_set_reduction: bool = False,
-        exogenous_feature_type: str = "ExogenousFeaturesBasedonSeasonalityTestWithAdditivenMultiplicative",
-        feature_set_reduction_method: str = "RFECV",
-        random_state_hyperr: int = 123,
-        metric: str = "mase",
-        mode: str = "train",
-        unfitted_forecaster: Optional[Any] = None,
-    ):
         pass
 
 
@@ -264,18 +245,14 @@ class PipelineModel(PipelineInterface):
             return False
 
     @staticmethod
-    def compare(stable: Optional[Any] = None, pilot: Optional[Any] = None, replace: bool = True) -> bool:
+    def compare(
+        stable: Optional[Any] = None, comparison: bool = False, replace: bool = True
+    ) -> bool:
         if stable is None:
-            stable = pilot
             return True
-            
-        compared = pilot[0].backtest_error < stable[0].backtest_error
-        
-        if replace and compared:
-            stable = pilot
+        if replace and comparison:
             return True
-            
-        return compared
+        return comparison
 
     @staticmethod
     def predict(**kwargs) -> Union[None, pd.DataFrame]:
