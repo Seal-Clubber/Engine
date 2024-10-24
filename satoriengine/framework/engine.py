@@ -127,11 +127,12 @@ class StreamModel:
         compared = pilot[0].backtest_error < self.stable[0].backtest_error
         return compared
 
-    def check_stagnation(self, current_error: float) -> bool:
+    def check_stagnation(self, pilot_model: Optional[Any]) -> bool:
         """
         Check if the backtest error has remained the same for multiple iterations
         Returns True if training should stop due to stagnation
         """
+        current_error = pilot_model[0].backtest_error
         if self.last_backtest_error is None:
             self.last_backtest_error = current_error
             return False
@@ -142,7 +143,6 @@ class StreamModel:
             self.stagnation_count = 0
             
         self.last_backtest_error = current_error
-        
         return self.stagnation_count >= 5
 
     def run(self):
@@ -158,11 +158,7 @@ class StreamModel:
             )
 
             if trainingResult.status == 1:
-                print(trainingResult.model)
-                current_error = trainingResult.model[0].backtest_error
-                
-                # Check for stagnation
-                if self.check_stagnation(current_error):
+                if self.check_stagnation(trainingResult.model):
                     print("Training stopped due to backtest_error stagnation after 3 iterations")
                     break
                 
