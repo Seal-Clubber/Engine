@@ -12,6 +12,7 @@ import pandas as pd
 from datetime import datetime
 import random
 from typing import Union, Optional, List, Any, Dict
+from collections import namedtuple
 
 from satoriengine.framework.process import process_data
 from satoriengine.framework.determine_features import determine_feature_set
@@ -47,9 +48,11 @@ class Engine:
         print(f"new_observation: {observation}")
         streamModel = self.streamModels.get(observation.streamId)
         if streamModel.thread is None or not streamModel.thread.is_alive():
+            streamModel.choose_pipeline()
             streamModel.run_forever()
         if streamModel is not None:
             streamModel.produce_prediction()
+            # streamModel.choose_pipeline()
         else:
             print(f"No model found for stream {observation.streamId}")
 
@@ -72,10 +75,12 @@ class StreamModel:
         self.streamId = streamId
         self.datapath = datapath_override or self.data_path()
         self.modelpath = modelpath_override or self.model_path()
+        self.pipeline: PipelineInterface = None
         self.stable: PipelineInterface = None
         self.prediction_produced = prediction_produced
-        self.last_backtest_error = None
-        self.stagnation_count = 0
+        # self.last_backtest_error = None
+        # self.stagnation_count = 0
+        self.choose_pipeline(getStart=True) 
 
     def produce_prediction(self, updated_model=None):
         """
@@ -85,7 +90,7 @@ class StreamModel:
         """
         updated_model = updated_model or self.stable
         if updated_model is not None:
-            forecast = PipelineModel.predict(stable=self.stable, datapath=self.datapath)
+            forecast = self.pipeline.predict(stable=self.stable, datapath=self.datapath)
 
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
@@ -121,29 +126,55 @@ class StreamModel:
         except FileNotFoundError:
             return None
 
-    def compare(self, pilot: Optional[Any] = None) -> bool:
-        if self.stable is None:
-            return True
-        compared = pilot[0].backtest_error < self.stable[0].backtest_error
-        return compared
+    # def check_stagnation(self, pilot_model: Optional[Any]) -> bool:
+    #     """
+    #     Check if the backtest error has remained the same for multiple iterations
+    #     Returns True if training should stop due to stagnation
+    #     """
+    #     current_error = pilot_model[0].backtest_error
+    #     if self.last_backtest_error is None:
+    #         self.last_backtest_error = current_error
+    #         return False
 
-    def check_stagnation(self, pilot_model: Optional[Any]) -> bool:
+    #     if abs(current_error - self.last_backtest_error) < 1e-10:
+    #         self.stagnation_count += 1
+    #     else:
+    #         self.stagnation_count = 0
+
+    #     self.last_backtest_error = current_error
+    #     return self.stagnation_count >= 5
+
+    def check_observations(self, has_header: bool = False) -> bool:
         """
-        Check if the backtest error has remained the same for multiple iterations
-        Returns True if training should stop due to stagnation
-        """
-        current_error = pilot_model[0].backtest_error
-        if self.last_backtest_error is None:
-            self.last_backtest_error = current_error
-            return False
+        Check if a CSV file has fewer than 3 observations.
         
-        if abs(current_error - self.last_backtest_error) < 1e-10: 
-            self.stagnation_count += 1
+        Args:
+            file_path (str): Path to the CSV file
+            has_header (bool): Whether the csv contains a header
+        Returns:
+            bool: True if file has more than 2 rows, False otherwise
+        """
+        return len(pd.read_csv(self.datapath, nrows=3, header=0 if has_header else None)) > 2
+
+    def choose_pipeline(self, getStart: bool = False):
+        """
+        everything can try to handle some cases
+        Engine
+            - low resources available - SKPipeline
+            - few observations - SKPipeline
+            - (mapping of cases to suitable pipelines)
+        examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
+        refactor to build a simple StartPipeline
+        called when the context may have changed
+        startpipeline should check for it's own stagnation and return a flag on the trainingResult object
+        """
+        if getStart:
+            self.pipeline = None
         else:
-            self.stagnation_count = 0
-            
-        self.last_backtest_error = current_error
-        return self.stagnation_count >= 5
+            if self.check_observations(): 
+                self.pipeline = SKPipeline
+            else:
+                self.pipeline = StarterPipeline
 
     def run(self):
         """
@@ -153,21 +184,17 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
-            trainingResult = PipelineModel.train(
-                stable=self.stable, datapath=self.datapath
+            trainingResult = self.pipeline.train(
+                stable=self.stable, 
+                datapath=self.datapath
             )
-
-            if trainingResult.status == 1:
-                if self.check_stagnation(trainingResult.model):
-                    print("Training stopped due to backtest_error stagnation after 3 iterations")
-                    break
-                
-                if PipelineModel.compare(
-                    self.stable, self.compare(trainingResult.model), replace=True
-                ):
-                    if PipelineModel.save(trainingResult.model, self.modelpath):
+            if trainingResult.status == 1 and not trainingResult.stagnated:
+                if self.pipeline.compare(self.stable, trainingResult.model):
+                    if self.pipeline.save(trainingResult.model, self.modelpath):
                         self.stable = trainingResult.model
                         self.produce_prediction(self.stable)
+            else:
+                break
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
@@ -176,10 +203,12 @@ class StreamModel:
 
 class TrainingResult:
 
-    def __init__(self, status, model, predictionTrigger):
+    def __init__(
+        self, status, model: "PipelineInterface", stagnated: bool = False
+    ):
         self.status = status
         self.model = model
-        self.predictionTrigger = predictionTrigger
+        self.stagnated = stagnated
 
 
 class PipelineInterface:
@@ -240,26 +269,21 @@ class PipelineInterface:
         pass
 
 
-class PipelineModel(PipelineInterface):
+class SKPipeline(PipelineInterface):
     @staticmethod
     def train(**kwargs) -> TrainingResult:
         if kwargs["stable"] is None:
-            status, model = PipelineModel.enginePipeline(
+            status, model = SKPipeline.skEnginePipeline(
                 kwargs["datapath"], ["quick_start"]
             )
             if status == 1:
-                if model[0].model_name == "starter_dataset_model":
-                    return TrainingResult(status, model, True)
-        status, model = PipelineModel.enginePipeline(
-            kwargs["datapath"], ["random_model"]
-        )
+                return TrainingResult(status, model, False)
+        status, model = SKPipeline.skEnginePipeline(kwargs["datapath"], ["random_model"])
         return TrainingResult(status, model, False)
 
     @staticmethod
     def save(model: Optional[Any], modelpath: str) -> bool:
         """saves the stable model to disk"""
-        if model[0].model_name == "starter_dataset_model":
-            return True
         try:
             os.makedirs(os.path.dirname(modelpath), exist_ok=True)
             joblib.dump(model, modelpath)
@@ -270,18 +294,18 @@ class PipelineModel(PipelineInterface):
 
     @staticmethod
     def compare(
-        stable: Optional[Any] = None, comparison: bool = False, replace: bool = True
+        stable: Optional[Any] = None,
+        pilot: Optional[Any] = None,
     ) -> bool:
+        """true indicates the pilot model is better than the stable model"""
         if stable is None:
             return True
-        if replace and comparison:
-            return True
-        return comparison
+        return pilot[0].backtest_error < stable[0].backtest_error
 
     @staticmethod
     def predict(**kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
-        status, predictor_model = PipelineModel.enginePipeline(
+        status, predictor_model = SKPipeline.skEnginePipeline(
             filename=kwargs["datapath"],
             list_of_models=[kwargs["stable"][0].model_name],
             mode="predict",
@@ -292,7 +316,7 @@ class PipelineModel(PipelineInterface):
         return None
 
     @staticmethod
-    def enginePipeline(
+    def skEnginePipeline(
         filename: str,
         list_of_models: List[str],
         interval: List[int] = [10, 90],
@@ -317,37 +341,6 @@ class PipelineModel(PipelineInterface):
                     reason = f"Not allowed for dataset size of {dataset_length}"
                     unsuitable_models.append((model, reason))
             return suitable_models, unsuitable_models
-
-        col_names_starter = ["date_time", "value", "id"]
-        starter_dataset = pd.read_csv(filename, names=col_names_starter, header=None)
-        if len(starter_dataset) < 3:
-            from collections import namedtuple
-
-            Result = namedtuple(
-                "Result",
-                ["forecast", "backtest_error", "model_name", "unfitted_forecaster"],
-            )
-            if len(starter_dataset) == 1:
-                # If dataset has only 1 row, return the same value in the forecast dataframe
-                value = starter_dataset.iloc[0, 1]
-                forecast = pd.DataFrame(
-                    {"ds": [pd.Timestamp.now() + pd.Timedelta(days=1)], "pred": [value]}
-                )
-            elif len(starter_dataset) == 2:
-                # If dataset has 2 rows, return their average
-                value = starter_dataset.iloc[:, 1].mean()
-                forecast = pd.DataFrame(
-                    {"ds": [pd.Timestamp.now() + pd.Timedelta(days=1)], "pred": [value]}
-                )
-
-            starter_result = Result(
-                forecast=forecast,
-                backtest_error=20,
-                model_name="starter_dataset_model",
-                unfitted_forecaster=None,
-            )
-
-            return 1, [starter_result]
 
         list_of_models = [model.lower() for model in list_of_models]
 
@@ -514,4 +507,76 @@ class PipelineModel(PipelineInterface):
             # Additional status code for unexpected errors
             return 4, f"An error occurred: {str(e)}"
 
-    print("All Executed well")
+
+class StarterPipeline(PipelineInterface):
+    @staticmethod
+    def train(**kwargs) -> TrainingResult:
+        if kwargs["stable"] is None:
+            status, model = StarterPipeline.starterEnginePipeline(
+                kwargs["datapath"]
+            )
+            if status == 1:
+                return TrainingResult(status, model, False)
+        else:
+            return TrainingResult(1, kwargs["stable"], True)
+
+    @staticmethod
+    def save(model: Optional[Any], modelpath: str) -> bool:
+        """saves the stable model to disk"""
+        return True
+
+    @staticmethod
+    def compare(
+        stable: Optional[Any] = None,
+        pilot: Optional[Any] = None,
+    ) -> bool:
+        """true indicates the pilot model is better than the stable model"""
+        if stable is None:
+            return True
+        return pilot[0].backtest_error < stable[0].backtest_error
+
+    @staticmethod
+    def predict(**kwargs) -> Union[None, pd.DataFrame]:
+        """prediction without training"""
+        status, predictor_model = StarterPipeline.starterEnginePipeline(
+            filename=kwargs["datapath"]
+        )
+        if status == 1:
+            return predictor_model[0].forecast
+        return None
+
+    @staticmethod
+    def starterEnginePipeline(
+        filename: str
+    ):
+        """Starter Engine function for the Satori Engine"""
+
+        col_names_starter = ["date_time", "value", "id"]
+        starter_dataset = pd.read_csv(filename, names=col_names_starter, header=None)
+        
+        Result = namedtuple(
+            "Result",
+            ["forecast", "backtest_error", "model_name", "unfitted_forecaster"],
+        )
+
+        if len(starter_dataset) == 1:
+            # If dataset has only 1 row, return the same value in the forecast dataframe
+            value = starter_dataset.iloc[0, 1]
+            forecast = pd.DataFrame(
+                {"ds": [pd.Timestamp.now() + pd.Timedelta(days=1)], "pred": [value]}
+            )
+        elif len(starter_dataset) == 2:
+            # If dataset has 2 rows, return their average
+            value = starter_dataset.iloc[:, 1].mean()
+            forecast = pd.DataFrame(
+                {"ds": [pd.Timestamp.now() + pd.Timedelta(days=1)], "pred": [value]}
+            )
+
+        starter_result = Result(
+            forecast=forecast,
+            backtest_error=20,
+            model_name="starter_dataset_model",
+            unfitted_forecaster=None,
+        )
+
+        return 1, [starter_result]
