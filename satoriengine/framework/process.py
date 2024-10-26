@@ -503,7 +503,7 @@ def process_noisy_dataset(
 
 
 def process_data(
-    filename: str,
+    data: pd.DataFrame,
     sampling_frequency: Union[str, None] = None,
     col_names: Union[list[str], None] = None,
     training_percentage: int = 80,
@@ -512,11 +512,11 @@ def process_data(
     quick_start: bool = False,
 ) -> ProcessedData:
 
-    if col_names is None:
-        col_names = ["date_time", "value", "id"]
+    # if col_names is None:
+    #     col_names = ["date_time", "value", "id"]
 
     # Read the CSV file
-    raw_dataset = pd.read_csv(filename, names=col_names, header=None)
+    raw_dataset = data
 
     # Process date_time column with flexible parsing and standardization
     raw_dataset["date_time"] = pd.to_datetime(raw_dataset["date_time"])
