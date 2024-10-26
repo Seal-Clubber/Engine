@@ -113,28 +113,22 @@ class StreamModel:
                 self.prediction_produced.on_next(streamforecast)
 
     def load_data(self) -> pd.DataFrame:
-        # todo: add columns ts, value, hash
         try:
             return pd.read_csv(self.data_path(), names=["date_time", "value", "id"], header=None)
         except FileNotFoundError:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def data_path(self) -> str:
-        print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
         return f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
 
     def model_path(self) -> str:
         return f"../../models/{generatePathId(streamId=self.streamId)}"
 
-    def check_observations(self, has_header: bool = False) -> bool:
+    def check_observations(self) -> bool:
         """
-        Check if a CSV file has fewer than 3 observations.
-
-        Args:
-            file_path (str): Path to the CSV file
-            has_header (bool): Whether the csv contains a header
+        Check if the dataframe has fewer than 3 observations.
         Returns:
-            bool: True if file has more than 2 rows, False otherwise
+            bool: True if dataframe has more than 2 rows, False otherwise
         """
         return len(self.data) > 2
 
@@ -177,7 +171,7 @@ class StreamModel:
             print(self.pipeline)
             trainingResult = self.pipeline.train(
                 stable=self.model,
-                data=self.data,  # todo: fix
+                data=self.data, 
             )
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pipeline.compare(self.model, trainingResult.model):
