@@ -17,12 +17,12 @@ class SKPipeline(PipelineInterface):
     def train(**kwargs) -> TrainingResult:
         if kwargs["stable"] is None:
             status, model = SKPipeline.skEnginePipeline(
-                kwargs["datapath"], ["quick_start"]
+                kwargs["data"], ["quick_start"]
             )
             if status == 1:
                 return TrainingResult(status, model, False)
         status, model = SKPipeline.skEnginePipeline(
-            kwargs["datapath"], ["random_model"]
+            kwargs["data"], ["random_model"]
         )
         return TrainingResult(status, model, False)
 
@@ -59,7 +59,7 @@ class SKPipeline(PipelineInterface):
     def predict(**kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         status, predictor_model = SKPipeline.skEnginePipeline(
-            filename=kwargs["datapath"],
+            data=kwargs["data"],
             list_of_models=[kwargs["stable"][0].model_name],
             mode="predict",
             unfitted_forecaster=kwargs["stable"][0].unfitted_forecaster,
