@@ -3,6 +3,7 @@ import traceback
 import os
 import time
 import copy
+import random
 import pandas as pd
 import numpy as np
 from reactivex import merge
@@ -29,7 +30,11 @@ from satoriengine.utils import clean
 
 class XGBRegressorPipeline(PipelineInterface):
 
-    def __init__(self, useGPU: bool, hyperParameters: list[HyperParameter], xgbParams: list = []):
+    def __init__(self, *args, **kwargs):
+        # unused
+        # useGPU: bool
+        # self.hyperParameters: list[HyperParameter] # unused
+        # xgbParams: list = []
         self.model = XGBRegressor(eval_metric='mae')
 
     def fit(self, **kwargs) -> TrainingResult:
@@ -83,3 +88,65 @@ class XGBRegressorPipeline(PipelineInterface):
 
     def _score(self, model: XGBRegressor, testX: Iterable, testY: Iterable):
         return mean_absolute_error(testY, model.predict(testX))
+
+    def _produceHyperParameters(self):
+        # assum self.model is XGBRegressor
+        # instead of explicitly holding the hyperparameters, outside the model
+        # we can just randomize the hyperparameters in the model in a similar,
+        # adjustable-learning-rate way as we used to:
+        # def radicallyRandomize():
+        #    for param in self.hyperParameters:
+        #        x = param.min + (random.random() * (param.max - param.min))
+        #        if param.kind == int:
+        #            x = int(x)
+        #        param.test = x
+        #
+        # def incrementallyRandomize():
+        #    for param in self.hyperParameters:
+        #        x = (
+        #            (random.random() * param.limit * 2) +
+        #            (param.value - param.limit))
+        #        if param.min < x < param.max:
+        #            if param.kind == int:
+        #                x = int(round(x))
+        #            param.test = x
+        #
+        # x = random.random()
+        # if x >= .9:
+        #    radicallyRandomize()
+        # elif .1 < x < .9:
+        #    incrementallyRandomize()
+        # something like
+        self.model.set_params(
+            learning_rate=min(max(self.model.learning_rate *
+                              random.uniform(0.8, 1.25), .001), 1),
+            n_estimators=min(
+                max(int(self.model.n_estimators * random.uniform(0.8, 1.25)), 10), 1000),
+            max_depth=min(max(int(self.model.max_depth * random.uniform(0.8, 1.25)), 3), 10))
+        # {
+        #    'objective': 'reg:squarederror',
+        #    'base_score': 0.5,
+        #    'booster': 'gbtree',
+        #    'colsample_bylevel': 1,
+        #    'colsample_bynode': 1,
+        #    'colsample_bytree': 1,
+        #    'gamma': 0,
+        #    'importance_type': 'gain',
+        #    'learning_rate': 0.01,      # Updated value, if modified
+        #    'max_delta_step': 0,
+        #    'max_depth': 5,             # Updated value, if modified
+        #    'min_child_weight': 1,
+        #    'missing': None,
+        #    'n_estimators': 200,        # Updated value, if modified
+        #    'n_jobs': 1,
+        #    'nthread': None,
+        #    'random_state': 0,
+        #    'reg_alpha': 0,
+        #    'reg_lambda': 1,
+        #    'scale_pos_weight': 1,
+        #    'seed': None,
+        #    'silent': None,
+        #    'subsample': 1,
+        #    'verbosity': 1,
+        #    'eval_metric': 'mae'        # Specified during instantiation
+        # }

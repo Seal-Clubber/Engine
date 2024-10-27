@@ -13,6 +13,9 @@ class TrainingResult:
 
 class PipelineInterface:
 
+    def __init__(self, *args, **kwargs):
+        self.model = None
+
     @staticmethod
     def load(modelPath: str, **kwargs) -> Union[None, 'PipelineInterface']:
         """loads the model model from disk if present"""
