@@ -13,56 +13,47 @@ from satoriengine.framework.pipelines.interface import PipelineInterface, Traini
 
 
 class SKPipeline(PipelineInterface):
-    @staticmethod
-    def train(**kwargs) -> TrainingResult:
-        if kwargs["stable"] is None:
-            status, model = SKPipeline.skEnginePipeline(
-                kwargs["data"], ["quick_start"]
-            )
-            if status == 1:
-                return TrainingResult(status, model, False)
-        status, model = SKPipeline.skEnginePipeline(
-            kwargs["data"], ["random_model"]
-        )
-        return TrainingResult(status, model, False)
 
-    @staticmethod
-    def save(model: Optional[Any], modelpath: str) -> bool:
+    def __init__(self):
+        self.model = None
+
+    def save(self, modelpath: str, **kwargs) -> bool:
         """saves the stable model to disk"""
         try:
             os.makedirs(os.path.dirname(modelpath), exist_ok=True)
-            joblib.dump(model, modelpath)
+            joblib.dump(self.model, modelpath)
             return True
         except Exception as e:
             print(f"Error saving model: {e}")
             return False
 
-    @staticmethod
-    def load(modelPath: str) -> Union[None, Any]:
-        """loads the model model from disk if present"""
-        try:
-            return joblib.load(modelPath)
-        except FileNotFoundError:
-            return None
+    def fit(self, **kwargs) -> TrainingResult:
+        if self.model is None:
+            status, model = SKPipeline.skEnginePipeline(
+                kwargs["data"], ["quick_start"]
+            )
+            if status == 1:
+                self.model = model
+                return TrainingResult(status, self.model, False)
+        status, model = SKPipeline.skEnginePipeline(
+            kwargs["data"], ["random_model"]
+        )
+        self.model = model
+        return TrainingResult(status, self.model, False)
 
-    @staticmethod
-    def compare(
-        stable: Optional[Any] = None,
-        pilot: Optional[Any] = None,
-    ) -> bool:
-        """true indicates the pilot model is better than the stable model"""
-        if stable is None:
-            return True
-        return pilot[0].backtest_error < stable[0].backtest_error
+    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+        """true indicates this model is better than the other model"""
+        if isinstance(other, self.__class__):
+            return self.model[0].backtest_error < other[0].backtest_error
+        return True
 
-    @staticmethod
-    def predict(**kwargs) -> Union[None, pd.DataFrame]:
+    def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         status, predictor_model = SKPipeline.skEnginePipeline(
             data=kwargs["data"],
-            list_of_models=[kwargs["stable"][0].model_name],
+            list_of_models=[self.model[0].model_name],
             mode="predict",
-            unfitted_forecaster=kwargs["stable"][0].unfitted_forecaster,
+            unfitted_forecaster=self.model[0].unfitted_forecaster,
         )
         if status == 1:
             return predictor_model[0].forecast
@@ -137,7 +128,8 @@ class SKPipeline(PipelineInterface):
             print(f"Randomly selected models: {list_of_models}")
             print(f"feature_set_reduction: {feature_set_reduction}")
             print(f"exogenous_feature_type: {exogenous_feature_type}")
-            print(f"feature_set_reduction_method: {feature_set_reduction_method}")
+            print(
+                f"feature_set_reduction_method: {feature_set_reduction_method}")
             print(f"random_state_hyper: {random_state_hyper}")
 
         if quick_start_present:

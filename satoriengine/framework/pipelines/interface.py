@@ -12,35 +12,16 @@ class TrainingResult:
 
 
 class PipelineInterface:
-    @staticmethod
-    def compare(stable: Optional[Any] = None, pilot: Optional[Any] = None) -> bool:
-        """
-        Compare stable (model) and pilot models based on their backtest error.
-
-        Args:
-            stable: The current stable model
-            replace: Whether to replace stable with pilot if pilot performs better
-
-        Returns:
-            bool: True if pilot should replace stable, False otherwise
-        """
-        pass
 
     @staticmethod
-    def predict(**kwargs) -> Union[None, pd.DataFrame]:
-        """
-        Make predictions using the stable model
+    def load(modelPath: str, **kwargs) -> Union[None, 'PipelineInterface']:
+        """loads the model model from disk if present"""
+        try:
+            return joblib.load(modelPath)
+        except FileNotFoundError:
+            return None
 
-        Args:
-            **kwargs: Keyword arguments including datapath and stable model
-
-        Returns:
-            Optional[pd.DataFrame]: Predictions if successful, None otherwise
-        """
-        pass
-
-    @staticmethod
-    def save(model: Optional[Any], modelpath: str) -> bool:
+    def save(self, modelpath: str, **kwargs) -> bool:
         """
         Save the model to disk.
 
@@ -53,12 +34,7 @@ class PipelineInterface:
         """
         pass
 
-    @staticmethod
-    def load(modelPath: str) -> Union[None, Any]:
-        """loads the model model from disk if present"""
-
-    @staticmethod
-    def train(**kwargs) -> TrainingResult:
+    def fit(self, **kwargs) -> TrainingResult:
         """
         Train a new model.
 
@@ -67,5 +43,30 @@ class PipelineInterface:
 
         Returns:
             TrainingResult: Object containing training status and model
+        """
+        pass
+
+    def compare(self, stable: Optional[Any] = None, **kwargs) -> bool:
+        """
+        Compare stable (model) and pilot models based on their backtest error.
+
+        Args:
+            stable: The current stable model
+            replace: Whether to replace stable with pilot if pilot performs better
+
+        Returns:
+            bool: True if pilot should replace stable, False otherwise
+        """
+        pass
+
+    def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
+        """
+        Make predictions using the stable model
+
+        Args:
+            **kwargs: Keyword arguments including datapath and stable model
+
+        Returns:
+            Optional[pd.DataFrame]: Predictions if successful, None otherwise
         """
         pass
