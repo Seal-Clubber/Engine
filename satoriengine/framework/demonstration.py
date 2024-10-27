@@ -2,15 +2,9 @@
 # ==============================================================================
 import numpy as np
 import pandas as pd
-from astral.sun import sun
-from astral import LocationInfo
-import datetime
 
 # Modelling and Forecasting
 # ==============================================================================
-import xgboost
-import lightgbm
-import sklearn
 from lightgbm import LGBMRegressor
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
@@ -74,7 +68,7 @@ import random
 
 # linear regressors : LinearRegression(), Lasso() or Ridge()
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
-from lineartree import LinearTreeRegressor, LinearBoostRegressor, LinearForestRegressor
+from lineartree import LinearBoostRegressor
 
 from sklearn.preprocessing import StandardScaler
 
@@ -82,17 +76,11 @@ from sktime.forecasting.fbprophet import Prophet
 from sktime.forecasting.ets import AutoETS
 from sktime.forecasting.tbats import TBATS
 from sktime.forecasting.neuralforecast import NeuralForecastLSTM
-from sktime.split import temporal_train_test_split
-from sktime.forecasting.model_selection import SlidingWindowSplitter, ExpandingWindowSplitter
+from sktime.forecasting.model_selection import SlidingWindowSplitter
 from sktime.forecasting.model_selection import ForecastingOptunaSearchCV
-from sktime.forecasting.model_evaluation import evaluate
-from sktime.forecasting.base import ForecastingHorizon
 from sktime.performance_metrics.forecasting import mean_absolute_scaled_error, mean_squared_error, mean_absolute_error
 from sktime.performance_metrics.forecasting import MeanAbsoluteScaledError #check if this is needed
-from scipy.stats import uniform, randint
-from sktime.utils.seasonality import autocorrelation_seasonality_test
 import optuna
-from  optuna.distributions import CategoricalDistribution
 
 def create_forecaster(model_type, if_exog=None, random_state=None, verbose=None, lags=None, differentiation=None, custom_params=None, weight=None, steps=None, time_metric_baseline="days", forecasterequivalentdate=1, forecasterequivalentdate_n_offsets=7, y=None, start_p=24, start_q=0, max_p=24, max_q=1, seasonal=True, test='adf', m=24, d=None, D=None):
     forecaster_params = {
@@ -2299,7 +2287,6 @@ def demonstration(
             feature_set_reduction_method=feature_set_reduction_method,
             bayesian_trial=20,
             random_state_hyper=random_state_hyper,
-            last_observed_datetime=last_date_time,
             frequency=sf,
             backtest_steps=backtest_steps,
             prediction_steps=forecasting_steps
