@@ -35,7 +35,7 @@ class XGBRegressorPipeline(PipelineInterface):
         # useGPU: bool
         # self.hyperParameters: list[HyperParameter] # unused
         # xgbParams: list = []
-        self.model = XGBRegressor(eval_metric='mae')
+        self.model: XGBRegressor = XGBRegressor(eval_metric='mae')
 
     def fit(self, **kwargs) -> TrainingResult:
         ''' train model - in place '''
