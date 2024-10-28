@@ -89,7 +89,7 @@ class XGBRegressorPipeline(PipelineInterface):
     def _score(self, model: XGBRegressor, testX: Iterable, testY: Iterable):
         return mean_absolute_error(testY, model.predict(testX))
 
-    def _produceHyperParameters(self):
+    def _updateHyperParameters(self):
         # assum self.model is XGBRegressor
         # instead of explicitly holding the hyperparameters, outside the model
         # we can just randomize the hyperparameters in the model in a similar,
