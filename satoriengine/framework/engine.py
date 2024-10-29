@@ -175,8 +175,8 @@ class StreamModel:
             print(self.pipeline)
             trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
-                if self.pilot.compare(self.pilot, trainingResult.model):
-                    if self.pilot.save(trainingResult.model, self.model_path()):
+                if self.pilot.compare(self.stable):
+                    if self.pilot.save(self.model_path()):
                         self.stable = copy.deepcopy(self.pilot)
                         self.produce_prediction(self.stable)
             else:
