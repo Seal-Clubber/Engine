@@ -1,21 +1,18 @@
+from typing import Union, Dict
+import copy
+import json
 import threading
-import joblib
+import pandas as pd
 from reactivex.subject import BehaviorSubject
-from satorilib.api.time import datetimeToTimestamp, now
-from satorilib.api.hash import generatePathId
-from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.api.hash import hashIt
 from satorilib.api.disk import getHashBefore
-
-import pandas as pd
-from typing import Union, Dict
-
+from satorilib.api.hash import generatePathId
+from satorilib.api.time import datetimeToTimestamp, now
+from satorilib.concepts import Stream, StreamId, Observation
 from satoriengine.framework.structs import StreamForecast
 from satoriengine.framework.pipelines.interface import PipelineInterface
-from satoriengine.framework.pipelines.sk import SKPipeline    
-from satoriengine.framework.pipelines.starter import StarterPipeline    
-
-import json
+from satoriengine.framework.pipelines.sk import SKPipeline
+from satoriengine.framework.pipelines.starter import StarterPipeline
 
 
 class Engine:
@@ -30,7 +27,8 @@ class Engine:
 
     def setup_subscriptions(self):
         self.new_observation.subscribe(
-            on_next=lambda x: self.handle_new_observation(x) if x is not None else None,
+            on_next=lambda x: self.handle_new_observation(
+                x) if x is not None else None,
             on_error=lambda e: self.handle_error(e),
             on_completed=lambda: self.handle_completion(),
         )
@@ -72,16 +70,21 @@ class StreamModel:
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
         self.pipeline: PipelineInterface = self.choose_pipeline(getStart=True)
-        self.model: PipelineInterface = self.pipeline.load(self.model_path()) if self.pipeline is not None else None
+        # the model file itself should tell us what pipeline it is
+        # if a model file exists, load it
+        # if not create a blank one.
+        self.pilot: PipelineInterface = self.pipeline.load(
+            self.model_path()) if self.pipeline is not None else None
+        self.stable: PipelineInterface = copy.deepcopy(self.pilot)
 
     def handle_new_observation(self, observation: Observation):
         """extract the data and save it to self.data"""
         parsed_data = json.loads(observation.raw)
         self.data = pd.concat([self.data, pd.DataFrame({
-            'date_time': [str(parsed_data['time'])], 
-            'value': [float(parsed_data['data'])], 
+            'date_time': [str(parsed_data['time'])],
+            'value': [float(parsed_data['data'])],
             'id': [str(parsed_data['hash'])]
-            })], ignore_index=True)
+        })], ignore_index=True)
 
     def produce_prediction(self, updated_model=None):
         """
@@ -89,9 +92,10 @@ class StreamModel:
             - model model replaced with a better one
             - new observation on the stream
         """
-        updated_model = updated_model or self.model
+        updated_model = updated_model or self.stable
         if updated_model is not None:
-            forecast = self.pipeline.predict(stable=self.model, data=self.data)
+            forecast = self.pipeline.predict(
+                stable=self.stable, data=self.data)
 
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
@@ -169,15 +173,12 @@ class StreamModel:
         """
         while True:
             print(self.pipeline)
-            trainingResult = self.pipeline.train(
-                stable=self.model,
-                data=self.data, 
-            )
+            trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
-                if self.pipeline.compare(self.model, trainingResult.model):
-                    if self.pipeline.save(trainingResult.model, self.model_path()):
-                        self.model = trainingResult.model
-                        self.produce_prediction(self.model)
+                if self.pilot.compare(self.stable):
+                    if self.pilot.save(self.model_path()):
+                        self.stable = copy.deepcopy(self.pilot)
+                        self.produce_prediction(self.stable)
             else:
                 break
 
