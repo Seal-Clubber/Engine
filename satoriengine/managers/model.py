@@ -49,7 +49,7 @@ class ModelManager(Cached):
         targets: list[StreamId] = None,
         memory: ModelMemoryApi = None,
         modelPath: str = None,
-        xgbParams: list = [],
+        xgbParams: list = None,
         hyperParameters: list[HyperParameter] = None,
         metrics: dict = None,
         features: dict = None,
@@ -94,7 +94,7 @@ class ModelManager(Cached):
             'PREDICTOR', default='xgboost')  # xgboost chronos ttm
         if self.predictor not in ['chronos', 'ttm']:
             self.predictor = 'xgboost'
-        self.xgbParams = xgbParams
+        self.xgbParams = xgbParams or []
         self.stable = StableModel(
             manager=self,
             hyperParameters=hyperParameters or [],
