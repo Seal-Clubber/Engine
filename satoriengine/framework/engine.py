@@ -177,7 +177,7 @@ class StreamModel:
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.pilot, trainingResult.model):
                     if self.pilot.save(trainingResult.model, self.model_path()):
-                        self.stable = copy.deepcopy(trainingResult.model)
+                        self.stable = copy.deepcopy(self.pilot)
                         self.produce_prediction(self.stable)
             else:
                 break
