@@ -27,8 +27,7 @@ class Engine:
 
     def setup_subscriptions(self):
         self.new_observation.subscribe(
-            on_next=lambda x: self.handle_new_observation(
-                x) if x is not None else None,
+            on_next=lambda x: self.handle_new_observation(x) if x is not None else None,
             on_error=lambda e: self.handle_error(e),
             on_completed=lambda: self.handle_completion(),
         )
@@ -45,7 +44,7 @@ class Engine:
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
-            streamModel.choose_pipeline(inplace=True)
+            streamModel.choose_pipeline(inplace=True) # also should change the pilot model pipeline
             streamModel.run_forever()
         if streamModel is not None:
             streamModel.produce_prediction()
@@ -69,22 +68,28 @@ class StreamModel:
         self.streamId = streamId
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
-        self.pipeline: PipelineInterface = self.choose_pipeline(getStart=True)
-        # the model file itself should tell us what pipeline it is
-        # if a model file exists, load it
-        # if not create a blank one.
+        self.pipeline: PipelineInterface = self.choose_pipeline()
         self.pilot: PipelineInterface = self.pipeline.load(
-            self.model_path()) if self.pipeline is not None else None
+            self.model_path()
+        )
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
 
     def handle_new_observation(self, observation: Observation):
         """extract the data and save it to self.data"""
         parsed_data = json.loads(observation.raw)
-        self.data = pd.concat([self.data, pd.DataFrame({
-            'date_time': [str(parsed_data['time'])],
-            'value': [float(parsed_data['data'])],
-            'id': [str(parsed_data['hash'])]
-        })], ignore_index=True)
+        self.data = pd.concat(
+            [
+                self.data,
+                pd.DataFrame(
+                    {
+                        "date_time": [str(parsed_data["time"])],
+                        "value": [float(parsed_data["data"])],
+                        "id": [str(parsed_data["hash"])],
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
 
     def produce_prediction(self, updated_model=None):
         """
@@ -94,8 +99,7 @@ class StreamModel:
         """
         updated_model = updated_model or self.stable
         if updated_model is not None:
-            forecast = self.pipeline.predict(
-                stable=self.stable, data=self.data)
+            forecast = updated_model.predict(stable=self.stable, data=self.data)
 
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
@@ -118,11 +122,14 @@ class StreamModel:
 
     def load_data(self) -> pd.DataFrame:
         try:
-            return pd.read_csv(self.data_path(), names=["date_time", "value", "id"], header=None)
+            return pd.read_csv(
+                self.data_path(), names=["date_time", "value", "id"], header=None
+            )
         except FileNotFoundError:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def data_path(self) -> str:
+        print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
         return f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
 
     def model_path(self) -> str:
@@ -136,9 +143,7 @@ class StreamModel:
         """
         return len(self.data) > 2
 
-    def choose_pipeline(
-        self, getStart: bool = False, inplace: bool = False
-    ) -> Union[PipelineInterface, None]:
+    def choose_pipeline(self, inplace: bool = False) -> PipelineInterface:
         """
         everything can try to handle some cases
         Engine
@@ -146,23 +151,15 @@ class StreamModel:
             - few observations - SKPipeline
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
-        refactor to build a simple StartPipeline
-        called when the context may have changed
-        startpipeline should check for it's own stagnation and return a flag on the trainingResult object
         """
-        if getStart:
+        if self.check_observations():
             if inplace:
-                self.pipeline = None
-            return None
+                self.pilot = SKPipeline()
+            return SKPipeline
         else:
-            if self.check_observations():
-                if inplace:
-                    self.pipeline = SKPipeline
-                return SKPipeline
-            else:
-                if inplace:
-                    self.pipeline = StarterPipeline
-                return StarterPipeline
+            if inplace:
+                self.pilot = StarterPipeline()
+            return StarterPipeline
 
     def run(self):
         """
@@ -173,7 +170,9 @@ class StreamModel:
         """
         while True:
             print(self.pipeline)
+            print(self.pilot)
             trainingResult = self.pilot.fit(data=self.data)
+            print(trainingResult.model)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):

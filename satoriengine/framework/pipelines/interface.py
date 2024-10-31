@@ -17,7 +17,7 @@ class PipelineInterface:
         self.model = None
 
     @staticmethod
-    def load(modelPath: str, **kwargs) -> Union[None, 'PipelineInterface']:
+    def load(modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
         """loads the model model from disk if present"""
         try:
             return joblib.load(modelPath)
@@ -59,6 +59,12 @@ class PipelineInterface:
 
         Returns:
             bool: True if pilot should replace stable, False otherwise
+        """
+        pass
+
+    def score(self, **kwargs) -> float:
+        """
+        will score the model.
         """
         pass
 

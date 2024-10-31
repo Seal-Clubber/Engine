@@ -14,7 +14,7 @@ from satoriengine.framework.pipelines.interface import PipelineInterface, Traini
 
 class SKPipeline(PipelineInterface):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.model = None
 
     def save(self, modelpath: str, **kwargs) -> bool:
@@ -29,23 +29,28 @@ class SKPipeline(PipelineInterface):
 
     def fit(self, **kwargs) -> TrainingResult:
         if self.model is None:
-            status, model = SKPipeline.skEnginePipeline(
-                kwargs["data"], ["quick_start"]
-            )
+            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["quick_start"])
             if status == 1:
                 self.model = model
                 return TrainingResult(status, self.model, False)
-        status, model = SKPipeline.skEnginePipeline(
-            kwargs["data"], ["random_model"]
-        )
+        status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["random_model"])
         self.model = model
         return TrainingResult(status, self.model, False)
 
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
         if isinstance(other, self.__class__):
-            return self.model[0].backtest_error < other[0].backtest_error
+            print("---------------------------------")
+            print(self.score())
+            print(other.score())
+            print("---------------------------------")
+            return self.score() < other.score()
         return True
+
+    def score(self, **kwargs) -> float:
+        print("*****************************************")
+        print(self.model)
+        return self.model[0].backtest_error
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
@@ -73,6 +78,9 @@ class SKPipeline(PipelineInterface):
         unfitted_forecaster: Optional[Any] = None,
     ):
         """Engine function for the Satori Engine"""
+
+        # if data.empty():
+        #     return 2, "Empty Dataset"
 
         def check_model_suitability(list_of_models, allowed_models, dataset_length):
             suitable_models = []
@@ -128,8 +136,7 @@ class SKPipeline(PipelineInterface):
             print(f"Randomly selected models: {list_of_models}")
             print(f"feature_set_reduction: {feature_set_reduction}")
             print(f"exogenous_feature_type: {exogenous_feature_type}")
-            print(
-                f"feature_set_reduction_method: {feature_set_reduction_method}")
+            print(f"feature_set_reduction_method: {feature_set_reduction_method}")
             print(f"random_state_hyper: {random_state_hyper}")
 
         if quick_start_present:
