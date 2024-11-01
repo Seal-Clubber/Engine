@@ -153,11 +153,11 @@ class StreamModel:
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
         if self.check_observations():
-            if inplace:
-                self.pilot = SKPipeline()
+            if inplace and not isinstance(self.pilot, SKPipeline):
+                self.pilot = SKPipeline() 
             return SKPipeline
         else:
-            if inplace:
+            if inplace and not isinstance(self.pilot, StarterPipeline):
                 self.pilot = StarterPipeline()
             return StarterPipeline
 
