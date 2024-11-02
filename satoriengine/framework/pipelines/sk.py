@@ -40,16 +40,16 @@ class SKPipeline(PipelineInterface):
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
         if isinstance(other, self.__class__):
-            print("---------------------------------")
-            print(self.score())
-            print(other.score())
-            print("---------------------------------")
+            # print("---------------------------------")
+            # print(self.score())
+            # print(other.score())
+            # print("---------------------------------")
             return self.score() < other.score()
         return True
 
     def score(self, **kwargs) -> float:
-        print("*****************************************")
-        print(self.model)
+        # print("*****************************************")
+        # print(self.model)
         return self.model[0].backtest_error
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:

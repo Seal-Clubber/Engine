@@ -1,81 +1,84 @@
 <mxfile host="65bd71144e">
     <diagram id="WcfGqjYyLfHxyExsQpsV" name="Page-1">
-        <mxGraphModel dx="772" dy="492" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="1002" dy="611" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="20" value="reqeust&lt;br&gt;&amp;lt;endpoint(streamid)&amp;gt;" style="edgeStyle=none;html=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="6">
+                <mxCell id="20" value="reqeust&lt;br&gt;&amp;lt;endpoint(streamid)&amp;gt;" style="edgeStyle=none;html=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="2" target="6" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="2" value="Engine&lt;br&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="2" value="Engine&lt;br&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="40" y="410" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="3" value="Neuron" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="3" value="Neuron" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="40" y="170" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="5" value="Data Manager" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="5" value="Data Manager" style="swimlane;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="280" y="40" width="520" height="550" as="geometry"/>
                 </mxCell>
-                <mxCell id="9" style="edgeStyle=none;html=1;" edge="1" parent="5" source="7" target="8">
+                <mxCell id="9" style="edgeStyle=none;html=1;" parent="5" source="7" target="8" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="22" value="requested&lt;br&gt;data" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="5" source="7" target="13">
+                <mxCell id="22" value="requested&lt;br&gt;data" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="5" source="7" target="13" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="480" y="280"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="7" value="Sqlite" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="5">
+                <mxCell id="7" value="Sqlite" style="rounded=1;whiteSpace=wrap;html=1;" parent="5" vertex="1">
                     <mxGeometry x="280" y="320" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="10" style="edgeStyle=none;html=1;" edge="1" parent="5" source="8" target="7">
+                <mxCell id="10" style="edgeStyle=none;html=1;" parent="5" source="8" target="7" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="8" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" vertex="1" parent="5">
+                <mxCell id="8" value="" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="5" vertex="1">
                     <mxGeometry x="310" y="440" width="60" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="19" style="edgeStyle=none;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;" edge="1" parent="5" source="6" target="13">
+                <mxCell id="19" style="edgeStyle=none;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;" parent="5" source="6" target="13" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="21" style="edgeStyle=none;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;" edge="1" parent="5" source="6" target="13">
+                <mxCell id="21" style="edgeStyle=none;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;" parent="5" source="6" target="13" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="6" value="ZeroMQ&lt;br&gt;(port - wireguard?)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="5">
+                <mxCell id="6" value="ZeroMQ&lt;br&gt;(port - wireguard?)" style="rounded=1;whiteSpace=wrap;html=1;" parent="5" vertex="1">
                     <mxGeometry x="50" y="40" width="120" height="480" as="geometry"/>
                 </mxCell>
-                <mxCell id="15" value="route to x,y,z&lt;br&gt;" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="5" source="13" target="6">
+                <mxCell id="15" value="route to x,y,z&lt;br&gt;" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="5" source="13" target="6" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <mxPoint x="210" y="210" as="sourcePoint"/>
                         <mxPoint x="250" y="160" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="13" value="Router" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="5">
+                <mxCell id="13" value="Router" style="rounded=1;whiteSpace=wrap;html=1;" parent="5" vertex="1">
                     <mxGeometry x="280" y="130" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="12" value="save observation" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="5" source="13" target="7">
+                <mxCell id="12" value="save observation" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="5" source="13" target="7" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="11" value="observation" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="3">
+                <mxCell id="11" value="observation" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="3" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="390" y="370" as="sourcePoint"/>
                         <mxPoint x="330" y="200" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="16" value="observation" style="edgeStyle=none;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="6" target="2">
+                <mxCell id="16" value="observation" style="edgeStyle=none;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="6" target="2" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="23" value="StreamPair" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                <mxCell id="23" value="StreamPair" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="40" y="10" width="140" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="24" value="subscription streamid" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="23">
+                <mxCell id="24" value="subscription streamid" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="23" vertex="1">
                     <mxGeometry y="30" width="140" height="30" as="geometry"/>
                 </mxCell>
-                <mxCell id="25" value="publication streamid" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" vertex="1" parent="23">
+                <mxCell id="25" value="publication streamid" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" parent="23" vertex="1">
                     <mxGeometry y="60" width="140" height="30" as="geometry"/>
                 </mxCell>
-                <mxCell id="28" value="&lt;h1&gt;Sqlite responsibilities&lt;/h1&gt;&lt;p&gt;translate incremental data (observations) to sqlite table&lt;/p&gt;&lt;p&gt;translate entire datastream (historical (df), (list of observations)) to sqlite table&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;sqlite table -&amp;gt; observation (the object)&lt;/span&gt;&lt;br&gt;&lt;/p&gt;&lt;p&gt;- one observation&lt;/p&gt;&lt;p&gt;- multiple observations&lt;/p&gt;&lt;p&gt;sqlite table -&amp;gt; df&lt;br&gt;&lt;/p&gt;&lt;p&gt;have queries to gather parts of a datastream -&amp;gt; df? list of obs&lt;br&gt;&lt;/p&gt;&lt;p&gt;have queries to gather multiple datastreams -&amp;gt; df? list of obs&lt;br&gt;&lt;/p&gt;&lt;p&gt;have queries to gather multiple parts of a datastream -&amp;gt; df? list of obs&lt;br&gt;&lt;/p&gt;" style="text;html=1;strokeColor=none;fillColor=none;spacing=5;spacingTop=-20;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+                <mxCell id="28" value="&lt;h1&gt;Sqlite responsibilities&lt;/h1&gt;&lt;p&gt;translate incremental data (observations) to sqlite table&lt;/p&gt;&lt;p&gt;translate entire datastream (historical (df), (list of observations)) to sqlite table&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;sqlite table -&amp;gt; observation (the object)&lt;/span&gt;&lt;br&gt;&lt;/p&gt;&lt;p&gt;- one observation&lt;/p&gt;&lt;p&gt;- multiple observations&lt;/p&gt;&lt;p&gt;sqlite table -&amp;gt; df&lt;br&gt;&lt;/p&gt;&lt;p&gt;have queries to gather parts of a datastream -&amp;gt; df? list of obs&lt;br&gt;&lt;/p&gt;&lt;p&gt;have queries to gather multiple datastreams -&amp;gt; df? list of obs&lt;br&gt;&lt;/p&gt;&lt;p&gt;have queries to gather multiple parts of a datastream -&amp;gt; df? list of obs&lt;br&gt;&lt;/p&gt;" style="text;html=1;strokeColor=none;fillColor=none;spacing=5;spacingTop=-20;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="1" vertex="1">
                     <mxGeometry x="370" y="610" width="430" height="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="29" style="edgeStyle=none;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.667;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="2" target="2">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
