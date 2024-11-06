@@ -831,7 +831,7 @@ def process_data(
             # print("inside smaller dataset size < 12 hours")
             allowed_models = ["baseline", "direct_linearregression"]
             if quick_start:
-                allowed_models = ["baseline"]
+                allowed_models = ["direct_linearregression"]
             lags = 1
             forecasting_steps = 1
             if sampling_timedelta > pd.Timedelta(hours=1):

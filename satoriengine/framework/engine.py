@@ -40,7 +40,7 @@ class Engine:
             )
 
     def handle_new_observation(self, observation: Observation):
-        print(f"new_observation: {observation}")
+        # print(f"new_observation: {observation}")
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
@@ -111,13 +111,14 @@ class StreamModel:
                 )
                 streamforecast = StreamForecast(
                     streamId=self.streamId,
+                    currentValue=self.data,
                     forecast=forecast,
                     observationTime=observationTime,
                     observationHash=observationHash,
                 )
-                print("**************************")
-                print(streamforecast)
-                print("**************************")
+                # print("**************************")
+                # print(streamforecast)
+                # print("**************************")
                 self.prediction_produced.on_next(streamforecast)
 
     def load_data(self) -> pd.DataFrame:
@@ -129,7 +130,7 @@ class StreamModel:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def data_path(self) -> str:
-        print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
+        # print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
         return f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
 
     def model_path(self) -> str:
@@ -169,10 +170,10 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
-            print(self.pipeline)
-            print(self.pilot)
+            # print(self.pipeline)
+            # print(self.pilot)
             trainingResult = self.pilot.fit(data=self.data)
-            print(trainingResult.model)
+            # print(trainingResult.model)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
