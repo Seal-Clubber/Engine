@@ -9,6 +9,7 @@ from satorilib.api.disk import getHashBefore
 from satorilib.api.hash import generatePathId
 from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.concepts import Stream, StreamId, Observation
+from satorilib.api.disk.filetypes.csv import CSVManager
 from satoriengine.framework.structs import StreamForecast
 from satoriengine.framework.pipelines.interface import PipelineInterface
 from satoriengine.framework.pipelines.sk import SKPipeline
@@ -33,9 +34,10 @@ class Engine:
         )
 
     def initialize_models(self):
-        for stream in self.streams:
+        for stream, pubStream in zip(self.streams, self.pubstreams):
             self.streamModels[stream.streamId] = StreamModel(
                 streamId=stream.streamId,
+                predictionStreamId=pubStream.streamId,
                 prediction_produced=self.prediction_produced,
             )
 
@@ -44,7 +46,9 @@ class Engine:
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
-            streamModel.choose_pipeline(inplace=True) # also should change the pilot model pipeline
+            streamModel.choose_pipeline(
+                inplace=True
+            )  # also should change the pilot model pipeline
             streamModel.run_forever()
         if streamModel is not None:
             streamModel.produce_prediction()
@@ -62,16 +66,16 @@ class StreamModel:
     def __init__(
         self,
         streamId: StreamId,
+        predictionStreamId: StreamId,
         prediction_produced: BehaviorSubject,
     ):
         self.thread = None
         self.streamId = streamId
+        self.predictionStreamId = predictionStreamId
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
         self.pipeline: PipelineInterface = self.choose_pipeline()
-        self.pilot: PipelineInterface = self.pipeline.load(
-            self.model_path()
-        )
+        self.pilot: PipelineInterface = self.pipeline.load(self.model_path())
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
 
     def handle_new_observation(self, observation: Observation):
@@ -109,17 +113,36 @@ class StreamModel:
                     + str(observationTime)
                     + str(prediction)
                 )
+                self.save_prediction(observationTime, prediction, observationHash)
                 streamforecast = StreamForecast(
                     streamId=self.streamId,
+                    predictionStreamId=self.predictionStreamId,
                     currentValue=self.data,
-                    forecast=forecast,
+                    forecast=forecast, # maybe we can fetch this value from predictionHistory
                     observationTime=observationTime,
                     observationHash=observationHash,
+                    predictionHistory=CSVManager().read(self.prediction_data_path()),
                 )
                 # print("**************************")
                 # print(streamforecast)
                 # print("**************************")
                 self.prediction_produced.on_next(streamforecast)
+
+    def save_prediction(
+        self,
+        observationTime: str,
+        prediction: float,
+        observationHash: str,
+    ) -> pd.DataFrame:
+        # alternative - use data manager: self.predictionUpdate.on_next(self)
+        df = pd.DataFrame(
+            {"value": [prediction], "hash": [observationHash]},
+            index=[observationTime],
+        )
+        df.to_csv(
+            self.prediction_data_path(), float_format="%.10f", mode="a", header=False
+        )
+        return df
 
     def load_data(self) -> pd.DataFrame:
         try:
@@ -130,11 +153,15 @@ class StreamModel:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def data_path(self) -> str:
-        # print(f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
-        return f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
+        # print(f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
+        return f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
+
+    def prediction_data_path(self) -> str:
+        # print(f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
+        return f"/Satori/Neuron/data/{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv"
 
     def model_path(self) -> str:
-        return f"../../models/{generatePathId(streamId=self.streamId)}"
+        return f"/Satori/Neuron/models/{generatePathId(streamId=self.streamId)}"
 
     def check_observations(self) -> bool:
         """
@@ -155,7 +182,7 @@ class StreamModel:
         """
         if self.check_observations():
             if inplace and not isinstance(self.pilot, SKPipeline):
-                self.pilot = SKPipeline() 
+                self.pilot = SKPipeline()
             return SKPipeline
         else:
             if inplace and not isinstance(self.pilot, StarterPipeline):
