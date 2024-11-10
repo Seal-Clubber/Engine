@@ -800,16 +800,18 @@ def process_data(
                 "autoreg_catboost",
                 "arima",
                 "skt_ets",
-            ]  # testing
+            ] 
             if quick_start:
                 allowed_models = ["autoreg_lightgbm"]
             time_metric_baseline = "days"
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = min(dataset_duration.days - 1, 1)
 
-        elif (dataset_duration.total_seconds() / 3600) >= 12 and len(dataset) >= 12:
+        elif len(dataset) >= 12: # was if dataset_duration >= pd.Timedelta(hours=12) and len(dataset) >= 12
             # quick_start : baseline with no_exog, feature_set_reduction = False
             allowed_models = ["baseline", "direct_linearregression", "autoreg_lightgbm"]  # testing
+            # print(1)
+            # print(allowed_models)
             if quick_start:
                 allowed_models = ["baseline"]
             # print("Hits the >= 12 length dataset case and >= 12 hours")
@@ -824,14 +826,11 @@ def process_data(
                 )
 
             forecasterequivalentdate = 1
-            # forecasting_steps = lags
+
         elif len(dataset) >= 3:
-            # print("Hits the >= 6 length dataset case")
-            # quick_start : Baseline with no_exog, feature_set_reduction = False
-            # print("inside smaller dataset size < 12 hours")
             allowed_models = ["baseline", "direct_linearregression"]
             if quick_start:
-                allowed_models = ["baseline"]
+                allowed_models = ["direct_linearregression"]
             lags = 1
             forecasting_steps = 1
             if sampling_timedelta > pd.Timedelta(hours=1):
@@ -853,6 +852,7 @@ def process_data(
     if nan_percentage.value > 0.4:
         use_weight = False
 
+    # print(2)
     # print(allowed_models)
     return ProcessedData(
         end_times,

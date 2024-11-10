@@ -9,6 +9,7 @@ from satorilib.api.disk import getHashBefore
 from satorilib.api.hash import generatePathId
 from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.concepts import Stream, StreamId, Observation
+from satorilib.api.disk.filetypes.csv import CSVManager
 from satoriengine.framework.structs import StreamForecast
 from satoriengine.framework.pipelines.interface import PipelineInterface
 from satoriengine.framework.pipelines.sk import SKPipeline
@@ -27,25 +28,27 @@ class Engine:
 
     def setup_subscriptions(self):
         self.new_observation.subscribe(
-            on_next=lambda x: self.handle_new_observation(
-                x) if x is not None else None,
+            on_next=lambda x: self.handle_new_observation(x) if x is not None else None,
             on_error=lambda e: self.handle_error(e),
             on_completed=lambda: self.handle_completion(),
         )
 
     def initialize_models(self):
-        for stream in self.streams:
+        for stream, pubStream in zip(self.streams, self.pubstreams):
             self.streamModels[stream.streamId] = StreamModel(
                 streamId=stream.streamId,
+                predictionStreamId=pubStream.streamId,
                 prediction_produced=self.prediction_produced,
             )
 
     def handle_new_observation(self, observation: Observation):
-        print(f"new_observation: {observation}")
+        # print(f"new_observation: {observation}")
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
-            streamModel.choose_pipeline(inplace=True)
+            streamModel.choose_pipeline(
+                inplace=True
+            )  # also should change the pilot model pipeline
             streamModel.run_forever()
         if streamModel is not None:
             streamModel.produce_prediction()
@@ -63,28 +66,34 @@ class StreamModel:
     def __init__(
         self,
         streamId: StreamId,
+        predictionStreamId: StreamId,
         prediction_produced: BehaviorSubject,
     ):
         self.thread = None
         self.streamId = streamId
+        self.predictionStreamId = predictionStreamId
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
-        self.pipeline: PipelineInterface = self.choose_pipeline(getStart=True)
-        # the model file itself should tell us what pipeline it is
-        # if a model file exists, load it
-        # if not create a blank one.
-        self.pilot: PipelineInterface = self.pipeline.load(
-            self.model_path()) if self.pipeline is not None else None
+        self.pipeline: PipelineInterface = self.choose_pipeline()
+        self.pilot: PipelineInterface = self.pipeline.load(self.model_path())
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
 
     def handle_new_observation(self, observation: Observation):
         """extract the data and save it to self.data"""
         parsed_data = json.loads(observation.raw)
-        self.data = pd.concat([self.data, pd.DataFrame({
-            'date_time': [str(parsed_data['time'])],
-            'value': [float(parsed_data['data'])],
-            'id': [str(parsed_data['hash'])]
-        })], ignore_index=True)
+        self.data = pd.concat(
+            [
+                self.data,
+                pd.DataFrame(
+                    {
+                        "date_time": [str(parsed_data["time"])],
+                        "value": [float(parsed_data["data"])],
+                        "id": [str(parsed_data["hash"])],
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
 
     def produce_prediction(self, updated_model=None):
         """
@@ -94,8 +103,7 @@ class StreamModel:
         """
         updated_model = updated_model or self.stable
         if updated_model is not None:
-            forecast = self.pipeline.predict(
-                stable=self.stable, data=self.data)
+            forecast = updated_model.predict(stable=self.stable, data=self.data)
 
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
@@ -105,28 +113,55 @@ class StreamModel:
                     + str(observationTime)
                     + str(prediction)
                 )
+                self.save_prediction(observationTime, prediction, observationHash)
                 streamforecast = StreamForecast(
                     streamId=self.streamId,
-                    forecast=forecast,
+                    predictionStreamId=self.predictionStreamId,
+                    currentValue=self.data,
+                    forecast=forecast, # maybe we can fetch this value from predictionHistory
                     observationTime=observationTime,
                     observationHash=observationHash,
+                    predictionHistory=CSVManager().read(self.prediction_data_path()),
                 )
-                print("**************************")
-                print(streamforecast)
-                print("**************************")
+                # print("**************************")
+                # print(streamforecast)
+                # print("**************************")
                 self.prediction_produced.on_next(streamforecast)
+
+    def save_prediction(
+        self,
+        observationTime: str,
+        prediction: float,
+        observationHash: str,
+    ) -> pd.DataFrame:
+        # alternative - use data manager: self.predictionUpdate.on_next(self)
+        df = pd.DataFrame(
+            {"value": [prediction], "hash": [observationHash]},
+            index=[observationTime],
+        )
+        df.to_csv(
+            self.prediction_data_path(), float_format="%.10f", mode="a", header=False
+        )
+        return df
 
     def load_data(self) -> pd.DataFrame:
         try:
-            return pd.read_csv(self.data_path(), names=["date_time", "value", "id"], header=None)
+            return pd.read_csv(
+                self.data_path(), names=["date_time", "value", "id"], header=None
+            )
         except FileNotFoundError:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def data_path(self) -> str:
-        return f"../../data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
+        # print(f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
+        return f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
+
+    def prediction_data_path(self) -> str:
+        # print(f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv")
+        return f"/Satori/Neuron/data/{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv"
 
     def model_path(self) -> str:
-        return f"../../models/{generatePathId(streamId=self.streamId)}"
+        return f"/Satori/Neuron/models/{generatePathId(streamId=self.streamId)}"
 
     def check_observations(self) -> bool:
         """
@@ -136,9 +171,7 @@ class StreamModel:
         """
         return len(self.data) > 2
 
-    def choose_pipeline(
-        self, getStart: bool = False, inplace: bool = False
-    ) -> Union[PipelineInterface, None]:
+    def choose_pipeline(self, inplace: bool = False) -> PipelineInterface:
         """
         everything can try to handle some cases
         Engine
@@ -146,23 +179,15 @@ class StreamModel:
             - few observations - SKPipeline
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
-        refactor to build a simple StartPipeline
-        called when the context may have changed
-        startpipeline should check for it's own stagnation and return a flag on the trainingResult object
         """
-        if getStart:
-            if inplace:
-                self.pipeline = None
-            return None
+        if self.check_observations():
+            if inplace and not isinstance(self.pilot, SKPipeline):
+                self.pilot = SKPipeline()
+            return SKPipeline
         else:
-            if self.check_observations():
-                if inplace:
-                    self.pipeline = SKPipeline
-                return SKPipeline
-            else:
-                if inplace:
-                    self.pipeline = StarterPipeline
-                return StarterPipeline
+            if inplace and not isinstance(self.pilot, StarterPipeline):
+                self.pilot = StarterPipeline()
+            return StarterPipeline
 
     def run(self):
         """
@@ -172,8 +197,10 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
-            print(self.pipeline)
+            # print(self.pipeline)
+            # print(self.pilot)
             trainingResult = self.pilot.fit(data=self.data)
+            # print(trainingResult.model)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
