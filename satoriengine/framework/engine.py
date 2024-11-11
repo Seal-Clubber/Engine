@@ -10,6 +10,7 @@ from satorilib.api.hash import generatePathId
 from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.api.disk.filetypes.csv import CSVManager
+from satorilib.logging import debug
 from satoriengine.framework.structs import StreamForecast
 from satoriengine.framework.pipelines.interface import PipelineInterface
 from satoriengine.framework.pipelines.sk import SKPipeline
@@ -50,8 +51,9 @@ class Engine:
                 inplace=True
             )  # also should change the pilot model pipeline
             streamModel.run_forever()
-        if streamModel is not None:
-            streamModel.produce_prediction()
+        if streamModel is not None and len(streamModel.data) > 1:
+            # debug("Inside the Engine", color="teal")
+            streamModel.produce_prediction() #
         else:
             print(f"No model found for stream {observation.streamId}")
 
@@ -205,6 +207,7 @@ class StreamModel:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
                         self.stable = copy.deepcopy(self.pilot)
+                        # debug("Inside run", color="teal")
                         self.produce_prediction(self.stable)
             else:
                 break
