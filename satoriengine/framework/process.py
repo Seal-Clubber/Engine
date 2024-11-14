@@ -760,7 +760,9 @@ def process_data(
 
     if sampling_timedelta < day_timedelta:
         # Calculate steps relative to a day
-        forecasting_steps = int(day_timedelta / sampling_timedelta)
+        forecasting_steps = min(
+            int(day_timedelta / sampling_timedelta), len(data_subsets["test"])
+        )
     elif sampling_timedelta >= day_timedelta:
         # Calculate steps relative to a week
         # can override the setting but have to not do backtesting
@@ -800,20 +802,24 @@ def process_data(
                 "autoreg_catboost",
                 "arima",
                 "skt_ets",
-            ] 
+            ]
             if quick_start:
-                allowed_models = ["autoreg_lightgbm"]
+                allowed_models = ["direct_linearregression"]
             time_metric_baseline = "days"
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = min(dataset_duration.days - 1, 1)
 
-        elif len(dataset) >= 12: # was if dataset_duration >= pd.Timedelta(hours=12) and len(dataset) >= 12
+        elif dataset_duration >= pd.Timedelta(hours=2) and len(dataset) >= 12:  # was if dataset_duration >= pd.Timedelta(hours=12) and len(dataset) >= 12
             # quick_start : baseline with no_exog, feature_set_reduction = False
-            allowed_models = ["baseline", "direct_linearregression", "autoreg_lightgbm"]  # testing
+            allowed_models = [
+                "baseline",
+                "direct_linearregression",
+                "autoreg_lightgbm",
+            ]  # testing
             # print(1)
             # print(allowed_models)
             if quick_start:
-                allowed_models = ["baseline"]
+                allowed_models = ["direct_linearregression"]
             # print("Hits the >= 12 length dataset case and >= 12 hours")
 
             if sampling_timedelta > pd.Timedelta(hours=1):
@@ -828,7 +834,10 @@ def process_data(
             forecasterequivalentdate = 1
 
         elif len(dataset) >= 3:
-            allowed_models = ["baseline", "direct_linearregression"]
+            allowed_models = ["direct_linearregression"]
+            if dataset_duration >= pd.Timedelta(hours=2):
+                allowed_models.append("baseline")
+                
             if quick_start:
                 allowed_models = ["direct_linearregression"]
             lags = 1
