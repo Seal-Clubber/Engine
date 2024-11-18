@@ -51,6 +51,7 @@ class Engine:
                 inplace=True
             )  # also should change the pilot model pipeline
             streamModel.run_forever()
+            
         if streamModel is not None and len(streamModel.data) > 1:
             # debug("Inside the Engine", color="teal")
             streamModel.produce_prediction() #

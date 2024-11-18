@@ -675,7 +675,7 @@ def process_data(
     }
 
     all_models = [
-        "baseline",
+        "baseline", # has three models inside it
         "direct_linearregression",
         "direct_ridge",
         "direct_lasso",
@@ -789,7 +789,6 @@ def process_data(
                 "direct_linearregression",
                 "direct_ridge",
                 "direct_lasso",
-                "direct_lightgbm",
                 "direct_xgb",
                 "direct_catboost",
                 "direct_histgradient",
@@ -802,7 +801,7 @@ def process_data(
                 "autoreg_catboost",
                 "arima",
                 "skt_ets",
-            ]
+            ] 
             if quick_start:
                 allowed_models = ["direct_linearregression"]
             time_metric_baseline = "days"
@@ -853,6 +852,13 @@ def process_data(
             if_invalid_dataset = True
 
         use_weight = False
+
+    # if sampling_timedelta < pd.Timedelta(hours=1):
+    #     allowed_models = [
+    #         model
+    #         for model in allowed_models
+    #         if model not in ["direct_xgb", "direct_catboost", "direct_histgradient"]
+    #     ]
 
     backtest_steps = forecasting_steps
 
