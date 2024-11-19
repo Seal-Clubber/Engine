@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Union, Optional, Any
 import joblib
+import os
 
 
 class TrainingResult:
@@ -21,7 +22,10 @@ class PipelineInterface:
         """loads the model model from disk if present"""
         try:
             return joblib.load(modelPath)
-        except FileNotFoundError:
+        except Exception as e:
+            print(f"Error while loading the model : {e}")
+            if os.path.isfile(modelPath):
+                os.remove(modelPath)
             return None
 
     def save(self, modelpath: str, **kwargs) -> bool:
