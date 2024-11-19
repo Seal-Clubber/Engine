@@ -43,13 +43,12 @@ class Engine:
             )
 
     def handle_new_observation(self, observation: Observation):
-        # print(f"new_observation: {observation}")
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
             streamModel.choose_pipeline(
                 inplace=True
-            )  # also should change the pilot model pipeline
+            ) 
             streamModel.run_forever()
             
         if streamModel is not None and len(streamModel.data) > 1:
@@ -126,9 +125,6 @@ class StreamModel:
                     observationHash=observationHash,
                     predictionHistory=CSVManager().read(self.prediction_data_path()),
                 )
-                # print("**************************")
-                # print(streamforecast)
-                # print("**************************")
                 self.prediction_produced.on_next(streamforecast)
 
     def save_prediction(
@@ -200,10 +196,7 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
-            # print(self.pipeline)
-            # print(self.pilot)
             trainingResult = self.pilot.fit(data=self.data)
-            # print(trainingResult.model)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
