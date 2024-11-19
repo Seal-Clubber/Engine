@@ -11,10 +11,8 @@ from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.api.disk.filetypes.csv import CSVManager
 from satorilib.logging import debug
-from satoriengine.framework.structs import StreamForecast
-from satoriengine.framework.pipelines.interface import PipelineInterface
-from satoriengine.framework.pipelines.sk import SKPipeline
-from satoriengine.framework.pipelines.starter import StarterPipeline
+from satoriengine.framework.Data import StreamForecast
+from satoriengine.framework.pipelines import PipelineInterface, SKPipeline, StarterPipeline
 
 
 class Engine:
