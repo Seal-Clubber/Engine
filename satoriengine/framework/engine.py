@@ -10,10 +10,9 @@ from satorilib.api.hash import generatePathId
 from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.api.disk.filetypes.csv import CSVManager
-from satoriengine.framework.structs import StreamForecast
-from satoriengine.framework.pipelines.interface import PipelineInterface
-from satoriengine.framework.pipelines.sk import SKPipeline
-from satoriengine.framework.pipelines.starter import StarterPipeline
+from satorilib.logging import debug
+from satoriengine.framework.Data import StreamForecast
+from satoriengine.framework.pipelines import PipelineInterface, SKPipeline, StarterPipeline
 
 
 class Engine:
@@ -42,16 +41,17 @@ class Engine:
             )
 
     def handle_new_observation(self, observation: Observation):
-        # print(f"new_observation: {observation}")
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
             streamModel.choose_pipeline(
                 inplace=True
-            )  # also should change the pilot model pipeline
+            ) 
             streamModel.run_forever()
-        if streamModel is not None:
-            streamModel.produce_prediction()
+            
+        if streamModel is not None and len(streamModel.data) > 1:
+            # debug("Inside the Engine", color="teal")
+            streamModel.produce_prediction() #
         else:
             print(f"No model found for stream {observation.streamId}")
 
@@ -123,9 +123,6 @@ class StreamModel:
                     observationHash=observationHash,
                     predictionHistory=CSVManager().read(self.prediction_data_path()),
                 )
-                # print("**************************")
-                # print(streamforecast)
-                # print("**************************")
                 self.prediction_produced.on_next(streamforecast)
 
     def save_prediction(
@@ -197,14 +194,12 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
-            # print(self.pipeline)
-            # print(self.pilot)
             trainingResult = self.pilot.fit(data=self.data)
-            # print(trainingResult.model)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
                         self.stable = copy.deepcopy(self.pilot)
+                        # debug("Inside run", color="teal")
                         self.produce_prediction(self.stable)
             else:
                 break

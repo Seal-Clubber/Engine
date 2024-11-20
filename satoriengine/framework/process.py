@@ -675,7 +675,7 @@ def process_data(
     }
 
     all_models = [
-        "baseline",
+        "baseline", # has three models inside it
         "direct_linearregression",
         "direct_ridge",
         "direct_lasso",
@@ -760,7 +760,9 @@ def process_data(
 
     if sampling_timedelta < day_timedelta:
         # Calculate steps relative to a day
-        forecasting_steps = int(day_timedelta / sampling_timedelta)
+        forecasting_steps = min(
+            int(day_timedelta / sampling_timedelta), len(data_subsets["test"])
+        )
     elif sampling_timedelta >= day_timedelta:
         # Calculate steps relative to a week
         # can override the setting but have to not do backtesting
@@ -787,7 +789,6 @@ def process_data(
                 "direct_linearregression",
                 "direct_ridge",
                 "direct_lasso",
-                "direct_lightgbm",
                 "direct_xgb",
                 "direct_catboost",
                 "direct_histgradient",
@@ -802,18 +803,22 @@ def process_data(
                 "skt_ets",
             ] 
             if quick_start:
-                allowed_models = ["autoreg_lightgbm"]
+                allowed_models = ["direct_linearregression"]
             time_metric_baseline = "days"
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = min(dataset_duration.days - 1, 1)
 
-        elif len(dataset) >= 12: # was if dataset_duration >= pd.Timedelta(hours=12) and len(dataset) >= 12
+        elif dataset_duration >= pd.Timedelta(hours=2) and len(dataset) >= 12:  # was if dataset_duration >= pd.Timedelta(hours=12) and len(dataset) >= 12
             # quick_start : baseline with no_exog, feature_set_reduction = False
-            allowed_models = ["baseline", "direct_linearregression", "autoreg_lightgbm"]  # testing
+            allowed_models = [
+                "baseline",
+                "direct_linearregression",
+                "autoreg_lightgbm",
+            ]  # testing
             # print(1)
             # print(allowed_models)
             if quick_start:
-                allowed_models = ["baseline"]
+                allowed_models = ["direct_linearregression"]
             # print("Hits the >= 12 length dataset case and >= 12 hours")
 
             if sampling_timedelta > pd.Timedelta(hours=1):
@@ -828,7 +833,10 @@ def process_data(
             forecasterequivalentdate = 1
 
         elif len(dataset) >= 3:
-            allowed_models = ["baseline", "direct_linearregression"]
+            allowed_models = ["direct_linearregression"]
+            if dataset_duration >= pd.Timedelta(hours=2):
+                allowed_models.append("baseline")
+                
             if quick_start:
                 allowed_models = ["direct_linearregression"]
             lags = 1
@@ -844,6 +852,15 @@ def process_data(
             if_invalid_dataset = True
 
         use_weight = False
+
+    if sampling_timedelta < pd.Timedelta(hours=4):
+        allowed_models = [
+            model
+            for model in allowed_models
+            if model not in ["direct_xgb", "direct_catboost", "direct_histgradient", "arima", 
+                             "skt_lstm_deeplearning", "skt_tbats_damped", "skt_tbats_standard", "autoreg_histgradient",
+                              "autoreg_xgb", "autoreg_catboost", "skt_ets" ]
+        ]
 
     backtest_steps = forecasting_steps
 
