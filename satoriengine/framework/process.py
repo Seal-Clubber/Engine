@@ -859,7 +859,7 @@ def process_data(
             for model in allowed_models
             if model not in ["direct_xgb", "direct_catboost", "direct_histgradient", "arima", 
                              "skt_lstm_deeplearning", "skt_tbats_damped", "skt_tbats_standard", "autoreg_histgradient",
-                              "autoreg_xgb", "autoreg_catboost" ]
+                              "autoreg_xgb", "autoreg_catboost", "skt_ets" ]
         ]
 
     backtest_steps = forecasting_steps
