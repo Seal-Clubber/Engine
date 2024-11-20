@@ -853,12 +853,14 @@ def process_data(
 
         use_weight = False
 
-    # if sampling_timedelta < pd.Timedelta(hours=1):
-    #     allowed_models = [
-    #         model
-    #         for model in allowed_models
-    #         if model not in ["direct_xgb", "direct_catboost", "direct_histgradient"]
-    #     ]
+    if sampling_timedelta < pd.Timedelta(hours=4):
+        allowed_models = [
+            model
+            for model in allowed_models
+            if model not in ["direct_xgb", "direct_catboost", "direct_histgradient", "arima", 
+                             "skt_lstm_deeplearning", "skt_tbats_damped", "skt_tbats_standard", "autoreg_histgradient",
+                              "autoreg_xgb", "autoreg_catboost" ]
+        ]
 
     backtest_steps = forecasting_steps
 
