@@ -10,7 +10,7 @@ from satorilib.api.hash import generatePathId
 from satorilib.api.time import datetimeToTimestamp, now
 from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.api.disk.filetypes.csv import CSVManager
-from satorilib.logging import debug
+from satorilib.logging import debug, info, error
 from satoriengine.framework.Data import StreamForecast
 from satoriengine.framework.pipelines import PipelineInterface, SKPipeline, StarterPipeline
 
@@ -46,11 +46,11 @@ class Engine:
         if streamModel.thread is None or not streamModel.thread.is_alive():
             streamModel.choose_pipeline(
                 inplace=True
-            ) 
+            )
             streamModel.run_forever()
-            
+
         if streamModel is not None and len(streamModel.data) > 1:
-            # debug("Inside the Engine", color="teal")
+            debug("Making Prediction for New Observation", color="teal")
             streamModel.produce_prediction() #
         else:
             print(f"No model found for stream {observation.streamId}")
@@ -199,9 +199,13 @@ class StreamModel:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
                         self.stable = copy.deepcopy(self.pilot)
-                        # debug("Inside run", color="teal")
+                        info("Stable Model Updated for stream : ", self.streamId, print=True)
                         self.produce_prediction(self.stable)
             else:
+                if not trainingResult.stagnated:
+                    debug("Starter Pipeline", color='teal')
+                else:
+                    error("Model Training Failed, Breaking out of the Loop")
                 break
 
     def run_forever(self):

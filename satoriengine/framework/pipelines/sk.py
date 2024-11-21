@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime
 import random
 from typing import Union, Optional, List, Any
+from satorilib.logging import info, debug, error
 
 from satoriengine.framework.process import process_data
 from satoriengine.framework.determine_features import determine_feature_set
@@ -40,16 +41,20 @@ class SKPipeline(PipelineInterface):
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
         if isinstance(other, self.__class__):
-            # print("---------------------------------")
-            # print(self.score())
-            # print(other.score())
-            # print("---------------------------------")
-            return self.score() < other.score()
+            if self.score() < other.score():
+                debug("Entered Comparison True", color='teal')
+                info(
+                f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
+                f'\n  stable score: {self.score()}'
+                f'\n  pilot  score: {other.score()}',
+                color='green', print=True)
+                return True
+            else:
+                return False
+            # return self.score() < other.score()
         return True
 
     def score(self, **kwargs) -> float:
-        # print("*****************************************")
-        # print(self.model)
         return self.model[0].backtest_error
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
@@ -62,7 +67,12 @@ class SKPipeline(PipelineInterface):
         )
         if status == 1:
             return predictor_model[0].forecast
+        else:
+            error("Error predicting : ", predictor_model)
         return None
+    
+    def forecasterName(self, **kwargs) -> str:
+        return self.model[0].model_name
 
     @staticmethod
     def skEnginePipeline(
