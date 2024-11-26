@@ -1,85 +1,19 @@
-import joblib
-import os
-
-import pandas as pd
-from datetime import datetime
+from typing import Union, List, Optional, Any
+import datetime
 import random
-from typing import Union, Optional, List, Any
-from satorilib.logging import info, debug, error, warning, setup, DEBUG
+import pandas as pd
+from process import process_data
+from determine_features import determine_feature_set
+from model_creation import model_create_train_test_and_predict
 
-from satoriengine.framework.process import process_data
-from satoriengine.framework.determine_features import determine_feature_set
-from satoriengine.framework.model_creation import model_create_train_test_and_predict
-from satoriengine.framework.pipelines.interface import PipelineInterface, TrainingResult
+class AIEngineOutput:
+    def __init__(self, 
+                 status: int,
+                 list_of_models: Union[List, str]):
+        self.status = status
+        self.list_of_models = list_of_models
 
-setup(level=DEBUG)
-
-
-class SKPipeline(PipelineInterface):
-
-    def __init__(self, **kwargs):
-        self.model = None
-
-    def save(self, modelpath: str, **kwargs) -> bool:
-        """saves the stable model to disk"""
-        try:
-            os.makedirs(os.path.dirname(modelpath), exist_ok=True)
-            joblib.dump(self.model, modelpath)
-            return True
-        except Exception as e:
-            error(f"Error saving model: {e}")
-            return False
-
-    def fit(self, **kwargs) -> TrainingResult:
-        if self.model is None:
-            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["quick_start"])
-            if status == 1:
-                self.model = model
-                debug("Model Picked for Training : ", self.model[0].model_name, print=True)
-                return TrainingResult(status, self.model, False)
-        status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["random_model"])
-        self.model = model
-        return TrainingResult(status, self.model, False)
-
-    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
-        """true indicates this model is better than the other model"""
-        if isinstance(other, self.__class__):
-            if self.score() < other.score():
-                debug('Entered Comparison True', print=True)
-                info(
-                f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
-                f'\n  stable score: {self.score()}'
-                f'\n  pilot  score: {other.score()}',
-                color='green', print=True)
-                return True
-            else:
-                return False
-            # return self.score() < other.score()
-        return True
-
-    def score(self, **kwargs) -> float:
-        return self.model[0].backtest_error
-
-    def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
-        """prediction without training"""
-        debug(f"Prediction with Model : {self.model[0].model_name}", print=True)
-        status, predictor_model = SKPipeline.skEnginePipeline(
-            data=kwargs["data"],
-            list_of_models=[self.model[0].model_name],
-            mode="predict",
-            unfitted_forecaster=self.model[0].unfitted_forecaster,
-        )
-        if status == 1:
-            return predictor_model[0].forecast
-        else:
-            error(f'Error predicting : {predictor_model} and status {status}')
-        return None
-    
-    def forecasterName(self, **kwargs) -> str:
-        return self.model[0].model_name.upper()
-
-    @staticmethod
-    def skEnginePipeline(
+def skEnginePipeline(
         data: pd.DataFrame,
         list_of_models: List[str],
         interval: List[int] = [10, 90],
@@ -90,7 +24,7 @@ class SKPipeline(PipelineInterface):
         metric: str = "mase",
         mode: str = "train",
         unfitted_forecaster: Optional[Any] = None,
-    ):
+    ) -> AIEngineOutput:
         """Engine function for the Satori Engine"""
 
         # if data.empty():
@@ -121,7 +55,7 @@ class SKPipeline(PipelineInterface):
             current_time = datetime.now()
             seed = int(current_time.strftime("%Y%m%d%H%M%S%f"))
             random.seed(seed)
-            # debug(f"Using random seed: {seed}")
+            print(f"Using random seed: {seed}")
 
             # Randomly select options
             feature_set_reduction = random.choice([True, False])
@@ -147,11 +81,11 @@ class SKPipeline(PipelineInterface):
                 )
                 for model in list_of_models
             ]
-            info(f"Randomly selected models: {list_of_models}", print=True)
-            debug(f"feature_set_reduction: {feature_set_reduction}")
-            debug(f"exogenous_feature_type: {exogenous_feature_type}")
-            debug(f"feature_set_reduction_method: {feature_set_reduction_method}")
-            debug(f"random_state_hyper: {random_state_hyper}")
+            print(f"Randomly selected models: {list_of_models}")
+            print(f"feature_set_reduction: {feature_set_reduction}")
+            print(f"exogenous_feature_type: {exogenous_feature_type}")
+            print(f"feature_set_reduction_method: {feature_set_reduction_method}")
+            print(f"random_state_hyper: {random_state_hyper}")
 
         if quick_start_present:
             feature_set_reduction = False
@@ -159,7 +93,11 @@ class SKPipeline(PipelineInterface):
             list_of_models = proc_data.allowed_models
 
         if proc_data.if_invalid_dataset:
-            return 2, "Status = 2 (insufficient amount of data)"
+            # return 2, "Status = 2 (insufficient amount of data)"
+            return AIEngineOutput(
+                2,
+                "Status = 2 (insufficient amount of data)"
+            )
 
         # Check if the requested models are suitable based on the allowed_models
         suitable_models, unsuitable_models = check_model_suitability(
@@ -167,12 +105,16 @@ class SKPipeline(PipelineInterface):
         )
 
         if unsuitable_models:
-            warning("The following models are not allowed due to insufficient data:")
+            print("The following models are not allowed due to insufficient data:")
             for model, reason in unsuitable_models:
-                warning(f"- {model}: {reason}")
+                print(f"- {model}: {reason}")
 
         if not any(suitable_models):
-            return (
+            # return (
+            #     3,
+            #     "Status = 3 (none of the requested models are suitable for the available data)",
+            # )
+            return AIEngineOutput(
                 3,
                 "Status = 3 (none of the requested models are suitable for the available data)",
             )
@@ -229,7 +171,8 @@ class SKPipeline(PipelineInterface):
                         prediction_steps=proc_data.forecasting_steps,
                         hyper_flag=True,
                     )
-
+            
+            print(1)
             list_of_results = []
             for model_name in list_of_models:
                 result = model_create_train_test_and_predict(
@@ -264,8 +207,16 @@ class SKPipeline(PipelineInterface):
                 )
                 list_of_results.append(result)
 
-            return 1, list_of_results  # Status = 1 (ran correctly)
+            # return 1, list_of_results  # Status = 1 (ran correctly)
+            return AIEngineOutput(
+                1,
+                list_of_results
+            )
 
         except Exception as e:
             # Additional status code for unexpected errors
-            return 4, f"An error occurred: {str(e)}"
+            # return 4, f"An error occurred: {str(e)}"
+            return AIEngineOutput(
+                4,
+                f"An error occurred: {str(e)}"
+            )

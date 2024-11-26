@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings('ignore')
-
 from typing import Union
 from datetime import datetime, timedelta
 from pandas.tseries.frequencies import to_offset
@@ -8,10 +5,6 @@ from scipy.stats import kruskal
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import PolynomialFeatures
-
-
-
-from satorilib.logging import debug, info, error
 
 
 class ProcessedData:
@@ -62,7 +55,7 @@ def fractional_hour_generator(datetimeparameter):
 
 
 def test_seasonality(differenced_dataset, SF, sampling_frequency):
-    debug(f"new seasonality test with SF = {SF}")
+    print(f"new seasonality test with SF = {SF}")
 
     if SF == "month":
         differenced_dataset[SF] = differenced_dataset.index.month
@@ -81,13 +74,13 @@ def test_seasonality(differenced_dataset, SF, sampling_frequency):
         try:
             differenced_dataset[SF] = getattr(differenced_dataset.index, SF)
         except AttributeError:
-            debug(f"Error: {SF} is not a valid attribute of the DatetimeIndex.")
+            print(f"Error: {SF} is not a valid attribute of the DatetimeIndex.")
             return False, None
 
     unique_seasonal_frequency = differenced_dataset[SF].unique()
 
     if len(unique_seasonal_frequency) < 2:
-        debug(
+        print(
             f"{SF.capitalize()} has less than 2 unique values. Cannot perform seasonality test."
         )
         return False, None
@@ -98,10 +91,10 @@ def test_seasonality(differenced_dataset, SF, sampling_frequency):
         if not group_data.empty:
             res.append(group_data)
         else:
-            debug(f"Seasonal frequency {i} has no data.")
+            print(f"Seasonal frequency {i} has no data.")
 
     if len(res) < 2:
-        debug(
+        print(
             f"{SF.capitalize()} has less than 2 non-empty groups. Cannot perform seasonality test!!!!."
         )
         return False, None
@@ -110,13 +103,13 @@ def test_seasonality(differenced_dataset, SF, sampling_frequency):
         p_value = round(p_value, 3)
         seasonal = p_value <= 0.05
 
-        debug(f"{SF.capitalize()} H_statistic is {H_statistic}")
-        debug(f"{SF.capitalize()} p_value is {p_value}")
-        debug(f"Seasonality that is built on {SF} is {seasonal}")
+        print(f"{SF.capitalize()} H_statistic is {H_statistic}")
+        print(f"{SF.capitalize()} p_value is {p_value}")
+        print(f"Seasonality that is built on {SF} is {seasonal}")
 
         return seasonal, p_value
     except ValueError as e:
-        debug(f"Error in seasonality test for {SF}: {str(e)}")
+        print(f"Error in seasonality test for {SF}: {str(e)}")
         return False, None
 
 
@@ -134,19 +127,26 @@ def create_exogenous_features(
 
     # Initialize new dataset
     new_dataset = pd.DataFrame(index=original_dataset.index)
+    # print(new_dataset)
     dataset_start_time = dataset_start_time.strftime("%Y-%m-%d %H:%M:%S")
     dataset_end_time = dataset_end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # start_date_time_object = datetime.datetime.strptime(dataset_start_time, '%Y-%m-%d %H:%M:%S')
+    # end_date_time_object = datetime.datetime.strptime(dataset_end_time, '%Y-%m-%d %H:%M:%S')
 
     start_date_time_object = datetime.strptime(dataset_start_time, "%Y-%m-%d %H:%M:%S")
     end_date_time_object = datetime.strptime(dataset_end_time, "%Y-%m-%d %H:%M:%S")
 
     dataset_delta = end_date_time_object - start_date_time_object
+    # print(dataset_delta)
 
     dataset_offset = to_offset("{td.days}D{td.seconds}s".format(td=dataset_delta))
 
     SeasonalFrequency = []
 
     sampling_frequency_offset = to_offset(sampling_frequency)
+    # print(sampling_frequency)
+    # print(sampling_frequency_offset)
     hour_test = to_offset("1h")
     day_of_week_test = to_offset("1d")
     week_test = to_offset("7d")
@@ -155,6 +155,17 @@ def create_exogenous_features(
 
     if sampling_frequency_offset <= hour_test and dataset_offset >= to_offset("3d"):
         SeasonalFrequency.append("hour")
+        # temp
+        # print(" features include hour")
+        # if sampling_frequency_offset < hour_test:
+        #     print(" sampling frequencyt offset is less than hour test")
+        # if exogenous_feature_type != 'AdditiveandMultiplicativeExogenousFeatures':
+        #     print(" case for AdditiveandMultiplicativeExogenousFeatures")
+        # if include_fractional_hour == True:
+        #     print(" include_fractional_hour set as True")
+        # if (exogenous_feature_type != 'AdditiveandMultiplicativeExogenousFeatures' or include_fractional_hour == True):
+        #     print(" right part true")
+        # temp
         if sampling_frequency_offset < hour_test and (
             (
                 exogenous_feature_type
@@ -165,6 +176,7 @@ def create_exogenous_features(
             )
             or include_fractional_hour == True
         ):
+            # print(" inside fractional hour")
             SeasonalFrequency.append("fractional_hour")
 
     if sampling_frequency_offset <= day_of_week_test and dataset_offset >= to_offset(
@@ -182,12 +194,16 @@ def create_exogenous_features(
     if sampling_frequency_offset <= year_test and dataset_offset >= to_offset("1095d"):
         SeasonalFrequency.append("year")
 
+    # print("Finished creating list of SF")
+    # print("Here is the issue")
+    # print(SeasonalFrequency)
     # Create all calendar features
     for SF in SeasonalFrequency:
         if SF == "hour":
             # we should consider for odd sampling freq may decide for the value to be a fraction ( need different formula )
             new_dataset[SF] = new_dataset.index.hour + 1
         elif SF == "fractional_hour":
+            # print("entered")
             new_dataset[SF] = new_dataset.index.map(
                 fractional_hour_generator
             )  # set the right parameter
@@ -199,6 +215,11 @@ def create_exogenous_features(
             new_dataset[SF] = new_dataset.index.month
         elif SF == "year":
             new_dataset[SF] = new_dataset.index.year
+    # print(new_dataset)
+    # print(new_dataset['hour'])
+    # print(new_dataset['fractional_hour'])
+    # print(new_dataset['fractional_hour', 'hour'])
+    # print(SeasonalFrequency)
     # Create cyclical features
     for feature in new_dataset.columns:
         new_dataset[f"sin_{feature}"] = np.sin(
@@ -207,6 +228,7 @@ def create_exogenous_features(
         new_dataset[f"cos_{feature}"] = np.cos(
             2 * np.pi * new_dataset[feature] / new_dataset[feature].max()
         )
+    # print(new_dataset)
     frac_hour_seasonal = None
     hour_seasonal = None
     day_of_week_seasonal = None
@@ -225,6 +247,7 @@ def create_exogenous_features(
         chosen_hour_type = None  # This will store either 'hour' or 'fractional_hour'
 
         # Special handling for hour and fractional_hour
+        print("Here")
         if "hour" in SeasonalFrequency:
             hour_seasonal, hour_p_value = test_seasonality(
                 optimally_differenced_dataset, "hour", sampling_frequency
@@ -242,32 +265,32 @@ def create_exogenous_features(
             )
             # calculation of week seasonality test to determine seasonal period of a year can be improved in the future by using day_of_year instead of week_of_year
         if not hour_seasonal and not frac_hour_seasonal:
-            debug("Neither hour nor fractional_hour is seasonal.")
+            print("Neither hour nor fractional_hour is seasonal.")
         elif hour_seasonal and frac_hour_seasonal:
             if hour_p_value <= frac_hour_p_value:
                 chosen_hour_type = "hour"
                 seasonal_periods.append("hour")
                 p_values["hour"] = hour_p_value
-                debug(
+                print(
                     "Both hour and fractional_hour are seasonal. Choosing hour due to lower or equal p-value."
                 )
             else:
                 chosen_hour_type = "fractional_hour"
                 seasonal_periods.append("fractional_hour")
                 p_values["fractional_hour"] = frac_hour_p_value
-                debug(
+                print(
                     "Both hour and fractional_hour are seasonal. Choosing fractional_hour due to lower p-value."
                 )
         elif hour_seasonal:
             chosen_hour_type = "hour"
             seasonal_periods.append("hour")
             p_values["hour"] = hour_p_value
-            debug("Only hour is seasonal.")
+            print("Only hour is seasonal.")
         elif frac_hour_seasonal:
             chosen_hour_type = "fractional_hour"
             seasonal_periods.append("fractional_hour")
             p_values["fractional_hour"] = frac_hour_p_value
-            debug("Only fractional_hour is seasonal.")
+            print("Only fractional_hour is seasonal.")
 
         # Test other seasonal frequencies
         for SF in [
@@ -281,14 +304,14 @@ def create_exogenous_features(
                 p_values[SF] = p_value
 
         if not seasonal_periods:
-            debug(
+            print(
                 "No seasonal periods detected. Returning no exogenous calendar related features."
             )
             new_dataset = pd.DataFrame(index=original_dataset.index)
         else:
-            debug("Detected seasonal periods:")
+            print("Detected seasonal periods:")
             for period in seasonal_periods:
-                debug(f"{period}: p-value = {p_values[period]}")
+                print(f"{period}: p-value = {p_values[period]}")
 
             # Keep only features for seasonal periods, excluding the non-chosen hour type
             seasonal_features = [
@@ -304,6 +327,7 @@ def create_exogenous_features(
             new_dataset = new_dataset[seasonal_features]
 
     num_columns = new_dataset.shape[1]
+    # print(f"Number of columns: {num_columns}")
 
     if (
         exogenous_feature_type
@@ -318,14 +342,20 @@ def create_exogenous_features(
             degree=2, interaction_only=True, include_bias=False  # was False
         ).set_output(transform="pandas")
 
+        # print(new_dataset)
+        # new_dataset.dropna()
+        # print(new_dataset)
         num_columns = new_dataset.shape[1]
+        # print(f"Number of columns: {num_columns}")
         new_dataset = polynomialobject2.fit_transform(new_dataset.dropna())
+        # print(new_dataset)
 
     # Get exogenous feature names
     exog_features = new_dataset.columns.tolist()
 
     # Create final dataframe of exogenous features
     df_exogenous_features = new_dataset.copy()
+    # print(df_exogenous_features)
     return (
         exog_features,
         new_dataset,
@@ -370,8 +400,15 @@ def roundto_minute(roundingdatetime):
     """
     # Add 30 seconds for rounding
     rounded = roundingdatetime + timedelta(seconds=30)
+
+    # Get total seconds and convert to minutes
     total_minutes = rounded.total_seconds() / 60
+
+    # Extract just the minute component
     minutes = int(total_minutes % 60)
+
+    # print(rounded)
+    # print(type(rounded))
     return minutes
 
 
@@ -734,7 +771,7 @@ def process_data(
         )
 
     if dataset_duration >= pd.Timedelta(days=19) and len(dataset) >= 25:
-        # debug("Hits the >= 25 length dataset case and >= 19 days")
+        # print("Hits the >= 25 length dataset case and >= 19 days")
         # quick_start : linear_regression with no_exog, feature_set_reduction = False
         if quick_start:
             allowed_models = ["direct_linearregression"]
@@ -746,7 +783,7 @@ def process_data(
     else:
         # quick_start : linear_regression with no_exog, feature_set_reduction = False
         if dataset_duration >= pd.Timedelta(days=3) and len(dataset) >= 72:
-            # debug("Hits the >= 72 length dataset case and >= 3 days")
+            # print("Hits the >= 72 length dataset case and >= 3 days")
             allowed_models = [
                 "baseline",
                 "direct_linearregression",
@@ -777,10 +814,12 @@ def process_data(
                 "baseline",
                 "direct_linearregression",
                 "autoreg_lightgbm",
-            ]  
+            ]  # testing
+            # print(1)
+            # print(allowed_models)
             if quick_start:
                 allowed_models = ["direct_linearregression"]
-            # debug("Hits the >= 12 length dataset case and >= 12 hours")
+            # print("Hits the >= 12 length dataset case and >= 12 hours")
 
             if sampling_timedelta > pd.Timedelta(hours=1):
                 time_metric_baseline = "days"
@@ -809,7 +848,7 @@ def process_data(
             forecasterequivalentdate = 1
             forecasterequivalentdate_n_offsets = 1
         else:
-            # debug("Hits the invalid dataset case")
+            # print("Hits the invalid dataset case")
             if_invalid_dataset = True
 
         use_weight = False
@@ -820,15 +859,18 @@ def process_data(
             for model in allowed_models
             if model not in ["direct_xgb", "direct_catboost", "direct_histgradient", "arima", 
                              "skt_lstm_deeplearning", "skt_tbats_damped", "skt_tbats_standard", "autoreg_histgradient",
-                              "autoreg_xgb", "autoreg_catboost", "skt_ets", "skt_tbats_quick" ]
+                              "autoreg_xgb", "autoreg_catboost", "skt_ets" ]
         ]
 
     backtest_steps = forecasting_steps
 
     nan_percentage = dataset.isna().mean()
+    # print(nan_percentage)
     if nan_percentage.value > 0.4:
         use_weight = False
 
+    # print(2)
+    # print(allowed_models)
     return ProcessedData(
         end_times,
         dataset,
