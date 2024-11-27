@@ -401,24 +401,31 @@ class ModelManager(Cached):
         else:
             if self.disk is None:
                 return False
-            xgb = self.disk.loadModel(
-                # modelPath=self.modelPath,
-                streamId=self.variable)
-            # logging.debug('LOADING STABLE', xgb)
-            if xgb is None or xgb == False:
+            try:
+                xgb = self.disk.loadModel(
+                    # modelPath=self.modelPath,
+                    streamId=self.variable)
+                # logging.debug('LOADING STABLE', xgb)
+                if xgb is None or xgb == False:
+                    self.stable.xgb = XGBRegressor(
+                        eval_metric='mae',
+                        **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
+                    return False
+                if (
+                    all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and
+                    # all([shp in self.stable.hyperParameters for shp in xgb.savedHyperParameters])
+                    True
+                ):
+                    self.stable.xgb = xgb
+                    self.stable.hyperParameters = [next((param2 for param2 in xgb.savedHyperParameters if param2.name == param.name), param)
+                                                for param in self.stable.hyperParameters]
+                    self.stable.chosenFeatures = xgb.savedChosenFeatures
+            except Exception as e:
+                #logging.warning('error loading model', e)
                 self.stable.xgb = XGBRegressor(
                     eval_metric='mae',
                     **{param.name: param.value for param in self.stable.hyperParameters if param.name in self.xgbParams})
                 return False
-            if (
-                all([scf in self.stable.features.keys() for scf in xgb.savedChosenFeatures]) and
-                # all([shp in self.stable.hyperParameters for shp in xgb.savedHyperParameters])
-                True
-            ):
-                self.stable.xgb = xgb
-                self.stable.hyperParameters = [next((param2 for param2 in xgb.savedHyperParameters if param2.name == param.name), param)
-                                               for param in self.stable.hyperParameters]
-                self.stable.chosenFeatures = xgb.savedChosenFeatures
         if self.predictor == 'chronos' or self.predictor == 'ttm':
             lb_idx = next((i for i in range(len(self.stable.hyperParameters))
                           if self.stable.hyperParameters[i].name == 'lookback_len'), -1)
