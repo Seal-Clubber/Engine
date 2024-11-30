@@ -50,7 +50,7 @@ class SKPipeline(PipelineInterface):
                 f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
                 f'\n  stable score: {self.score()}'
                 f'\n  pilot  score: {other.score()}',
-                color='green')
+                color='green', print=True)
                 return True
             else:
                 return False
@@ -73,6 +73,8 @@ class SKPipeline(PipelineInterface):
             return predictor_model[0].forecast
         else:
             error(f'Error predicting : {predictor_model} and status {status}')
+            self.model = None
+
         return None
 
     def forecasterName(self, **kwargs) -> str:
