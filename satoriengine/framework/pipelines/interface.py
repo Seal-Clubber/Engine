@@ -21,6 +21,8 @@ class PipelineInterface:
     @staticmethod
     def load(modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
         """loads the model model from disk if present"""
+        if not os.path.isfile(modelPath):
+            return None
         try:
             return joblib.load(modelPath)
         except Exception as e:
