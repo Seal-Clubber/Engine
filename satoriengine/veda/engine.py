@@ -7,15 +7,15 @@ import threading
 import pandas as pd
 import os
 from reactivex.subject import BehaviorSubject
-from satorilib.utils.hash import hashIt
-from satorilib.utils.hash import generatePathId
+from satorilib.utils.hash import hashIt, generatePathId
 from satorilib.utils.time import datetimeToTimestamp, now
+from satorilib.utils.system import getProcessorCount
 from satorilib.disk import getHashBefore
 from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.logging import debug, info, error, setup, DEBUG, INFO
-from satoriengine.framework.Data import StreamForecast
-from satoriengine.framework.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline
+from satoriengine.veda.Data import StreamForecast
+from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline
 
 setup(level=INFO)
 
@@ -64,7 +64,7 @@ class Engine:
         print(f"An error occurred new_observaiton: {error}")
 
     def handle_completion(self):
-        print(f"new_observation completed")
+        print("new_observation completed")
 
 
 class StreamModel:
@@ -166,18 +166,20 @@ class StreamModel:
         # alternative - use data manager: self.predictionUpdate.on_next(self)
         df = pd.DataFrame(
             {"value": [prediction], "hash": [observationHash]},
-            index=[observationTime],
-        )
+            index=[observationTime])
         df.to_csv(
-            self.prediction_data_path(), float_format="%.10f", mode="a", header=False
-        )
+            self.prediction_data_path(),
+            float_format="%.10f",
+            mode="a",
+            header=False)
         return df
 
     def load_data(self) -> pd.DataFrame:
         try:
             return pd.read_csv(
-                self.data_path(), names=["date_time", "value", "id"], header=None
-            )
+                self.data_path(),
+                names=["date_time", "value", "id"],
+                header=None)
         except FileNotFoundError:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
@@ -190,15 +192,7 @@ class StreamModel:
         return f"/Satori/Neuron/data/{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv"
 
     def model_path(self) -> str:
-        return f"/Satori/Neuron/models/frameworkengine/{generatePathId(streamId=self.streamId)}"
-
-    def check_observations(self) -> bool:
-        """
-        Check if the dataframe has fewer than 3 observations.
-        Returns:
-            bool: True if dataframe has more than 2 rows, False otherwise
-        """
-        return len(self.data) > 2
+        return f"/Satori/Neuron/models/veda/{generatePathId(streamId=self.streamId)}/{self.pipeline.__name__}.joblib"
 
     def choose_pipeline(self, inplace: bool = False) -> PipelineInterface:
         """
@@ -209,16 +203,23 @@ class StreamModel:
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
-        if self.check_observations():
-            if inplace and not isinstance(self.pilot, SKPipeline):
-                # self.pilot = SKPipeline()
-            # return SKPipeline
-                self.pilot = XgbPipeline()
-            return XgbPipeline
-        else:
+        if self.data is None or len(self.data) < 10:
             if inplace and not isinstance(self.pilot, StarterPipeline):
                 self.pilot = StarterPipeline()
             return StarterPipeline
+        if getProcessorCount() < 4:
+            if inplace and not isinstance(self.pilot, XgbPipeline):
+                self.pilot = XgbPipeline()
+            return XgbPipeline
+        if 10 <= len(self.data) < 40:
+            if inplace and not isinstance(self.pilot, XgbPipeline):
+                self.pilot = XgbPipeline()
+            return XgbPipeline
+        # at least 4 processors and
+        # at least 40 observations
+        if inplace and not isinstance(self.pilot, SKPipeline):
+            self.pilot = SKPipeline()
+        return SKPipeline
 
     def run(self):
         """
@@ -228,13 +229,12 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
-            debug(self.pilot, color='teal')
             trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.model_path()):
                         self.stable = copy.deepcopy(self.pilot)
-                        info("Stable Model Updated for stream : ", self.streamId, print=True)
+                        info("Stable Model Updated for stream:", self.streamId, print=True)
                         self.produce_prediction(self.stable)
             else:
                 if not trainingResult.stagnated:

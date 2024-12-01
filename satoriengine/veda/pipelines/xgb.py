@@ -4,8 +4,8 @@ import numpy as np
 import joblib
 import os
 
-from satoriengine.framework.pipelines.interface import PipelineInterface, TrainingResult
-from satoriengine.framework.process import process_data
+from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
+from satoriengine.veda.process import process_data
 from satorilib.logging import info, debug, error, warning, setup, DEBUG
 
 from xgboost import XGBRegressor

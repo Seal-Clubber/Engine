@@ -24,7 +24,7 @@ from satoriengine.model.chronos_adapter import ChronosAdapter
 from satoriengine.model.ttm_adapter import TTMAdapter
 from typing import Union, Optional, Any
 from collections import namedtuple
-from satoriengine.framework.pipelines.interface import PipelineInterface, TrainingResult
+from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 from satoriengine.utils import clean
 
 
