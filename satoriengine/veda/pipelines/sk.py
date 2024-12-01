@@ -52,6 +52,11 @@ class SKPipeline(PipelineInterface):
                     color='green')
                 return True
             else:
+                debug(
+                    "trainning round"
+                    f'\n  stable score: {self.score()}'
+                    f'\n  pilot  score: {other.score()}',
+                    print=True)
                 return False
             # return self.score() < other.score()
         return True
@@ -61,6 +66,7 @@ class SKPipeline(PipelineInterface):
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
+        print('predict?')
         debug(f"Prediction with Model : {self.model[0].model_name}", print=True)
         status, predictor_model = SKPipeline.skEnginePipeline(
             data=kwargs["data"],

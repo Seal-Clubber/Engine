@@ -103,9 +103,9 @@ class StreamModel:
         updated_model = updated_model or self.stable
         print('1', updated_model, self.stable)
         if updated_model is not None:
-            print('2')
+            print('2', self.data)
             forecast = updated_model.predict(data=self.data)
-            print('3')
+            print('3', forecast)
             if isinstance(forecast, pd.DataFrame):
                 print('4')
                 observationTime = datetimeToTimestamp(now())
@@ -228,6 +228,7 @@ class StreamModel:
         Breaks if backtest error stagnates for 3 iterations.
         """
         while True:
+
             trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
