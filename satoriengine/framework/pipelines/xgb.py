@@ -63,7 +63,6 @@ class XgbPipeline(PipelineInterface):
         """
         if isinstance(stable, self.__class__):
             if self.score() < stable.score():
-                debug('Entered Comparison True', color='teal')
                 info(
                     f'model improved!'
                     f'\n  stable score: {self.score()}'
@@ -74,8 +73,7 @@ class XgbPipeline(PipelineInterface):
             else:
                 debug(
                     f'\nstable score: {stable.score()}'
-                    f'\npilot  score: {self.score()}',
-                    color='yellow')
+                    f'\npilot  score: {self.score()}')
                 return False
         return True
 

@@ -45,12 +45,11 @@ class SKPipeline(PipelineInterface):
         """true indicates this model is better than the other model"""
         if isinstance(other, self.__class__):
             if self.score() < other.score():
-                debug('Entered Comparison True', print=True)
                 info(
-                f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
-                f'\n  stable score: {self.score()}'
-                f'\n  pilot  score: {other.score()}',
-                color='green', print=True)
+                    f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
+                    f'\n  stable score: {self.score()}'
+                    f'\n  pilot  score: {other.score()}',
+                    color='green')
                 return True
             else:
                 return False
