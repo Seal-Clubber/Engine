@@ -34,28 +34,24 @@ class Engine:
         self.new_observation.subscribe(
             on_next=lambda x: self.handle_new_observation(x) if x is not None else None,
             on_error=lambda e: self.handle_error(e),
-            on_completed=lambda: self.handle_completion(),
-        )
+            on_completed=lambda: self.handle_completion())
 
     def initialize_models(self):
         for stream, pubStream in zip(self.streams, self.pubstreams):
             self.streamModels[stream.streamId] = StreamModel(
                 streamId=stream.streamId,
                 predictionStreamId=pubStream.streamId,
-                prediction_produced=self.prediction_produced,
-            )
+                prediction_produced=self.prediction_produced)
 
     def handle_new_observation(self, observation: Observation):
         streamModel = self.streamModels.get(observation.streamId)
         streamModel.handle_new_observation(observation)
         if streamModel.thread is None or not streamModel.thread.is_alive():
-            streamModel.choose_pipeline(
-                inplace=True
-            )
+            streamModel.choose_pipeline(inplace=True)
             streamModel.run_forever()
 
         if streamModel is not None and len(streamModel.data) > 1:
-            debug('Making Prediction for New Observation', color='teal')
+            debug(f'Making prediction based on new observation using {streamModel.pipeline.__name__}', color='teal')
             streamModel.produce_prediction()
         else:
             info(f"No model found for stream {observation.streamId}")
@@ -90,16 +86,12 @@ class StreamModel:
         self.data = pd.concat(
             [
                 self.data,
-                pd.DataFrame(
-                    {
-                        "date_time": [str(parsed_data["time"])],
-                        "value": [float(parsed_data["data"])],
-                        "id": [str(parsed_data["hash"])],
-                    }
-                ),
+                pd.DataFrame({
+                    "date_time": [str(parsed_data["time"])],
+                    "value": [float(parsed_data["data"])],
+                    "id": [str(parsed_data["hash"])]}),
             ],
-            ignore_index=True,
-        )
+            ignore_index=True)
 
     def produce_prediction(self, updated_model=None):
         """
@@ -107,18 +99,21 @@ class StreamModel:
             - model replaced with a better one
             - new observation on the stream
         """
+        print('a')
         updated_model = updated_model or self.stable
+        print('1', updated_model, self.stable)
         if updated_model is not None:
+            print('2')
             forecast = updated_model.predict(data=self.data)
-
+            print('3')
             if isinstance(forecast, pd.DataFrame):
+                print('4')
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)
                 observationHash = hashIt(
                     getHashBefore(pd.DataFrame(), observationTime)
                     + str(observationTime)
-                    + str(prediction)
-                )
+                    + str(prediction))
                 self.save_prediction(observationTime, prediction, observationHash)
                 streamforecast = StreamForecast(
                     streamId=self.streamId,
@@ -127,10 +122,11 @@ class StreamModel:
                     forecast=forecast, # maybe we can fetch this value from predictionHistory
                     observationTime=observationTime,
                     observationHash=observationHash,
-                    predictionHistory=CSVManager().read(self.prediction_data_path()),
-                )
+                    predictionHistory=CSVManager().read(self.prediction_data_path()))
+                print('5')
                 self.prediction_produced.on_next(streamforecast)
             else:
+                print('6')
                 error("Forecast failed, retrying with Quick Model")
                 debug("Model Path to be deleted : ", self.model_path(), color="teal")
                 if os.path.isfile(self.model_path()):
@@ -139,23 +135,21 @@ class StreamModel:
                         debug("Deleted failed model file", color="teal")
                     except Exception as e:
                         error(f"Failed to delete model file: {str(e)}")
-
                 self.stable = None
                 pipeline_class = self.choose_pipeline()
                 rollback_model = pipeline_class()
-
+                print('7')
                 try:
                     training_result = rollback_model.fit(data=self.data)
                     if training_result.status == 1:
                         debug(f"New model trained: {training_result.model[0].model_name}", color="teal")
                         self.stable = copy.deepcopy(rollback_model)
+                        print('8')
                         self.produce_prediction(self.stable)
                     else:
                         error(f"Failed to train alternative model (status: {training_result.status})")
                 except Exception as e:
                     error(f"Error training new model: {str(e)}")
-
-
 
     def save_prediction(
         self,
@@ -184,15 +178,20 @@ class StreamModel:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def data_path(self) -> str:
-        # debug(f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv", print=True)
-        return f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv"
+        return (
+            '/Satori/Neuron/data/'
+            f'{generatePathId(streamId=self.streamId)}/aggregate.csv')
 
     def prediction_data_path(self) -> str:
-        # debug(f"/Satori/Neuron/data/{generatePathId(streamId=self.streamId)}/aggregate.csv", print=True)
-        return f"/Satori/Neuron/data/{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv"
+        return (
+            '/Satori/Neuron/data/'
+            f'{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv')
 
     def model_path(self) -> str:
-        return f"/Satori/Neuron/models/veda/{generatePathId(streamId=self.streamId)}/{self.pipeline.__name__}.joblib"
+        return (
+            '/Satori/Neuron/models/veda/'
+            f'{generatePathId(streamId=self.streamId)}/'
+            f'{self.pipeline.__name__}.joblib')
 
     def choose_pipeline(self, inplace: bool = False) -> PipelineInterface:
         """
