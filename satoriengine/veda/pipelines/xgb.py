@@ -73,12 +73,14 @@ class XgbPipeline(PipelineInterface):
             else:
                 debug(
                     f'\nstable score: {stable.score()}'
-                    f'\npilot  score: {self.score()}')
+                    f'\npilot  score: {self.score()}', color='yellow')
                 return False
         return True
 
     def score(self, **kwargs) -> float:
         """will score the model"""
+        if self.model is None:
+            return np.inf
         return mean_absolute_error(self.test_y, self.model.predict(self.test_x))
 
     def predict(self, **kwargs) -> pd.DataFrame:

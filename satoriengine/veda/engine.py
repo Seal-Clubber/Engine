@@ -42,6 +42,8 @@ class Engine:
                 streamId=stream.streamId,
                 predictionStreamId=pubStream.streamId,
                 prediction_produced=self.prediction_produced)
+            self.streamModels[stream.streamId].choose_pipeline(inplace=True)
+            self.streamModels[stream.streamId].run_forever()
 
     def handle_new_observation(self, observation: Observation):
         streamModel = self.streamModels.get(observation.streamId)
@@ -49,7 +51,6 @@ class Engine:
         if streamModel.thread is None or not streamModel.thread.is_alive():
             streamModel.choose_pipeline(inplace=True)
             streamModel.run_forever()
-
         if streamModel is not None and len(streamModel.data) > 1:
             debug(f'Making prediction based on new observation using {streamModel.pipeline.__name__}', color='teal')
             streamModel.produce_prediction()
@@ -99,15 +100,10 @@ class StreamModel:
             - model replaced with a better one
             - new observation on the stream
         """
-        print('a')
         updated_model = updated_model or self.stable
-        print('1', updated_model, self.stable)
         if updated_model is not None:
-            print('2', self.data)
             forecast = updated_model.predict(data=self.data)
-            print('3', forecast)
             if isinstance(forecast, pd.DataFrame):
-                print('4')
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)
                 observationHash = hashIt(
@@ -123,10 +119,8 @@ class StreamModel:
                     observationTime=observationTime,
                     observationHash=observationHash,
                     predictionHistory=CSVManager().read(self.prediction_data_path()))
-                print('5')
                 self.prediction_produced.on_next(streamforecast)
             else:
-                print('6')
                 error("Forecast failed, retrying with Quick Model")
                 debug("Model Path to be deleted : ", self.model_path(), color="teal")
                 if os.path.isfile(self.model_path()):
@@ -138,13 +132,11 @@ class StreamModel:
                 self.stable = None
                 pipeline_class = self.choose_pipeline()
                 rollback_model = pipeline_class()
-                print('7')
                 try:
                     training_result = rollback_model.fit(data=self.data)
                     if training_result.status == 1:
                         debug(f"New model trained: {training_result.model[0].model_name}", color="teal")
                         self.stable = copy.deepcopy(rollback_model)
-                        print('8')
                         self.produce_prediction(self.stable)
                     else:
                         error(f"Failed to train alternative model (status: {training_result.status})")
@@ -216,9 +208,14 @@ class StreamModel:
             return XgbPipeline
         # at least 4 processors and
         # at least 40 observations
-        if inplace and not isinstance(self.pilot, SKPipeline):
-            self.pilot = SKPipeline()
-        return SKPipeline
+        # still debugging
+        # if inplace and not isinstance(self.pilot, SKPipeline):
+        #     self.pilot = SKPipeline()
+        # return SKPipeline
+        if inplace and not isinstance(self.pilot, XgbPipeline):
+            self.pilot = XgbPipeline()
+        return XgbPipeline
+
 
     def run(self):
         """
@@ -227,8 +224,7 @@ class StreamModel:
         using the best known model to make predictions on demand.
         Breaks if backtest error stagnates for 3 iterations.
         """
-        while True:
-
+        while len(self.data) > 0:
             trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):

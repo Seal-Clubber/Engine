@@ -66,14 +66,12 @@ class SKPipeline(PipelineInterface):
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
-        print('predict?')
         debug(f"Prediction with Model : {self.model[0].model_name}", print=True)
         status, predictor_model = SKPipeline.skEnginePipeline(
             data=kwargs["data"],
             list_of_models=[self.model[0].model_name],
             mode="predict",
-            unfitted_forecaster=self.model[0].unfitted_forecaster,
-        )
+            unfitted_forecaster=self.model[0].unfitted_forecaster)
         if status == 1:
             return predictor_model[0].forecast
         else:
