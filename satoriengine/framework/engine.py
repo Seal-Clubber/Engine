@@ -7,12 +7,12 @@ import threading
 import pandas as pd
 import os
 from reactivex.subject import BehaviorSubject
-from satorilib.api.hash import hashIt
-from satorilib.api.disk import getHashBefore
-from satorilib.api.hash import generatePathId
-from satorilib.api.time import datetimeToTimestamp, now
+from satorilib.utils.hash import hashIt
+from satorilib.utils.hash import generatePathId
+from satorilib.utils.time import datetimeToTimestamp, now
+from satorilib.disk import getHashBefore
 from satorilib.concepts import Stream, StreamId, Observation
-from satorilib.api.disk.filetypes.csv import CSVManager
+from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.logging import debug, info, error, setup, DEBUG, INFO
 from satoriengine.framework.Data import StreamForecast
 from satoriengine.framework.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline
