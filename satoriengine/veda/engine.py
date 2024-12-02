@@ -194,7 +194,7 @@ class StreamModel:
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
-        if self.data is None or len(self.data) < 10:
+        if self.data is None or len(self.data) < 3:
             if inplace and not isinstance(self.pilot, StarterPipeline):
                 self.pilot = StarterPipeline()
             return StarterPipeline
@@ -202,19 +202,19 @@ class StreamModel:
             if inplace and not isinstance(self.pilot, XgbPipeline):
                 self.pilot = XgbPipeline()
             return XgbPipeline
-        if 10 <= len(self.data) < 40:
+        if 3 <= len(self.data) < 40:
             if inplace and not isinstance(self.pilot, XgbPipeline):
                 self.pilot = XgbPipeline()
             return XgbPipeline
         # at least 4 processors and
         # at least 40 observations
         # still debugging
-        # if inplace and not isinstance(self.pilot, SKPipeline):
-        #     self.pilot = SKPipeline()
-        # return SKPipeline
-        if inplace and not isinstance(self.pilot, XgbPipeline):
-            self.pilot = XgbPipeline()
-        return XgbPipeline
+        if inplace and not isinstance(self.pilot, SKPipeline):
+            self.pilot = SKPipeline()
+        return SKPipeline
+        # if inplace and not isinstance(self.pilot, XgbPipeline):
+        #     self.pilot = XgbPipeline()
+        # return XgbPipeline
 
 
     def run(self):
