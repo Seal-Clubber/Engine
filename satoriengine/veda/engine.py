@@ -224,6 +224,8 @@ class StreamModel:
         using the best known model to make predictions on demand.
         Breaks if backtest error stagnates for 3 iterations.
         """
+        # still have a "problem?" where the model makes predictions right away
+        # wasn't sure SKPipeline was working so just using XgbPipeline for now
         while len(self.data) > 0:
             trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
