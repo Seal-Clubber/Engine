@@ -65,8 +65,8 @@ class XgbPipeline(PipelineInterface):
             if self.score() < stable.score():
                 info(
                     f'model improved!'
-                    f'\n  stable score: {self.score()}'
-                    f'\n  pilot  score: {stable.score()}',
+                    f'\n  stable score: {stable.score()}'
+                    f'\n  pilot  score: {self.score()}',
                     f'\n  Parameters: {self.hyperparameters}',
                     color='green')
                 return True

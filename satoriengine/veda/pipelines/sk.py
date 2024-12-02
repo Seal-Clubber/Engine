@@ -41,28 +41,28 @@ class SKPipeline(PipelineInterface):
         self.model = model
         return TrainingResult(status, self.model, False)
 
-    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, stable: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
-        if isinstance(other, self.__class__):
-            if self.score() < other.score():
+        if isinstance(stable, self.__class__):
+            if self.score() < stable.score():
                 info(
-                    f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
-                    f'\n  stable score: {self.score()}'
-                    f'\n  pilot  score: {other.score()}',
+                    f'model improved! {self.forecasterName()} replaces {stable.forecasterName()}'
+                    f'\n  stable score: {stable.score()}'
+                    f'\n  pilot  score: {self.score()}',
                     color='green')
                 return True
             else:
                 debug(
-                    "trainning round"
-                    f'\n  stable score: {self.score()}'
-                    f'\n  pilot  score: {other.score()}',
-                    print=True)
+                    f'\nstable score: {stable.score()}'
+                    f'\npilot  score: {self.score()}', color='yellow')
                 return False
             # return self.score() < other.score()
         return True
 
     def score(self, **kwargs) -> float:
-        return self.model[0].backtest_error
+        if self.model == None:
+            return float('inf')
+        return self.model[0].backtest_error if self.model[0].backtest_error != 0 else 1000
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
@@ -81,7 +81,7 @@ class SKPipeline(PipelineInterface):
         return None
 
     def forecasterName(self, **kwargs) -> str:
-        return self.model[0].model_name.upper()
+        return self.model[0].model_name.upper() if self.model != None else "First Model"
 
     @staticmethod
     def skEnginePipeline(
