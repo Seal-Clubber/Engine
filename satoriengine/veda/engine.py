@@ -5,6 +5,8 @@ import copy
 import json
 import threading
 import pandas as pd
+
+import pickle
 import os
 from reactivex.subject import BehaviorSubject
 from satorilib.utils.hash import hashIt, generatePathId
@@ -16,6 +18,8 @@ from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.logging import debug, info, error, setup, DEBUG, INFO
 from satoriengine.veda.Data import StreamForecast
 from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline
+
+setup(level=INFO)
 
 setup(level=INFO)
 
@@ -77,7 +81,8 @@ class StreamModel:
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
         self.pipeline: PipelineInterface = self.choose_pipeline()
-        self.pilot: PipelineInterface = self.pipeline.load(self.model_path())
+        self.pilot: PipelineInterface = self.pipeline()  # Create instance first
+        self.pilot.load(self.model_path())  # Then load model on the instance
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
         print(self.pipeline.__name__)
 
@@ -181,6 +186,11 @@ class StreamModel:
             f'{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv')
 
     def model_path(self) -> str:
+        debug(
+            '/Satori/Neuron/models/veda/'
+            f'{generatePathId(streamId=self.streamId)}/'
+            f'{self.pipeline.__name__}.joblib',
+            color="teal")
         return (
             '/Satori/Neuron/models/veda/'
             f'{generatePathId(streamId=self.streamId)}/'
@@ -214,10 +224,9 @@ class StreamModel:
         # at least 4 processors and
         # at least 40 observations
         # still debugging
-        #if inplace and not isinstance(self.pilot, SKPipeline):
-        #    self.pilot = SKPipeline()
-        #return SKPipeline
-
+        # if inplace and not isinstance(self.pilot, SKPipeline):
+        #     self.pilot = SKPipeline()
+        # return SKPipeline
         if inplace and not isinstance(self.pilot, XgbPipeline):
             self.pilot = XgbPipeline()
         return XgbPipeline
@@ -245,7 +254,7 @@ class StreamModel:
                     debug("Starter Pipeline", print=True)
                 else:
                     error("Model Training Failed, Breaking out of the Loop")
-                break
+                break 
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
