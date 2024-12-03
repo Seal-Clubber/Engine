@@ -28,6 +28,7 @@ class PipelineInterface:
         Returns:
         PipelineInterface: Model if load successful, None otherwise
         """
+        pass
 
     def save(self, modelpath: str, **kwargs) -> bool:
         """
