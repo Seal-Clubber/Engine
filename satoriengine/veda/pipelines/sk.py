@@ -54,7 +54,7 @@ class SKPipeline(PipelineInterface):
         debug("model error = ", self.score(), color="white")
         if self.model is None:
             status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["quick_start"])
-        else:    
+        else:
             status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["random_model"])
 
         if status == 1:
@@ -62,47 +62,41 @@ class SKPipeline(PipelineInterface):
             debug("Model Picked for Training : ", self.model[0].model_name, print=True)
         else:
             self.model = None
-        return TrainingResult(status, self.model, False)
+        return TrainingResult(status, self, False)
 
-    def compare(self, stable: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
-        # if isinstance(stable, self.__class__):
-        #     if self.score() < stable.score():
+        # if isinstance(other, self.__class__):
+        #     if self.score() < other.score():
         #         info(
-        #             f'model improved! {self.forecasterName()} replaces {stable.forecasterName()}'
-        #             f'\n  stable score: {stable.score()}'
-        #             f'\n  pilot  score: {self.score()}',
+        #             f'model improved! {self.forecasterName()} replaces {other.forecasterName()}'
+        #             f'\n  other score: {other.score()}'
+        #             f'\n  this  score: {self.score()}',
         #             color='green')
         #         return True
         #     else:
         #         debug(
-        #             f'\nstable score: {stable.score()}'
-        #             f'\npilot  score: {self.score()}', color='yellow')
+        #             f'\nother score: {other.score()}'
+        #             f'\nthis  score: {self.score()}', color='yellow')
         #         return False
         #     # return self.score() < other.score()
         # return True
-        if not isinstance(stable, self.__class__):
+        if not isinstance(other, self.__class__):
             return True
-            
-        pilot_score = self.score()
-        stable_score = stable.model_error or stable.score()
-        is_improved = pilot_score < stable_score
-        
+        this_score = self.score()
+        other_score = other.model_error or other.score()
+        is_improved = this_score < other_score
         if is_improved:
             info(
                 'model improved!'
-                f'\n  stable score: {stable_score}'
-                f'\n  pilot  score: {pilot_score}'
-                f'\n  Parameters: {self.hyperparameters}',
-                color='green'
-            )
+                f'\n  stable score: {other_score}'
+                f'\n  pilot  score: {this_score}'
+                color='green')
         else:
             debug(
-                f'\nstable score: {stable_score}'
-                f'\npilot  score: {pilot_score}',
-                color='yellow'
-            )
-        
+                f'\nstable score: {other_score}'
+                f'\npilot  score: {this_score}',
+                color='yellow')
         return is_improved
 
     def score(self, **kwargs) -> float:

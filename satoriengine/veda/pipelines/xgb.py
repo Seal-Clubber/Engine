@@ -47,14 +47,13 @@ class XgbPipeline(PipelineInterface):
             self.model_error = self.score()
             state = {
                 'stable_model' : self.model,
-                'model_error' : self.model_error
-            }
+                'model_error' : self.model_error}
             joblib.dump(state, modelpath)
             return True
         except Exception as e:
             print(f"Error saving model: {e}")
             return False
-        
+
 
     def fit(self, **kwargs) -> TrainingResult:
         """Train a new model"""
@@ -63,8 +62,7 @@ class XgbPipeline(PipelineInterface):
             proc_data.dataset.index.values,
             proc_data.dataset['value'],
             test_size=self.split or 0.2,
-            shuffle=False,
-        )
+            shuffle=False)
         self.train_x = self._prepare_time_features(pre_train_x)
         self.test_x = self._prepare_time_features(pre_test_x)
         self.hyperparameters = self._prep_params()
@@ -73,9 +71,8 @@ class XgbPipeline(PipelineInterface):
             self.train_x,
             self.train_y,
             eval_set=[(self.train_x, self.train_y), (self.test_x, self.test_y)],
-            verbose=False,
-        )
-        return TrainingResult(1, self.model, False)
+            verbose=False)
+        return TrainingResult(1, self, False)
 
     # def compare(self, stable: Union[PipelineInterface, None] = None, **kwargs) -> bool:
     #     """
@@ -112,33 +109,28 @@ class XgbPipeline(PipelineInterface):
     #                 return False
     #     return True
 
-    def compare(self, stable: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """
-        Compare stable (model) and pilot models based on their backtest error.
-        Returns True if pilot model performs better than stable model.
+        Compare other (model) and this models based on their backtest error.
+        Returns True if this model performs better than other model.
         """
-        if not isinstance(stable, self.__class__):
+        if not isinstance(other, self.__class__):
             return True
-            
-        pilot_score = self.score()
-        stable_score = stable.model_error or stable.score()
-        is_improved = pilot_score < stable_score
-        
+        this_score = self.score()
+        other_score = other.model_error or other.score()
+        is_improved = this_score < other_score
         if is_improved:
             info(
                 'model improved!'
-                f'\n  stable score: {stable_score}'
-                f'\n  pilot  score: {pilot_score}'
+                f'\n  stable score: {other_score}'
+                f'\n  pilot  score: {this_score}'
                 f'\n  Parameters: {self.hyperparameters}',
-                color='green'
-            )
+                color='green')
         else:
             debug(
-                f'\nstable score: {stable_score}'
-                f'\npilot  score: {pilot_score}',
-                color='yellow'
-            )
-        
+                f'\nstable score: {other_score}'
+                f'\npilot  score: {this_score}',
+                color='yellow')
         return is_improved
 
     def score(self, **kwargs) -> float:
@@ -156,12 +148,12 @@ class XgbPipeline(PipelineInterface):
         self.model.fit(
             self.X_full,
             self.y_full,
-            verbose=False,
-        )
+            verbose=False)
         last_date = pd.Timestamp(proc_data.dataset.index[-1])
         future_predictions = self._predict_future(
-            self.model, last_date, proc_data.sampling_frequency
-        )
+            self.model,
+            last_date,
+            proc_data.sampling_frequency)
         return future_predictions
 
     def _predict_future(

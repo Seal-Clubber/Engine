@@ -1,11 +1,18 @@
+'''
+run chronos on the data
+produce a feature of predictions
+feed data and chronos predictions into xgboost
+'''
+
 import pandas as pd
-from typing import Union, Optional, Any
+from typing import Union
 import numpy as np
 import joblib
 import os
 
-from satoriengine.framework.pipelines.interface import PipelineInterface, TrainingResult
-from satoriengine.framework.process import process_data
+from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
+#from satoriengine.veda.pipelines.chronos import ChronosVedaPipeline
+from satoriengine.veda.process import process_data
 from satorilib.logging import info, debug, error, warning, setup, DEBUG
 
 from xgboost import XGBRegressor
@@ -13,10 +20,11 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 
 
-class XgbPipeline(PipelineInterface):
+class XgbChronosVedaPipeline(PipelineInterface):
 
     def __init__(self, **kwargs):
         self.model: Union[XGBRegressor, None] = None
+        #self.chronos: Union[ChronosVedaPipeline, None] = None
         self.hyperparameters: Union[dict, None] = None
         self.train_x: pd.DataFrame = None
         self.test_x: pd.DataFrame = None
@@ -25,16 +33,29 @@ class XgbPipeline(PipelineInterface):
         self.X_full: pd.DataFrame = None
         self.y_full: pd.Series = None
         self.split: float = None
-        self.model_error: float = np.inf
+        self.model_error: float = None
+
+    def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
+        """loads the model model from disk if present"""
+        try:
+            saved_state = joblib.load(modelPath)
+            self.model = saved_state['stable_model']
+            self.model_error = saved_state['model_error']
+            return self.model
+        except Exception as e:
+            debug(f"Error Loading Model File : {e}", print=True)
+            if os.path.isfile(modelPath):
+                os.remove(modelPath)
+            return None
 
     def save(self, modelpath: str, **kwargs) -> bool:
         """saves the stable model to disk"""
         try:
             os.makedirs(os.path.dirname(modelpath), exist_ok=True)
-            # Create a state dictionary with all necessary data
+            self.model_error = self.score()
             state = {
-                'xgb_model': self.model,
-                'model_error': self.model_error
+                'stable_model' : self.model,
+                'model_error' : self.model_error
             }
             joblib.dump(state, modelpath)
             return True
@@ -42,18 +63,6 @@ class XgbPipeline(PipelineInterface):
             print(f"Error saving model: {e}")
             return False
 
-
-    def load(self, modelpath: str, **kwargs) -> Union[None, XGBRegressor]:
-        """loads the stable model from disk"""
-        try:
-            if os.path.exists(modelpath):
-                state = joblib.load(modelpath)
-                self.model = state['xgb_model']
-                self.model_error = state['model_error']
-            return self.model
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            return None
 
     def fit(self, **kwargs) -> TrainingResult:
         """Train a new model"""
@@ -74,33 +83,31 @@ class XgbPipeline(PipelineInterface):
             eval_set=[(self.train_x, self.train_y), (self.test_x, self.test_y)],
             verbose=False,
         )
-        return TrainingResult(1, self.model, False)
+        return TrainingResult(1, self, False)
 
-    def compare(self, stable: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """
-        Compare stable (model) and pilot models based on their backtest error.
+        Compare other (model) and pilot models based on their backtest error.
+        Returns True if pilot model performs better than other model.
         """
-        if isinstance(stable, self.__class__):
-            if self.score() < stable.score():
-                debug('Entered Comparison True', color='teal', print=True)
-                info(
-                    f'model improved!'
-                    f'\n  stable score: {self.score()}'
-                    f'\n  pilot  score: {stable.score()}',
-                    f'\n  Parameters: {self.hyperparameters}',
-                    color='green',
-                    print=True,
-                )
-                return True
-            else:
-                info(
-                    f'\nstable score: {stable.score()}'
-                    f'\npilot  score: {self.score()}',
-                    color='yellow',
-                    print=True,
-                )
-                return False
-        return True
+        if not isinstance(other, self.__class__):
+            return True
+        this_score = self.score()
+        other_score = other.model_error or other.score()
+        is_improved = this_score < other_score
+        if is_improved:
+            info(
+                'model improved!'
+                f'\n  other score: {other_score}'
+                f'\n  pilot  score: {this_score}'
+                f'\n  Parameters: {self.hyperparameters}',
+                color='green')
+        else:
+            debug(
+                f'\nother score: {other_score}'
+                f'\npilot  score: {this_score}',
+                color='yellow')
+        return is_improved
 
     def score(self, **kwargs) -> float:
         """will score the model"""
@@ -108,7 +115,6 @@ class XgbPipeline(PipelineInterface):
             return np.inf
         self.model_error = mean_absolute_error(self.test_y, self.model.predict(self.test_x))
         return self.model_error
-    
 
     def predict(self, **kwargs) -> pd.DataFrame:
         """Make predictions using the stable model"""

@@ -22,9 +22,9 @@ class StarterPipeline(PipelineInterface):
             status, model = StarterPipeline.starterEnginePipeline(kwargs["data"])
             if status == 1:
                 self.model = model
-                return TrainingResult(status, model, False)
+                return TrainingResult(status, self, False)
         else:
-            return TrainingResult(1, self.model, True)
+            return TrainingResult(1, self, True)
 
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
