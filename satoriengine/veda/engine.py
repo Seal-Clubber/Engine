@@ -1,13 +1,11 @@
 import warnings
 warnings.filterwarnings('ignore')
-from typing import Union, Dict
+from typing import Dict
+import os
 import copy
 import json
 import threading
 import pandas as pd
-
-import pickle
-import os
 from reactivex.subject import BehaviorSubject
 from satorilib.utils.hash import hashIt, generatePathId
 from satorilib.utils.time import datetimeToTimestamp, now
@@ -15,12 +13,11 @@ from satorilib.utils.system import getProcessorCount
 from satorilib.disk import getHashBefore
 from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.disk.filetypes.csv import CSVManager
-from satorilib.logging import debug, info, error, setup, DEBUG, INFO
+from satorilib.logging import debug, info, error, setup, INFO
 from satoriengine.veda.Data import StreamForecast
 from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline
 
 setup(level=INFO)
-
 class Engine:
     def __init__(self, streams: list[Stream], pubstreams: list[Stream]):
         self.streams = streams
