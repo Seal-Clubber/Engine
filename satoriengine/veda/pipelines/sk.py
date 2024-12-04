@@ -90,7 +90,7 @@ class SKPipeline(PipelineInterface):
             info(
                 'model improved!'
                 f'\n  stable score: {other_score}'
-                f'\n  pilot  score: {this_score}'
+                f'\n  pilot  score: {this_score}',
                 color='green')
         else:
             debug(

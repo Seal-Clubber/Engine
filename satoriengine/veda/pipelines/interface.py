@@ -62,6 +62,7 @@ class PipelineInterface:
             other: The model to compare against, typically the "stable" model
         Returns:
             bool: True if pilot should replace other, False otherwise
+            this should return a comparison object which has a bool expression
         """
         if not isinstance(other, self.__class__):
             return True

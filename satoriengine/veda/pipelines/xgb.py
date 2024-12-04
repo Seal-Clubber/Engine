@@ -55,9 +55,9 @@ class XgbPipeline(PipelineInterface):
             return False
 
 
-    def fit(self, **kwargs) -> TrainingResult:
-        """Train a new model"""
-        proc_data = process_data(kwargs["data"], quick_start=False)
+    def fit(self, data: pd.DataFrame) -> TrainingResult:
+        """ Train a new model """
+        proc_data = process_data(data, quick_start=False)
         pre_train_x, pre_test_x, self.train_y, self.test_y = train_test_split(
             proc_data.dataset.index.values,
             proc_data.dataset['value'],

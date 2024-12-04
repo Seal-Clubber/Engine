@@ -2,12 +2,12 @@ from typing import Union
 import os
 import time
 import numpy as np
+import pandas as pd
 import torch
 from chronos import ChronosPipeline
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 
 class ChronosVedaPipeline(PipelineInterface):
-
     def __init__(self, useGPU):
         hfhome = os.environ.get('HF_HOME', default='/Satori/Neuron/models/huggingface')
         os.makedirs(hfhome, exist_ok=True)
@@ -25,12 +25,10 @@ class ChronosVedaPipeline(PipelineInterface):
             # force_download=True,
         )
         self.ctx_len = 512  # historical context
-
     def fit(self, trainX, trainY, eval_set, verbose):
         ''' online learning '''
         return TrainingResult(1, self, False)
-
-    def predict(self, current):
+    def predict(self, current: pd.DataFrame) -> np.ndarray:
         data = current.values
         data = np.squeeze(data, axis=0)
         data = data[-self.ctx_len:]
@@ -51,14 +49,12 @@ class ChronosVedaPipeline(PipelineInterface):
         print(
             f"Chronos prediction time seconds: {total_time}    Historical context size: {data.shape}    Predictions: {predictions}")
         return np.asarray(predictions, dtype=np.float32)
-
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """
         Compare other (model) and this models based on their backtest error.
         Returns True if this model performs better than other model.
         """
         return kwargs.get('override', True)
-
     def score(self, **kwargs) -> float:
         """will score the model"""
         return np.inf

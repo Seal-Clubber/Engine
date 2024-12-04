@@ -76,6 +76,19 @@ class XgbChronosVedaPipeline(PipelineInterface):
         self.train_x = self._prepare_time_features(pre_train_x)
         self.test_x = self._prepare_time_features(pre_test_x)
         self.hyperparameters = self._prep_params()
+        # append the chronos predictions to the training data
+        #   hour  day  month  year  day_of_week
+        # 0       19    1     10  2024            1
+        # 1       19    1     10  2024            1
+        # 2       19    1     10  2024            1
+        # 3       19    1     10  2024            1
+        # 4       20    1     10  2024            1
+        # ...    ...  ...    ...   ...          ...
+        # 7300    12   21     11  2024            3
+        # 7301    12   21     11  2024            3
+        # 7302    12   21     11  2024            3
+        # 7303    12   21     11  2024            3
+        # 7304    12   21     11  2024            3
         self.model = XGBRegressor(**self.hyperparameters)
         self.model.fit(
             self.train_x,
