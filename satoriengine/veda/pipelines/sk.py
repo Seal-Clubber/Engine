@@ -91,6 +91,7 @@ class SKPipeline(PipelineInterface):
                 'model improved!'
                 f'\n  stable score: {other_score}'
                 f'\n  pilot  score: {this_score}',
+                f'\n  New Model: {self.forecasterName()}',
                 color='green')
         else:
             debug(
