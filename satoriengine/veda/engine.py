@@ -21,9 +21,6 @@ from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPi
 
 setup(level=INFO)
 
-setup(level=INFO)
-
-
 class Engine:
     def __init__(self, streams: list[Stream], pubstreams: list[Stream]):
         self.streams = streams
@@ -254,7 +251,7 @@ class StreamModel:
                     debug("Starter Pipeline", print=True)
                 else:
                     error("Model Training Failed, Breaking out of the Loop")
-                break 
+                break
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)

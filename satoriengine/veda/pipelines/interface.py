@@ -18,7 +18,7 @@ class PipelineInterface:
     def __init__(self, *args, **kwargs):
         self.model = None
 
-    def load(self, modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
+    def load(self, modelPath: str, *args, **kwargs) -> Union[None, "PipelineInterface"]:
         """
         loads the model model from disk if present
 
@@ -30,7 +30,7 @@ class PipelineInterface:
         """
         pass
 
-    def save(self, modelpath: str, **kwargs) -> bool:
+    def save(self, modelpath: str, *args, **kwargs) -> bool:
         """
         Save the model to disk.
 
@@ -43,7 +43,7 @@ class PipelineInterface:
         """
         pass
 
-    def fit(self, **kwargs) -> TrainingResult:
+    def fit(self, *args, **kwargs) -> TrainingResult:
         """
         Train a new model.
 
@@ -55,7 +55,7 @@ class PipelineInterface:
         """
         pass
 
-    def compare(self, other: Optional[Any] = None, **kwargs) -> bool:
+    def compare(self, other: Optional[Any] = None, *args, **kwargs) -> bool:
         """
         Compare other (model) and pilot models based on their backtest error.
         Args:
@@ -81,13 +81,13 @@ class PipelineInterface:
                 color='yellow')
         return is_improved
 
-    def score(self, **kwargs) -> float:
+    def score(self, *args, **kwargs) -> float:
         """
         will score the model.
         """
         pass
 
-    def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
+    def predict(self, *args, **kwargs) -> Union[None, pd.DataFrame]:
         """
         Make predictions using the stable model
 
