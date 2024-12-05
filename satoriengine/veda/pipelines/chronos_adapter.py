@@ -10,7 +10,7 @@ from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingRes
 
 
 class ChronosVedaPipeline(PipelineInterface):
-    def __init__(self, useGPU: bool = False, **kwargs):
+    def __init__(self, useGPU: bool = False, *args, **kwargs):
         #ChronosVedaPipeline.set_seed(37) # does not make it deterministic
         hfhome = os.environ.get(
             'HF_HOME', default='/Satori/Neuron/models/huggingface')

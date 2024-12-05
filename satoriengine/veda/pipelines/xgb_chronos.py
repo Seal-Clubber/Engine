@@ -19,7 +19,8 @@ from satoriengine.veda.pipelines.chronos_adapter import ChronosVedaPipeline
 
 class XgbChronosPipeline(PipelineInterface):
 
-    def __init__(self):
+    def __init__(self, uid: str = None, *args, **kwargs):
+        self.uid = uid
         self.model: XGBRegressor = None
         self.chronos: Union[ChronosVedaPipeline, None] = ChronosVedaPipeline()
         self.dataset: pd.DataFrame = None
@@ -32,8 +33,9 @@ class XgbChronosPipeline(PipelineInterface):
         self.y_full: pd.Series = None
         self.split: float = None
         self.model_error: float = None
+        self.rng = np.random.default_rng(37)
 
-    def load(self, modelPath: str) -> Union[None, XGBRegressor]:
+    def load(self, modelPath: str, *args, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
             print('modelPath', modelPath)
@@ -52,7 +54,7 @@ class XgbChronosPipeline(PipelineInterface):
                 os.remove(modelPath)
             return None
 
-    def save(self, modelpath: str) -> bool:
+    def save(self, modelpath: str, *args, **kwargs) -> bool:
         """saves the stable model to disk"""
         try:
             os.makedirs(os.path.dirname(modelpath), exist_ok=True)
@@ -67,7 +69,7 @@ class XgbChronosPipeline(PipelineInterface):
             print(f"Error saving model: {e}")
             return False
 
-    def compare(self, other: Union[PipelineInterface, None] = None) -> bool:
+    def compare(self, other: Union[PipelineInterface, None] = None, *args, **kwargs) -> bool:
         """
         Compare other (model) and this models based on their backtest error.
         Returns True if this model performs better than other model.
@@ -91,17 +93,15 @@ class XgbChronosPipeline(PipelineInterface):
                 color='yellow')
         return is_improved
 
-    def score(self) -> float:
+    def score(self, *args, **kwargs) -> float:
         """will score the model"""
         if self.model is None:
             return np.inf
         self.model_error = mean_absolute_error(self.test_y, self.model.predict(self.test_x))
         return self.model_error
 
-    def fit(self, data: pd.DataFrame) -> TrainingResult:
+    def fit(self, data: pd.DataFrame, *args, **kwargs) -> TrainingResult:
         """ Train a new model """
-        import time
-        t = time.time()
         _, _ = self._manage_data(data)
         pre_train_x, pre_test_x, self.train_y, self.test_y = train_test_split(
             self.dataset.index.values,
@@ -111,7 +111,9 @@ class XgbChronosPipeline(PipelineInterface):
             random_state=37)
         self.train_x = self._prepare_time_features(pre_train_x)
         self.test_x = self._prepare_time_features(pre_test_x)
-        self.hyperparameters = self._mutate_params()
+        self.hyperparameters = self._mutate_params(
+            prev_params=self.hyperparameters,
+            rng=self.rng)
         if self.model is None:
             self.model = XGBRegressor(**self.hyperparameters)
         else:
@@ -123,7 +125,7 @@ class XgbChronosPipeline(PipelineInterface):
             verbose=False)
         return TrainingResult(1, self, False)
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, data: pd.DataFrame, *args, **kwargs) -> pd.DataFrame:
         """Make predictions using the stable model"""
         _, sampling_frequency = self._manage_data(data, chronos_on_last=True)
         self.X_full = self._prepare_time_features(self.dataset.index.values)
@@ -201,13 +203,19 @@ class XgbChronosPipeline(PipelineInterface):
             # Identify rows where the 'chronos' column is NaN - skip first row
             unpredicted = df.iloc[1:][df['chronos'].isna()]
             # Process rows with missing 'chronos' one at a time
+            i = 0
             for idx, row in unpredicted.iterrows():
                 # Slice the dataset up to (but not including) the current timestamp
                 historical_data = df.loc[:idx].iloc[:-1]
                 # Ensure historical_data is non-empty before calling predict
                 if not historical_data.empty:
                     # Predict and fill the 'chronos' value for the current row
-                    df.at[idx, 'chronos'] = self.chronos.predict(data=historical_data)
+                    df.at[idx, 'chronos'] = self.chronos.predict(data=historical_data[['value']])
+                    print('uid', self.uid, 'chronos predicting', idx)
+                # adding this data can be slow, so we'll just do a few at a time
+                i += 1
+                if i > 4:
+                    break
             return df
 
         self.dataset, sampling_frequency = update_data(data)
@@ -239,13 +247,13 @@ class XgbChronosPipeline(PipelineInterface):
             'scale_pos_weight': (0.5, 10)}
 
     @staticmethod
-    def _prep_params() -> dict:
+    def _prep_params(rng: Union[np.random.Generator, None] = None) -> dict:
         """
         Generates randomized hyperparameters for XGBoost within reasonable ranges.
         Returns a dictionary of hyperparameters.
         """
         param_bounds: dict = XgbChronosPipeline.param_bounds()
-        rng = np.random.default_rng(37)
+        rng = rng or np.random.default_rng(37)
         params = {
             'random_state': rng.integers(0, 10000),
             'eval_metric': 'mae',
@@ -276,7 +284,10 @@ class XgbChronosPipeline(PipelineInterface):
         return params
 
     @staticmethod
-    def _mutate_params(prev_params: Union[dict, None] = None) -> dict:
+    def _mutate_params(
+        prev_params: Union[dict, None] = None,
+        rng: Union[np.random.Generator, None] = None,
+    ) -> dict:
         """
         Tweaks the previous hyperparameters for XGBoost by making random adjustments
         based on a squished normal distribution that respects both boundaries and the
@@ -286,9 +297,9 @@ class XgbChronosPipeline(PipelineInterface):
         Returns:
             dict: A dictionary of tweaked hyperparameters.
         """
-        prev_params = prev_params or XgbChronosPipeline._prep_params()
+        rng = rng or np.random.default_rng(37)
+        prev_params = prev_params or XgbChronosPipeline._prep_params(rng)
         param_bounds: dict = XgbChronosPipeline.param_bounds()
-        rng = np.random.default_rng(37)
         mutated_params = {}
         for param, (min_bound, max_bound) in param_bounds.items():
             current_value = prev_params[param]
@@ -311,7 +322,7 @@ class XgbChronosPipeline(PipelineInterface):
 
 
     @staticmethod
-    def _straight_line_interpolation(df, value_col, step='10T', scale=0.0):
+    def _straight_line_interpolation(df, value_col, step='10T', scale=0.0, rng: Union[np.random.Generator, None] = None):
         """
         This would probably be better to use than the stepwise pattern as it
         atleast points in the direction of the trend.
@@ -334,9 +345,9 @@ class XgbChronosPipeline(PipelineInterface):
         df = df.sort_index()
         df = df.resample(step).mean()  # Resample to fill in missing timestamps with NaN
         # Perform fractal interpolation
+        rng = rng or np.random.default_rng(seed=37)
         for _ in range(5):  # Number of fractal iterations
             filled = df[value_col].interpolate(method='linear')  # Linear interpolation
-            rng = np.random.default_rng(seed=37)
             perturbation = rng.normal(scale=scale, size=len(filled))  # Small random noise
             df[value_col] = filled + perturbation  # Add fractal-like noise
         return df

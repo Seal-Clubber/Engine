@@ -13,7 +13,7 @@ from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingRes
 
 class XgbPipeline(PipelineInterface):
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.model: XGBRegressor = None
         self.hyperparameters: Union[dict, None] = None
         self.train_x: pd.DataFrame = None
@@ -25,7 +25,7 @@ class XgbPipeline(PipelineInterface):
         self.split: float = None
         self.model_error: float = None
 
-    def load(self, modelPath: str) -> Union[None, XGBRegressor]:
+    def load(self, modelPath: str, *args, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
             saved_state = joblib.load(modelPath)
@@ -38,7 +38,7 @@ class XgbPipeline(PipelineInterface):
                 os.remove(modelPath)
             return None
 
-    def save(self, modelpath: str) -> bool:
+    def save(self, modelpath: str, *args, **kwargs) -> bool:
         """saves the stable model to disk"""
         try:
             os.makedirs(os.path.dirname(modelpath), exist_ok=True)
@@ -52,7 +52,7 @@ class XgbPipeline(PipelineInterface):
             print(f"Error saving model: {e}")
             return False
 
-    def compare(self, other: Union[PipelineInterface, None] = None) -> bool:
+    def compare(self, other: Union[PipelineInterface, None] = None, *args, **kwargs) -> bool:
         """
         Compare other (model) and this models based on their backtest error.
         Returns True if this model performs better than other model.
@@ -76,14 +76,14 @@ class XgbPipeline(PipelineInterface):
                 color='yellow')
         return is_improved
 
-    def score(self) -> float:
+    def score(self, *args, **kwargs) -> float:
         """will score the model"""
         if self.model is None:
             return np.inf
         self.model_error = mean_absolute_error(self.test_y, self.model.predict(self.test_x))
         return self.model_error
 
-    def fit(self, data: pd.DataFrame) -> TrainingResult:
+    def fit(self, data: pd.DataFrame, *args, **kwargs) -> TrainingResult:
         """ Train a new model """
         proc_data = process_data(data, quick_start=False)
         # todo: get ready to combine features from different sources (merge)
@@ -110,7 +110,7 @@ class XgbPipeline(PipelineInterface):
             verbose=False)
         return TrainingResult(1, self, False)
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def predict(self, data: pd.DataFrame, *args, **kwargs) -> pd.DataFrame:
         """Make predictions using the stable model"""
         proc_data = process_data(data, quick_start=False)
         self.X_full = self._prepare_time_features(proc_data.dataset.index.values)

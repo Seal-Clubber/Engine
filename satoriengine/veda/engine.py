@@ -2,6 +2,7 @@ import warnings
 warnings.filterwarnings('ignore')
 from typing import Dict
 import os
+import time
 import copy
 import json
 import threading
@@ -28,6 +29,14 @@ class Engine:
         self.setup_subscriptions()
         self.initialize_models()
 
+    def pause(self):
+        for streamModel in self.streamModels.values():
+            streamModel.pause()
+
+    def resume(self):
+        for streamModel in self.streamModels.values():
+            streamModel.resume()
+
     def setup_subscriptions(self):
         self.new_observation.subscribe(
             on_next=lambda x: self.handle_new_observation(x) if x is not None else None,
@@ -42,7 +51,7 @@ class Engine:
                 prediction_produced=self.prediction_produced)
             self.streamModels[stream.streamId].choose_pipeline(inplace=True)
             self.streamModels[stream.streamId].run_forever()
-            # break # only one stream for testing
+            break # only one stream for testing
 
     def handle_new_observation(self, observation: Observation):
         streamModel = self.streamModels.get(observation.streamId)
@@ -52,7 +61,9 @@ class Engine:
             streamModel.run_forever()
         if streamModel is not None and len(streamModel.data) > 1:
             debug(f'Making prediction based on new observation using {streamModel.pipeline.__name__}', color='teal')
+            self.pause()
             streamModel.produce_prediction()
+            self.resume()
         else:
             info(f"No model found for stream {observation.streamId}")
 
@@ -76,11 +87,17 @@ class StreamModel:
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
         self.pipeline: PipelineInterface = self.choose_pipeline()
-        self.pilot: PipelineInterface = self.pipeline()  # Create instance first
+        self.pilot: PipelineInterface = self.pipeline(uid=streamId)  # Create instance first
         self.pilot.load(self.model_path())  # Then load model on the instance
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
+        self.paused: bool = False
         print(self.pipeline.__name__)
 
+    def pause(self):
+        self.paused = True
+
+    def resume(self):
+        self.paused = False
 
     def handle_new_observation(self, observation: Observation):
         """extract the data and save it to self.data"""
@@ -104,6 +121,7 @@ class StreamModel:
         updated_model = updated_model or self.stable
         if updated_model is not None:
             forecast = updated_model.predict(data=self.data)
+            print('forecast', forecast)
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)
@@ -237,6 +255,9 @@ class StreamModel:
         # still have a "problem?" where the model makes predictions right away
         # wasn't sure SKPipeline was working so just using XgbPipeline for now
         while len(self.data) > 0:
+            if self.paused:
+                time.sleep(1)
+                continue
             trainingResult = self.pilot.fit(data=self.data)
             if trainingResult.status == 1 and not trainingResult.stagnated:
                 if self.pilot.compare(self.stable):
