@@ -15,7 +15,7 @@ from satorilib.concepts import Stream, StreamId, Observation
 from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.logging import debug, info, error, setup, INFO
 from satoriengine.veda.Data import StreamForecast
-from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline
+from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline, XgbChronosPipeline
 
 setup(level=INFO)
 class Engine:
@@ -211,22 +211,22 @@ class StreamModel:
                 self.pilot = StarterPipeline()
             return StarterPipeline
         if getProcessorCount() < 4:
-            if inplace and not isinstance(self.pilot, XgbPipeline):
-                self.pilot = XgbPipeline()
-            return XgbPipeline
+            if inplace and not isinstance(self.pilot, XgbChronosPipeline):
+                self.pilot = XgbChronosPipeline()
+            return XgbChronosPipeline
         if 3 <= len(self.data) < 40 or len(self.data) > 1000:
-            if inplace and not isinstance(self.pilot, XgbPipeline):
-                self.pilot = XgbPipeline()
-            return XgbPipeline
+            if inplace and not isinstance(self.pilot, XgbChronosPipeline):
+                self.pilot = XgbChronosPipeline()
+            return XgbChronosPipeline
         # at least 4 processors and
         # at least 40 observations
         # still debugging
-        if inplace and not isinstance(self.pilot, SKPipeline):
-            self.pilot = SKPipeline()
-        return SKPipeline
-        # if inplace and not isinstance(self.pilot, XgbPipeline):
-        #     self.pilot = XgbPipeline()
-        # return XgbPipeline
+        #if inplace and not isinstance(self.pilot, SKPipeline):
+        #    self.pilot = SKPipeline()
+        #return SKPipeline
+        if inplace and not isinstance(self.pilot, XgbChronosPipeline):
+            self.pilot = XgbChronosPipeline()
+        return XgbChronosPipeline
 
 
     def run(self):
