@@ -42,6 +42,7 @@ class Engine:
                 prediction_produced=self.prediction_produced)
             self.streamModels[stream.streamId].choose_pipeline(inplace=True)
             self.streamModels[stream.streamId].run_forever()
+            # break # only one stream for testing
 
     def handle_new_observation(self, observation: Observation):
         streamModel = self.streamModels.get(observation.streamId)
@@ -100,12 +101,9 @@ class StreamModel:
             - model replaced with a better one
             - new observation on the stream
         """
-        debug('1 predict', print=True)
         updated_model = updated_model or self.stable
         if updated_model is not None:
-            debug('2 predict', print=True)
             forecast = updated_model.predict(data=self.data)
-            debug('3 predict', print=True)
             if isinstance(forecast, pd.DataFrame):
                 observationTime = datetimeToTimestamp(now())
                 prediction = StreamForecast.firstPredictionOf(forecast)

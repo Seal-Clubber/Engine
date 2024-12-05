@@ -3,6 +3,7 @@ import os
 import time
 import numpy as np
 import pandas as pd
+import random
 import torch
 from chronos import ChronosPipeline
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
@@ -10,6 +11,7 @@ from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingRes
 
 class ChronosVedaPipeline(PipelineInterface):
     def __init__(self, useGPU: bool = False, **kwargs):
+        #ChronosVedaPipeline.set_seed(37) # does not make it deterministic
         hfhome = os.environ.get(
             'HF_HOME', default='/Satori/Neuron/models/huggingface')
         os.makedirs(hfhome, exist_ok=True)
@@ -27,6 +29,15 @@ class ChronosVedaPipeline(PipelineInterface):
             # force_download=True,
         )
         self.ctx_len = 512  # historical context
+        #self.model.model.eval() # does not make it deterministic
+
+    @staticmethod
+    def set_seed(seed: int):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     def fit(self, trainX, trainY, eval_set, verbose):
         ''' online learning '''
@@ -66,54 +77,3 @@ class ChronosVedaPipeline(PipelineInterface):
     def score(self, **kwargs) -> float:
         """will score the model"""
         return np.inf
-
-
-def generate_training_data(ctx_len: int, num_features: int = 1, num_samples: int = 1000):
-    """
-    Generates synthetic training data for testing.
-    Parameters:
-    - ctx_len: The historical context length required for each sample (rows).
-    - num_features: The number of features (columns) in the training data.
-    - num_samples: The number of samples in the training set.
-    Returns:
-    - trainX: A list of pandas DataFrames, where each DataFrame represents one sample.
-    - trainY: A numpy array of shape (num_samples, 1).
-    - eval_set: A tuple containing evaluation X and Y datasets.
-    """
-    import pandas as pd
-    import numpy as np
-    # Generate synthetic training data
-    trainX = []
-    trainY = []
-    for _ in range(num_samples):
-        # Generate a sine wave with some noise
-        data = np.sin(np.linspace(0, 20 * np.pi, ctx_len)) + \
-            np.random.normal(0, 0.1, ctx_len)
-        # Multiple features: stack the same time series with small variations
-        features = np.stack([data + np.random.normal(0, 0.01, ctx_len)
-                            for _ in range(num_features)], axis=1)
-        # Target is the mean of the last 10 points
-        target = np.mean(data[-10:]) + np.random.normal(0, 0.1)
-        # Convert features to DataFrame
-        df = pd.DataFrame(features, columns=[
-                          f'feature_{i}' for i in range(num_features)])
-        trainX.append(df)
-        trainY.append(target)
-    trainY = np.array(trainY)
-    # Create evaluation set
-    eval_size = max(10, int(num_samples * 0.1))
-    evalX = trainX[:eval_size]
-    evalY = trainY[:eval_size]
-    eval_set = (evalX, evalY)
-    return trainX, trainY, eval_set
-
-
-# Generate training data
-ctx_len = 512
-num_features = 3  # Example for multiple features
-trainX, trainY, eval_set = generate_training_data(
-    ctx_len=ctx_len, num_features=num_features, num_samples=1000)
-
-# Pass the first sample as a DataFrame to predict
-c = ChronosVedaPipeline()
-c.predict(trainX[0])

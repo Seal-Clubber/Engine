@@ -36,10 +36,15 @@ class XgbChronosPipeline(PipelineInterface):
     def load(self, modelPath: str) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
+            print('modelPath', modelPath)
             saved_state = joblib.load(modelPath)
+            print('saved_state', saved_state)
             self.model = saved_state['stable_model']
+            print('self.model', self.model)
             self.model_error = saved_state['model_error']
+            print('self.model_error', self.model_error)
             self.dataset = saved_state['dataset']
+            print('loaded', self.dataset)
             return self.model
         except Exception as e:
             debug(f"Error Loading Model File : {e}", print=True)
@@ -97,9 +102,7 @@ class XgbChronosPipeline(PipelineInterface):
         """ Train a new model """
         import time
         t = time.time()
-        print('data after', t, self.dataset)
         _, _ = self._manage_data(data)
-        print('data after', t, self.dataset)
         pre_train_x, pre_test_x, self.train_y, self.test_y = train_test_split(
             self.dataset.index.values,
             self.dataset['value'],
@@ -160,38 +163,57 @@ class XgbChronosPipeline(PipelineInterface):
         whole dataset everytime so we save the processed data and
         incrementally add to it over time.
         '''
-        proc_data = process_data(data, quick_start=False)
-        proc_data.dataset.drop(['id'], axis=1, inplace=True)
-        # incrementally add missing processed data rows to the self.dataset
-        if self.dataset is None:
-            self.dataset = proc_data.dataset
-            self.dataset['chronos'] = np.nan
-        else:
-            # Identify rows in proc_data.dataset not present in self.dataset
-            missing_rows = proc_data.dataset[~proc_data.dataset.index.isin(self.dataset.index)]
-            # Append only the missing rows to self.dataset
-            self.dataset = pd.concat([self.dataset, missing_rows])
-        # now look at the self.dataset and where the chronos column is empty run the chronos prediction for it, filling the nan column at that row:
-        # Ensure the dataset is sorted by timestamp (index)
-        self.dataset.sort_index(inplace=True)
-        if chronos_on_last:
-            # just do the last row if choronos column is empty
-            if self.dataset['chronos'].iloc[-1] is np.nan:
-                historical_data = self.dataset.iloc[:-1]
-                if not historical_data.empty:
-                    self.dataset.at[self.dataset.index[-1], 'chronos'] = self.chronos.predict(data=historical_data)
-        else:
-            # Identify rows where the 'chronos' column is NaN
-            missing_chronos_rows = self.dataset['chronos'].isna()
+
+        def update_data(data: pd.DataFrame) -> pd.DataFrame:
+            proc_data = process_data(data, quick_start=False)
+            proc_data.dataset.drop(['id'], axis=1, inplace=True)
+            # incrementally add missing processed data rows to the self.dataset
+            if self.dataset is None:
+                self.dataset = proc_data.dataset
+                self.dataset['chronos'] = np.nan
+            else:
+                # Identify rows in proc_data.dataset not present in self.dataset
+                missing_rows = proc_data.dataset[~proc_data.dataset.index.isin(self.dataset.index)]
+                # Append only the missing rows to self.dataset
+                self.dataset = pd.concat([self.dataset, missing_rows])
+            return self.dataset, proc_data.sampling_frequency
+
+        def add_percentage_change(df: pd.DataFrame) -> pd.DataFrame:
+
+            def calculate_percentage_change(df, past):
+                return ((df['value'] - df['value'].shift(past)) / df['value'].shift(past)) * 100
+
+            for past in [1, 2, 3, 5, 8, 13, 21, 34, 55]:
+                df[f'percent{past}'] = calculate_percentage_change(df, past)
+            return df
+
+        def add_chronos(df: pd.DataFrame) -> pd.DataFrame:
+            # now look at the self.dataset and where the chronos column is empty run the chronos prediction for it, filling the nan column at that row:
+            # Ensure the dataset is sorted by timestamp (index)
+            df.sort_index(inplace=True)
+            if chronos_on_last:
+                # just do the last row if choronos column is empty
+                if df['chronos'].iloc[-1] is np.nan:
+                    historical_data = df.iloc[:-1]
+                    if not historical_data.empty:
+                        df.at[df.index[-1], 'chronos'] = self.chronos.predict(data=historical_data)
+                return df
+            # Identify rows where the 'chronos' column is NaN - skip first row
+            unpredicted = df.iloc[1:][df['chronos'].isna()]
             # Process rows with missing 'chronos' one at a time
-            for idx, row in self.dataset[missing_chronos_rows].iterrows():
+            for idx, row in unpredicted.iterrows():
                 # Slice the dataset up to (but not including) the current timestamp
-                historical_data = self.dataset.loc[:idx].iloc[:-1]
+                historical_data = df.loc[:idx].iloc[:-1]
                 # Ensure historical_data is non-empty before calling predict
                 if not historical_data.empty:
                     # Predict and fill the 'chronos' value for the current row
-                    self.dataset.at[idx, 'chronos'] = self.chronos.predict(data=historical_data)
-        return self.dataset, proc_data.sampling_frequency
+                    df.at[idx, 'chronos'] = self.chronos.predict(data=historical_data)
+            return df
+
+        self.dataset, sampling_frequency = update_data(data)
+        self.dataset = add_percentage_change(self.dataset)
+        self.dataset = add_chronos(self.dataset)
+        return self.dataset, sampling_frequency
 
     @staticmethod
     def _prepare_time_features(dates: np.ndarray) -> pd.DataFrame:
