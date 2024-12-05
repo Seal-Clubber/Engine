@@ -33,15 +33,13 @@ class XgbChronosPipeline(PipelineInterface):
         self.split: float = None
         self.model_error: float = None
 
-    # TODO: save and load the predictions of the chronos model since it's part
-    # of the model itself.
-
     def load(self, modelPath: str) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
             saved_state = joblib.load(modelPath)
             self.model = saved_state['stable_model']
             self.model_error = saved_state['model_error']
+            self.dataset = saved_state['dataset']
             return self.model
         except Exception as e:
             debug(f"Error Loading Model File : {e}", print=True)
@@ -55,8 +53,9 @@ class XgbChronosPipeline(PipelineInterface):
             os.makedirs(os.path.dirname(modelpath), exist_ok=True)
             self.model_error = self.score()
             state = {
-                'stable_model' : self.model,
-                'model_error' : self.model_error}
+                'stable_model': self.model,
+                'model_error': self.model_error,
+                'dataset': self.dataset}
             joblib.dump(state, modelpath)
             return True
         except Exception as e:
@@ -123,7 +122,7 @@ class XgbChronosPipeline(PipelineInterface):
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """Make predictions using the stable model"""
-        _, sampling_frequency = self._manage_data(data)
+        _, sampling_frequency = self._manage_data(data, chronos_on_last=True)
         self.X_full = self._prepare_time_features(self.dataset.index.values)
         self.y_full = self.dataset['value']
         self.model.fit(
@@ -154,7 +153,7 @@ class XgbChronosPipeline(PipelineInterface):
         results = pd.DataFrame({'date_time': future_dates, 'pred': predictions})
         return results
 
-    def _manage_data(self, data: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    def _manage_data(self, data: pd.DataFrame, chronos_on_last:bool=False) -> tuple[pd.DataFrame, str]:
         '''
         here we need to merge the chronos predictions with the data, but it
         must be done incrementally because it takes too long to do it on the
@@ -175,16 +174,23 @@ class XgbChronosPipeline(PipelineInterface):
         # now look at the self.dataset and where the chronos column is empty run the chronos prediction for it, filling the nan column at that row:
         # Ensure the dataset is sorted by timestamp (index)
         self.dataset.sort_index(inplace=True)
-        # Identify rows where the 'chronos' column is NaN
-        missing_chronos_rows = self.dataset['chronos'].isna()
-        # Process rows with missing 'chronos' one at a time
-        for idx, row in self.dataset[missing_chronos_rows].iterrows():
-            # Slice the dataset up to (but not including) the current timestamp
-            historical_data = self.dataset.loc[:idx].iloc[:-1]
-            # Ensure historical_data is non-empty before calling predict
-            if not historical_data.empty:
-                # Predict and fill the 'chronos' value for the current row
-                self.dataset.at[idx, 'chronos'] = self.chronos.predict(data=historical_data)
+        if chronos_on_last:
+            # just do the last row if choronos column is empty
+            if self.dataset['chronos'].iloc[-1] is np.nan:
+                historical_data = self.dataset.iloc[:-1]
+                if not historical_data.empty:
+                    self.dataset.at[self.dataset.index[-1], 'chronos'] = self.chronos.predict(data=historical_data)
+        else:
+            # Identify rows where the 'chronos' column is NaN
+            missing_chronos_rows = self.dataset['chronos'].isna()
+            # Process rows with missing 'chronos' one at a time
+            for idx, row in self.dataset[missing_chronos_rows].iterrows():
+                # Slice the dataset up to (but not including) the current timestamp
+                historical_data = self.dataset.loc[:idx].iloc[:-1]
+                # Ensure historical_data is non-empty before calling predict
+                if not historical_data.empty:
+                    # Predict and fill the 'chronos' value for the current row
+                    self.dataset.at[idx, 'chronos'] = self.chronos.predict(data=historical_data)
         return self.dataset, proc_data.sampling_frequency
 
     @staticmethod
