@@ -50,7 +50,7 @@ class ChronosVedaPipeline(PipelineInterface):
             data = np.squeeze(data, axis=0)
         data = data[-self.ctx_len:]  # Use the last `ctx_len` rows
         context = torch.tensor(data)
-        t1_start = time.perf_counter_ns()
+        #t1_start = time.perf_counter_ns()
         forecast = self.model.predict(
             context,
             1,  # prediction_length
@@ -62,9 +62,11 @@ class ChronosVedaPipeline(PipelineInterface):
         # low, median, high = np.quantile(forecast[0].numpy(), [0.1, 0.5, 0.9], axis=0)
         median = forecast.median(dim=1).values
         predictions = median[0]
-        total_time = (time.perf_counter_ns() - t1_start) / 1e9  # seconds
-        print(
-            f"Chronos prediction time seconds: {total_time}    Historical context size: {data.shape}    Predictions: {predictions}")
+        #total_time = (time.perf_counter_ns() - t1_start) / 1e9  # seconds
+        #print(
+        #    f"Chronos prediction time seconds: {total_time}    "
+        #    f"Historical context size: {data.shape}    "
+        #    f"Predictions: {predictions}")
         return np.asarray(predictions, dtype=np.float32)
 
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:

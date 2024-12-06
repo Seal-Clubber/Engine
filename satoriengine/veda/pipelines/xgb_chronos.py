@@ -11,7 +11,7 @@ import pandas as pd
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
-from satorilib.logging import info, debug
+from satorilib.logging import info, debug, warning
 from satoriengine.veda.process import process_data
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 from satoriengine.veda.pipelines.chronos_adapter import ChronosVedaPipeline
@@ -38,15 +38,10 @@ class XgbChronosPipeline(PipelineInterface):
     def load(self, modelPath: str, *args, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
-            print('modelPath', modelPath)
             saved_state = joblib.load(modelPath)
-            print('saved_state', saved_state)
             self.model = saved_state['stable_model']
-            print('self.model', self.model)
             self.model_error = saved_state['model_error']
-            print('self.model_error', self.model_error)
             self.dataset = saved_state['dataset']
-            print('loaded', self.dataset)
             return self.model
         except Exception as e:
             debug(f"Error Loading Model File : {e}", print=True)
@@ -66,7 +61,7 @@ class XgbChronosPipeline(PipelineInterface):
             joblib.dump(state, modelpath)
             return True
         except Exception as e:
-            print(f"Error saving model: {e}")
+            warning(f"Error saving model: {e}")
             return False
 
     def compare(self, other: Union[PipelineInterface, None] = None, *args, **kwargs) -> bool:
@@ -211,7 +206,6 @@ class XgbChronosPipeline(PipelineInterface):
                 if not historical_data.empty:
                     # Predict and fill the 'chronos' value for the current row
                     df.at[idx, 'chronos'] = self.chronos.predict(data=historical_data[['value']])
-                    print('uid', self.uid, 'chronos predicting', idx)
                 # adding this data can be slow, so we'll just do a few at a time
                 i += 1
                 if i > 4:

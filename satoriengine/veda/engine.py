@@ -51,7 +51,6 @@ class Engine:
                 prediction_produced=self.prediction_produced)
             self.streamModels[stream.streamId].choose_pipeline(inplace=True)
             self.streamModels[stream.streamId].run_forever()
-            break # only one stream for testing
 
     def handle_new_observation(self, observation: Observation):
         streamModel = self.streamModels.get(observation.streamId)
@@ -87,8 +86,8 @@ class StreamModel:
         self.prediction_produced = prediction_produced
         self.data: pd.DataFrame = self.load_data()
         self.pipeline: PipelineInterface = self.choose_pipeline()
-        self.pilot: PipelineInterface = self.pipeline(uid=streamId)  # Create instance first
-        self.pilot.load(self.model_path())  # Then load model on the instance
+        self.pilot: PipelineInterface = self.pipeline(uid=streamId)
+        self.pilot.load(self.model_path())
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
         self.paused: bool = False
         print(self.pipeline.__name__)
@@ -138,6 +137,7 @@ class StreamModel:
                     observationTime=observationTime,
                     observationHash=observationHash,
                     predictionHistory=CSVManager().read(self.prediction_data_path()))
+                print('streamforecast', streamforecast)
                 self.prediction_produced.on_next(streamforecast)
             else:
                 error("Forecast failed, retrying with Quick Model")
@@ -223,26 +223,19 @@ class StreamModel:
         #        self.pilot = StarterPipeline()
         #    return StarterPipeline
         if self.data is None or len(self.data) < 3:
-            if inplace and not isinstance(self.pilot, StarterPipeline):
-                self.pilot = StarterPipeline()
-            return StarterPipeline
+            pipeline = StarterPipeline
         if getProcessorCount() < 4:
-            if inplace and not isinstance(self.pilot, XgbChronosPipeline):
-                self.pilot = XgbChronosPipeline()
-            return XgbChronosPipeline
-        if 3 <= len(self.data) < 40 or len(self.data) > 1000:
-            if inplace and not isinstance(self.pilot, XgbChronosPipeline):
-                self.pilot = XgbChronosPipeline()
-            return XgbChronosPipeline
-        # at least 4 processors and
-        # at least 40 observations
-        # still debugging
-        #if inplace and not isinstance(self.pilot, SKPipeline):
-        #    self.pilot = SKPipeline()
-        #return SKPipeline
-        if inplace and not isinstance(self.pilot, XgbChronosPipeline):
-            self.pilot = XgbChronosPipeline()
-        return XgbChronosPipeline
+            pipeline = XgbPipeline
+        elif 3 <= len(self.data) < 1_000:
+            pipeline = XgbChronosPipeline
+        elif len(self.data) < 10_000:
+            pipeline = SKPipeline
+        else:
+            pipeline = XgbChronosPipeline
+        if inplace and not isinstance(self.pilot, pipeline):
+            self.pipeline = pipeline
+            self.pilot = pipeline()
+        return pipeline
 
 
     def run(self):
