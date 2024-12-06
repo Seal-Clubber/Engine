@@ -54,7 +54,7 @@ class Engine:
                 predictionProduced=self.predictionProduced)
             self.streamModels[stream.streamId].choosePipeline(inplace=True)
             self.streamModels[stream.streamId].run_forever()
-            break  # only one stream for testing
+            #break  # only one stream for testing
 
     def handleNewObservation(self, observation: Observation):
         streamModel = self.streamModels.get(observation.streamId)
