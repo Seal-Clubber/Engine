@@ -85,10 +85,13 @@ class StreamModel:
         predictionStreamId: StreamId,
         predictionProduced: BehaviorSubject,
     ):
-        self.thread = None
-        self.streamId = streamId
-        self.predictionStreamId = predictionStreamId
-        self.predictionProduced = predictionProduced
+        self.preferredPipelines: list[PipelineInterface] = [StarterPipeline, XgbPipeline, XgbChronosPipeline, SKPipeline]
+        self.defaultPipelines: list[PipelineInterface] = [XgbPipeline, XgbPipeline, StarterPipeline]
+        self.failedPipelines = []
+        self.thread: threading.Thread = None
+        self.streamId: StreamId = streamId
+        self.predictionStreamId: StreamId = predictionStreamId
+        self.predictionProduced: StreamId = predictionProduced
         self.data: pd.DataFrame = self.loadData()
         self.pipeline: PipelineInterface = self.choosePipeline()
         self.pilot: PipelineInterface = self.pipeline(uid=streamId)
@@ -227,16 +230,20 @@ class StreamModel:
         """
         if False: # for testing specific pipelines
             pipeline = XgbChronosPipeline
-        elif self.data is None or len(self.data) < 3:
-            pipeline = StarterPipeline
-        elif getProcessorCount() < 4:
-            pipeline = XgbPipeline
-        elif 3 <= len(self.data) < 1_000:
-            pipeline = XgbChronosPipeline
-        elif len(self.data) < 10_000:
-            pipeline = SKPipeline
         else:
-            pipeline = XgbChronosPipeline
+            pipeline = None
+            for p in self.preferredPipelines:
+                if p in self.failedPipelines:
+                    continue
+                if p.condition(dataCount=len(self.data)) == 1:
+                    pipeline = p
+                    break
+            if pipeline is None:
+                for pipeline in self.defaultPipelines:
+                    if pipeline not in self.failedPipelines:
+                        break
+                if pipeline is None:
+                    pipeline = self.defaultPipelines[-1]
         if (
             inplace and (
                 not hasattr(self, 'pilot') or
@@ -244,7 +251,8 @@ class StreamModel:
         ):
             info(
                 f'Switching from {self.pipeline.__name__} '
-                f'to {pipeline.__name__} on {self.streamId}', color='blue')
+                f'to {pipeline.__name__} on {self.streamId}',
+                color='blue')
             self.pipeline = pipeline
             self.pilot = pipeline(uid=self.streamId)
         return pipeline
@@ -266,11 +274,14 @@ class StreamModel:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.modelPath()):
                         self.stable = copy.deepcopy(self.pilot)
-                        info("Stable Model Updated for stream:",
-                             self.streamId, print=True)
+                        info(
+                            "Stable Model Updated for stream:",
+                            self.streamId.cleanId,
+                            print=True)
                         self.producePrediction(self.stable)
             else:
-                debug(f'Model Training Failed on {self.streamId} waiting 10 minutes to retry', color='yellow')
+                debug(f'Model Training Failed on {self.streamId} waiting 10 minutes to retry')
+                self.failedPipelines.append(self.pilot)
                 time.sleep(60*10)
 
     def run_forever(self):

@@ -6,11 +6,16 @@ from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingRes
 
 class StarterPipeline(PipelineInterface):
 
+    @staticmethod
+    def condition(*args, **kwargs) -> float:
+        if kwargs.get('dataCount', 0) < 5:
+            return 1.0
+        return 0.0
+
     def __init__(self, **kwargs):
         self.model = None
 
-    @staticmethod
-    def load(modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
+    def load(self, modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
         """loads the model model from disk if present"""
 
     def save(self, modelpath: str, **kwargs) -> bool:

@@ -19,6 +19,12 @@ from satoriengine.veda.pipelines.chronos_adapter import ChronosVedaPipeline
 
 class XgbChronosPipeline(PipelineInterface):
 
+    @staticmethod
+    def condition(*args, **kwargs) -> float:
+        if 5 <= kwargs.get('dataCount', 0) < 1_000:
+            return 1.0
+        return 0.0
+
     def __init__(self, uid: str = None, **kwargs):
         self.uid = uid
         self.model: XGBRegressor = None
@@ -34,6 +40,8 @@ class XgbChronosPipeline(PipelineInterface):
         self.split: float = None
         self.modelError: float = None
         self.rng = np.random.default_rng(37)
+
+
 
     def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""

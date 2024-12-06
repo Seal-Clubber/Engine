@@ -17,6 +17,22 @@ class PipelineInterface:
     def __init__(self, *args, **kwargs):
         self.model = None
 
+    @staticmethod
+    def condition(*args, **kwargs) -> float:
+        """
+        defines the condition for the pipeline to be executed
+
+        Args:
+            accepts information about the environment (hardware specs, etc.)
+            and data (length, entropy, etc.)
+
+        Returns:
+            returns a float between or including 0 and 1,
+            0 meaning you should not use this model under those conditions and
+            1 meaning these conditions are ideal for this model
+        """
+        pass
+
     def load(self, modelPath: str, *args, **kwargs) -> Union[None, "PipelineInterface"]:
         """
         loads the model model from disk if present
@@ -25,7 +41,7 @@ class PipelineInterface:
             modelpath: Path where the model should be loaded from
 
         Returns:
-        PipelineInterface: Model if load successful, None otherwise
+            PipelineInterface: Model if load successful, None otherwise
         """
         pass
 
