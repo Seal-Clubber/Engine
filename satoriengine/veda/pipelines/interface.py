@@ -7,11 +7,10 @@ from satorilib.logging import error, debug, info
 
 class TrainingResult:
 
-    def __init__(self, status, model: "PipelineInterface", stagnated: bool = False):
+    def __init__(self, status, model: "PipelineInterface"):
         self.status = status
         self.model = model
-        self.stagnated = stagnated
-
+        self.modelError = None
 
 class PipelineInterface:
 
@@ -55,7 +54,7 @@ class PipelineInterface:
         """
         pass
 
-    def compare(self, other: Optional[Any] = None, *args, **kwargs) -> bool:
+    def compare(self, *args, **kwargs) -> bool:
         """
         Compare other (model) and pilot models based on their backtest error.
         Args:
@@ -64,23 +63,7 @@ class PipelineInterface:
             bool: True if pilot should replace other, False otherwise
             this should return a comparison object which has a bool expression
         """
-        if not isinstance(other, self.__class__):
-            return True
-        this_score = self.score()
-        other_score = other.score()
-        is_improved = this_score < other_score
-        if is_improved:
-            info(
-                'model improved!'
-                f'\n  stable score: {other_score}'
-                f'\n  pilot  score: {this_score}',
-                color='green')
-        else:
-            debug(
-                f'\nstable score: {other_score}'
-                f'\npilot  score: {this_score}',
-                color='yellow')
-        return is_improved
+        pass
 
     def score(self, *args, **kwargs) -> float:
         """
