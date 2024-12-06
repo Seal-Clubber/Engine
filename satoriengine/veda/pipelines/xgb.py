@@ -79,8 +79,7 @@ class XgbPipeline(PipelineInterface):
         else:
             debug(
                 f'\nstable score: {otherScore}'
-                f'\npilot  score: {thisScore}',
-                color='yellow')
+                f'\npilot  score: {thisScore}')
         return isImproved
 
     def score(self, **kwargs) -> float:

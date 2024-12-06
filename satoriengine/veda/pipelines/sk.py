@@ -56,20 +56,6 @@ class SKPipeline(PipelineInterface):
             print(f"Error saving model: {e}")
             return False
 
-    def fit(self, **kwargs) -> TrainingResult:
-        debug("model error = ", self.score(), color="white")
-        if self.model is None:
-            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["quick_start"])
-        else:
-            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["random_model"])
-
-        if status == 1:
-            self.model = model
-            debug("Model Picked for Training : ", self.model[0].model_name, print=True)
-        else:
-            self.model = None
-        return TrainingResult(status, self)
-
     def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
         # if isinstance(other, self.__class__):
@@ -111,6 +97,20 @@ class SKPipeline(PipelineInterface):
             return np.inf
         self.modelError = self.model[0].backtest_error if self.model[0].backtest_error != 0 else 1000
         return self.modelError
+
+    def fit(self, **kwargs) -> TrainingResult:
+        debug("model error = ", self.score(), color="white")
+        if self.model is None:
+            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["quick_start"])
+        else:
+            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["random_model"])
+
+        if status == 1:
+            self.model = model
+            debug("Model Picked for Training : ", self.model[0].model_name, print=True)
+        else:
+            self.model = None
+        return TrainingResult(status, self)
 
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""

@@ -41,8 +41,6 @@ class XgbChronosPipeline(PipelineInterface):
         self.modelError: float = None
         self.rng = np.random.default_rng(37)
 
-
-
     def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
@@ -92,8 +90,7 @@ class XgbChronosPipeline(PipelineInterface):
         else:
             debug(
                 f'\nstable score: {otherScore}'
-                f'\npilot  score: {thisScore}',
-                color='yellow')
+                f'\npilot  score: {thisScore}')
         return isImproved
 
     def score(self, **kwargs) -> float:
