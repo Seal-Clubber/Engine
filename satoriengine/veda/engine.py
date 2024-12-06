@@ -225,11 +225,7 @@ class StreamModel:
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
-        # if not hasattr(self, 'stable') or self.stable is None or self.stable.model is not None:
-        #    if inplace and not isinstance(self.pilot, StarterPipeline):
-        #        self.pilot = StarterPipeline()
-        #    return StarterPipeline
-        if True: # testing
+        if False: # for testing specific pipelines
             pipeline = XgbChronosPipeline
         elif self.data is None or len(self.data) < 3:
             pipeline = StarterPipeline
@@ -260,8 +256,6 @@ class StreamModel:
         using the best known model to make predictions on demand.
         Breaks if backtest error stagnates for 3 iterations.
         """
-        # still have a "problem?" where the model makes predictions right away
-        # wasn't sure SKPipeline was working so just using XgbPipeline for now
         while len(self.data) > 0:
             if self.paused:
                 time.sleep(1)
