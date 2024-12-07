@@ -9,7 +9,7 @@ class StarterPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
-        if len(kwargs.get('data', [])) < 5:
+        if len(kwargs.get('data', [])) < 10:
             return 1.0
         return 0.0
 
@@ -29,7 +29,7 @@ class StarterPipeline(PipelineInterface):
         #forecast = StarterPipeline.starterEnginePipeline(data)
         #if self.model is None:
         #    self.model = forecast
-        return TrainingResult(0, self)
+        return TrainingResult(-1, self)
 
     def compare(self, other: PipelineInterface, **kwargs) -> bool:
         return True

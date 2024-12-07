@@ -184,7 +184,7 @@ class StreamModel:
                 rollbackModel = self.defaultPipelines[-1]()
                 try:
                     trainingResult = rollbackModel.fit(data=self.data)
-                    if trainingResult.status == 1:
+                    if abs(trainingResult.status) == 1:
                         debug(
                             f'New model trained: '
                             f'{trainingResult.model[0].model_name}',
