@@ -26,6 +26,7 @@ class XgbChronosPipeline(PipelineInterface):
         return 0.0
 
     def __init__(self, uid: str = None, modelPath: str = None, **kwargs):
+        super().__init__()
         self.uid = uid
         self.model: XGBRegressor = None
         self.chronos: Union[ChronosVedaPipeline, None] = ChronosVedaPipeline()
@@ -155,8 +156,10 @@ class XgbChronosPipeline(PipelineInterface):
             verbose=False)
         return TrainingResult(1, self)
 
-    def predict(self, data: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    def predict(self, data: pd.DataFrame, **kwargs) -> Union[pd.DataFrame, None]:
         """Make predictions using the stable model"""
+        if self.model is None or self.dataset is None:
+            return None
         self._manageData(data, chronosOnLast=True)
         self.fullX = self._prepareTimeFeatures(self.dataset.index.values)
         self.fullY = self.dataset['value']

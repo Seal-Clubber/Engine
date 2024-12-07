@@ -14,6 +14,7 @@ class StarterPipeline(PipelineInterface):
         return 0.0
 
     def __init__(self, **kwargs):
+        super().__init__()
         self.model = None
 
     def load(self, modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
@@ -24,8 +25,10 @@ class StarterPipeline(PipelineInterface):
         return True
 
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
-        forecast = StarterPipeline.starterEnginePipeline(data)
-        self.model = self.model or forecast
+        # we don't need to fit anything
+        #forecast = StarterPipeline.starterEnginePipeline(data)
+        #if self.model is None:
+        #    self.model = forecast
         return TrainingResult(0, self)
 
     def compare(self, other: PipelineInterface, **kwargs) -> bool:

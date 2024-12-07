@@ -181,8 +181,7 @@ class StreamModel:
                     except Exception as e:
                         error(f"Failed to delete model file: {str(e)}")
                 self.stable = None
-                pipelineClass = self.choosePipeline()
-                rollbackModel = pipelineClass()
+                rollbackModel = self.defaultPipelines[-1]()
                 try:
                     trainingResult = rollbackModel.fit(data=self.data)
                     if trainingResult.status == 1:

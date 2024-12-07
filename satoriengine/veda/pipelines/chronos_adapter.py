@@ -22,6 +22,7 @@ class ChronosVedaPipeline(PipelineInterface):
 
 
     def __init__(self, useGPU: bool = False, **kwargs):
+        super().__init__()
         #ChronosVedaPipeline.set_seed(37) # does not make it deterministic
         hfhome = os.environ.get(
             'HF_HOME', default='/Satori/Neuron/models/huggingface')
