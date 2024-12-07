@@ -20,7 +20,31 @@ class SKPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
-        if kwargs.get('cpu', 0) > 4 and kwargs.get('dataCount', 0) < 10_000:
+
+        def calculateRegularDataCount(data: pd.DataFrame, column: str) -> int:
+            data[column] = pd.to_datetime(data[column])
+            data = data.sort_values(by=column)
+            regular_data_points = pd.date_range(
+                start=data[column].min(),
+                end=data[column].max(),
+                freq=getSamplingFrequencyOfColumn(data, column))
+            return len(regular_data_points)
+
+        def getSamplingFrequencyOfColumn(data: pd.DataFrame, column: str) -> str:
+            time_diffs = data[column].diff().dropna()
+            inferred_freq = pd.infer_freq(data[column])
+            if inferred_freq:
+                return inferred_freq
+            most_common_diff = time_diffs.value_counts().idxmax()
+            return most_common_diff
+
+        data = kwargs.get('data')
+        if data is None:
+            if kwargs.get('cpu', 0) > 4 and kwargs.get('dataCount', 0) < 10_000:
+                return 1.0
+            return 0.0
+        regularDataCount = calculateRegularDataCount(data, 'date_time')
+        if kwargs.get('cpu', 0) > 4 and regularDataCount < 10_000:
             return 1.0
         return 0.0
 
