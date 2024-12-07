@@ -25,7 +25,7 @@ class XgbChronosPipeline(PipelineInterface):
             return 1.0
         return 0.0
 
-    def __init__(self, uid: str = None, **kwargs):
+    def __init__(self, uid: str = None, modelPath: str = None, **kwargs):
         self.uid = uid
         self.model: XGBRegressor = None
         self.chronos: Union[ChronosVedaPipeline, None] = ChronosVedaPipeline()
@@ -39,10 +39,12 @@ class XgbChronosPipeline(PipelineInterface):
         self.fullY: pd.Series = None
         self.split: float = None
         self.modelError: float = None
+        self.modelPath = modelPath
         self.rng = np.random.default_rng(37)
 
     def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
+        modelPath = self._setModelPath(modelPath)
         try:
             savedState = joblib.load(modelPath)
             self.model = savedState['stableModel']
@@ -55,16 +57,18 @@ class XgbChronosPipeline(PipelineInterface):
                 os.remove(modelPath)
             return None
 
-    def save(self, modelpath: str, **kwargs) -> bool:
+    def save(self, modelPath: str, **kwargs) -> bool:
         """saves the stable model to disk"""
+        modelPath = self._setModelPath(modelPath)
+        print('saving model to:', modelPath, self.dataset, len(self.dataset[~self.dataset['chronos'].isna()]))
         try:
-            os.makedirs(os.path.dirname(modelpath), exist_ok=True)
+            os.makedirs(os.path.dirname(modelPath), exist_ok=True)
             self.modelError = self.score()
             state = {
                 'stableModel': self.model,
                 'modelError': self.modelError,
                 'dataset': self.dataset}
-            joblib.dump(state, modelpath)
+            joblib.dump(state, modelPath)
             return True
         except Exception as e:
             warning(f"Error saving model: {e}")
@@ -91,6 +95,7 @@ class XgbChronosPipeline(PipelineInterface):
             debug(
                 f'\nstable score: {otherScore}'
                 f'\npilot  score: {thisScore}')
+            self._update(other)
         return isImproved
 
     def score(self, **kwargs) -> float:
@@ -140,6 +145,25 @@ class XgbChronosPipeline(PipelineInterface):
             lastDate,
             sampling_frequency)
         return futurePredictions
+
+    def _setModelPath(self, modelPath: str = None) -> str:
+        self.modelPath = self.modelPath or modelPath
+        modelPath = modelPath or self.modelPath
+        return modelPath
+
+    def _update(self, other: Union['XgbChronosPipeline', None] = None, **kwargs) -> bool:
+        """
+        we save chronos predictions to the dataset slowly over time, since they
+        are technically part of the model we want to save them as we go. So we
+        must combine the existing best model with the latest chronos predictions
+        """
+        if not isinstance(other, self.__class__):
+            return True
+        if (len(self.dataset[~self.dataset['chronos'].isna()]) > len(
+                other.dataset[~other.dataset['chronos'].isna()])
+        ):
+            other.dataset = self.dataset
+            other.save()
 
     def _predictFuture(
         self,

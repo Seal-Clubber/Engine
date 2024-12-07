@@ -252,6 +252,7 @@ class StreamModel:
                 color='blue')
             self.pipeline = pipeline
             self.pilot = pipeline(uid=self.streamId)
+            self.pilot.load(self.modelPath())
         return pipeline
 
     def run(self):
