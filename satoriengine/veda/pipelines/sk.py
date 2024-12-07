@@ -32,6 +32,7 @@ class SKPipeline(PipelineInterface):
 
         def getSamplingFrequencyOfColumn(data: pd.DataFrame, column: str) -> str:
             time_diffs = data[column].diff().dropna()
+            time_diffs = time_diffs.dt.round('T')
             inferred_freq = pd.infer_freq(data[column])
             if inferred_freq:
                 return inferred_freq
