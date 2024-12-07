@@ -35,9 +35,9 @@ class XgbPipeline(PipelineInterface):
     def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         try:
-            saved_state = joblib.load(modelPath)
-            self.model = saved_state['stableModel']
-            self.modelError = saved_state['modelError']
+            saved = joblib.load(modelPath)
+            self.model = saved['stableModel']
+            self.modelError = saved['modelError']
             return self.model
         except Exception as e:
             debug(f"Error Loading Model File : {e}", print=True)

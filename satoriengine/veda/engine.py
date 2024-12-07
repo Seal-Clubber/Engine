@@ -108,6 +108,7 @@ class StreamModel:
         predictionStreamId: StreamId,
         predictionProduced: BehaviorSubject,
     ):
+        self.cpu = getProcessorCount()
         self.preferredPipelines: list[PipelineInterface] = [StarterPipeline, XgbPipeline, XgbChronosPipeline, SKPipeline]
         self.defaultPipelines: list[PipelineInterface] = [XgbPipeline, XgbPipeline, StarterPipeline]
         self.failedPipelines = []
@@ -121,7 +122,6 @@ class StreamModel:
         self.pilot.load(self.modelPath())
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        self.cpu = getProcessorCount()
         debug(f'StreamModel {generatePathId(streamId=self.streamId)} initialized with {self.pipeline.__name__}', color='teal')
 
     def pause(self):
