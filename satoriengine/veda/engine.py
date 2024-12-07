@@ -1,5 +1,5 @@
 from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline, XgbChronosPipeline
-from satoriengine.veda.Data import StreamForecast
+from satoriengine.veda.data import StreamForecast
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.concepts import Stream, StreamId, Observation
