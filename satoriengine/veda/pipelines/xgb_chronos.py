@@ -42,25 +42,51 @@ class XgbChronosPipeline(PipelineInterface):
         self.modelPath = modelPath
         self.rng = np.random.default_rng(37)
 
-    def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
-        """loads the model model from disk if present"""
-        modelPath = self._setModelPath(modelPath)
+    @staticmethod
+    def _load(modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
+        """loads and returns the model model from disk if present"""
         try:
-            savedState = joblib.load(modelPath)
-            self.model = savedState['stableModel']
-            self.modelError = savedState['modelError']
-            self.dataset = savedState['dataset']
-            return self.model
+            return joblib.load(modelPath)
         except Exception as e:
             debug(f"Error Loading Model File : {e}", print=True)
             if os.path.isfile(modelPath):
                 os.remove(modelPath)
             return None
 
-    def save(self, modelPath: str, **kwargs) -> bool:
+    @staticmethod
+    def _save(
+        model: XGBRegressor,
+        modelError: float,
+        dataset: pd.DataFrame,
+        modelPath: str,
+        **kwargs,
+    ) -> bool:
+        """saves the stable model to disk"""
+        print('saving model to:', modelPath, dataset, len(dataset[~dataset['chronos'].isna()]))
+        try:
+            os.makedirs(os.path.dirname(modelPath), exist_ok=True)
+            state = {
+                'stableModel': model,
+                'modelError': modelError,
+                'dataset': dataset}
+            joblib.dump(state, modelPath)
+            return True
+        except Exception as e:
+            warning(f"Error saving model: {e}")
+            return False
+
+    def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
+        """loads the model model from disk if present"""
+        modelPath = self._setModelPath(modelPath)
+        saved = XgbChronosPipeline._load(modelPath, **kwargs)
+        self.model = saved['stableModel']
+        self.modelError = saved['modelError']
+        self.dataset = saved['dataset']
+        return self.model
+
+    def save(self, modelPath: str = None, **kwargs) -> bool:
         """saves the stable model to disk"""
         modelPath = self._setModelPath(modelPath)
-        print('saving model to:', modelPath, self.dataset, len(self.dataset[~self.dataset['chronos'].isna()]))
         try:
             os.makedirs(os.path.dirname(modelPath), exist_ok=True)
             self.modelError = self.score()
@@ -162,8 +188,12 @@ class XgbChronosPipeline(PipelineInterface):
         if (len(self.dataset[~self.dataset['chronos'].isna()]) > len(
                 other.dataset[~other.dataset['chronos'].isna()])
         ):
-            other.dataset = self.dataset
-            other.save()
+            saved = XgbChronosPipeline._load(other.modelPath)
+            XgbChronosPipeline._save(
+                    model=saved['stableModel'],
+                    modelError=saved['modelError'],
+                    dataset=self.dataset,
+                    modelPath=other.modelPath)
 
     def _predictFuture(
         self,
