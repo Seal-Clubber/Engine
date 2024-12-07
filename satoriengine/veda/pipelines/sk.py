@@ -22,22 +22,18 @@ class SKPipeline(PipelineInterface):
     def condition(*args, **kwargs) -> float:
 
         def calculateRegularDataCount(data: pd.DataFrame, column: str) -> int:
+            # Ensure the column is in datetime format
             data[column] = pd.to_datetime(data[column])
+            # Sort data by the datetime column
             data = data.sort_values(by=column)
-            regular_data_points = pd.date_range(
-                start=data[column].min(),
-                end=data[column].max(),
-                freq=getSamplingFrequencyOfColumn(data, column))
-            return len(regular_data_points)
-
-        def getSamplingFrequencyOfColumn(data: pd.DataFrame, column: str) -> str:
-            time_diffs = data[column].diff().dropna()
-            time_diffs = time_diffs.dt.round('T')
-            inferred_freq = pd.infer_freq(data[column])
-            if inferred_freq:
-                return inferred_freq
-            most_common_diff = time_diffs.value_counts().idxmax()
-            return most_common_diff
+            # Calculate time differences and round to the nearest minute
+            time_diffs = data[column].diff().dropna().dt.round('T')
+            # Determine the most common interval (in seconds)
+            interval = time_diffs.value_counts().idxmax().total_seconds()
+            # Calculate total time span in seconds
+            seconds = (data[column].max() - data[column].min()).total_seconds()
+            # Calculate the number of regular data points
+            return int(seconds // interval) + 1
 
         data = kwargs.get('data')
         if data is None:

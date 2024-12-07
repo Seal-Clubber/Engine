@@ -310,6 +310,7 @@ class XgbChronosPipeline(PipelineInterface):
         self.dataset = updateData(data)
         self.dataset = addPercentageChange(self.dataset)
         self.dataset = addChronos(self.dataset)
+        print(self.dataset)
         return self.dataset
 
 
