@@ -29,6 +29,8 @@ class XgbChronosPipeline(PipelineInterface):
         super().__init__()
         self.uid = uid
         self.model: XGBRegressor = None
+        self.modelError: float = None
+        self.modelPath = modelPath
         self.chronos: Union[ChronosVedaPipeline, None] = ChronosVedaPipeline()
         self.dataset: pd.DataFrame = None
         self.hyperparameters: Union[dict, None] = None
@@ -39,8 +41,6 @@ class XgbChronosPipeline(PipelineInterface):
         self.fullX: pd.DataFrame = None
         self.fullY: pd.Series = None
         self.split: float = None
-        self.modelError: float = None
-        self.modelPath = modelPath
         self.rng = np.random.default_rng(37)
 
     @staticmethod
@@ -49,7 +49,7 @@ class XgbChronosPipeline(PipelineInterface):
         try:
             return joblib.load(modelPath)
         except Exception as e:
-            debug(f"Error Loading Model File : {e}", print=True)
+            debug(f"Unable to load model file, creating a new one: {e}", print=True)
             if os.path.isfile(modelPath):
                 os.remove(modelPath)
             return None
