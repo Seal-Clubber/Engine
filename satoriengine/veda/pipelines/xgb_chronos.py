@@ -73,7 +73,6 @@ class XgbChronosPipeline(PipelineInterface):
         **kwargs,
     ) -> bool:
         """saves the stable model to disk"""
-        print('saving model to:', modelPath, dataset, len(dataset[~dataset['chronos'].isna()]))
         try:
             os.makedirs(os.path.dirname(modelPath), exist_ok=True)
             joblib.dump({
