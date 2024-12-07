@@ -37,7 +37,7 @@ class SKPipeline(PipelineInterface):
 
         data = kwargs.get('data')
         if data is None:
-            if kwargs.get('cpu', 0) > 4 and kwargs.get('dataCount', 0) < 10_000:
+            if kwargs.get('cpu', 0) > 4 and len(kwargs.get('data', [])) < 10_000:
                 return 1.0
             return 0.0
         regularDataCount = calculateRegularDataCount(data, 'date_time')

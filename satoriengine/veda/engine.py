@@ -121,6 +121,7 @@ class StreamModel:
         self.pilot.load(self.modelPath())
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
         self.paused: bool = False
+        self.cpu = getProcessorCount()
         debug(f'StreamModel {generatePathId(streamId=self.streamId)} initialized with {self.pipeline.__name__}', color='teal')
 
     def pause(self):
@@ -255,7 +256,7 @@ class StreamModel:
             for p in self.preferredPipelines:
                 if p in self.failedPipelines:
                     continue
-                if p.condition(dataCount=len(self.data)) == 1:
+                if p.condition(data=self.data, cpu=self.cpu) == 1:
                     pipeline = p
                     break
             if pipeline is None:
