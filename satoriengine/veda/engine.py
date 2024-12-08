@@ -184,10 +184,6 @@ class StreamModel:
                 try:
                     trainingResult = backupModel.fit(data=self.data)
                     if abs(trainingResult.status) == 1:
-                        debug(
-                            f'New model trained: '
-                            f'{trainingResult.model.model_name}',
-                            color="teal")
                         self.producePrediction(backupModel)
                     else:
                         error(
