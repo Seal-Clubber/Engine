@@ -1,6 +1,6 @@
 # TODO: refactor see issue #24
 
-'''
+"""
 the DataManager should save the streams to a database on disk as a parquet file
 so that the model managers can get their data easily.
 
@@ -35,16 +35,17 @@ Basic Reponsibilities of the DataManager:
        subscriber subscribe to
     E. download the datastream and notify model manager
 4. garbage collect stale datastreams
-'''
+"""
 import datetime as dt
 import pandas as pd
 from reactivex.subject import BehaviorSubject
 from satorilib.concepts import Observation, StreamId
-from satorilib.api import hash
-from satorilib.api import system
-from satorilib.api.disk import Cached, Disk
-from satorilib.api.disk.cache import CachedResult
+from satorilib.utils import hash
+from satorilib.utils import system
+from satorilib.disk import Cached, Disk
+from satorilib.disk.cache import CachedResult
 from satorilib import logging
+
 # from satoriengine.managers.model import ModelManager
 # from satoriengine.init.start import StartupDag
 
@@ -81,7 +82,7 @@ class DataManager(Cached):
         return [i[0] for i in self.imports]
 
     def getExploratory(self):
-        '''
+        """
         asks an endpoint for the history of an unseen datastream.
         provides showImportance and everythingSeenBefore perhaps...
         scores each history against each of my original data columns
@@ -90,37 +91,37 @@ class DataManager(Cached):
         purge them if not picked up by our models, so the models need
         a mechanism to recognize new stuff and test it out as soon as
         they see it.
-        '''
+        """
         pass
 
     def getPurge(self):
-        ''' in charge of removing columns that aren't useful to our models '''
+        """in charge of removing columns that aren't useful to our models"""
         pass
 
     #################################################################################
     ### most of the fuctions above this point are made obsolete by the new design ###
     #################################################################################
 
-    def runSubscriber(self, models: list['ModelManager']):
-        ''' routes new data to the right models '''
+    def runSubscriber(self, models: list["ModelManager"]):
+        """routes new data to the right models"""
 
-        def handleNewData(models: list['ModelManager'], observation: Observation):
-            ''' append to existing datastream, save to disk, notify models '''
+        def handleNewData(models: list["ModelManager"], observation: Observation):
+            """append to existing datastream, save to disk, notify models"""
 
             def remember():
-                '''
+                """
                 cache latest observation for each stream as an Observation
                 object with a DataFrame if it's new returns true so process can
                 continue, if a repeat, return false
-                '''
+                """
                 if observation.key not in self.targets.keys():
                     self.targets[observation.key] = None
                 x = self.targets.get(observation.key)
                 if (
                     x is not None
-                    and hasattr(x, 'observationHash')
+                    and hasattr(x, "observationHash")
                     and x.observationHash is not None
-                    and hasattr(observation, 'observationHash')
+                    and hasattr(observation, "observationHash")
                     and observation.observationHash is not None
                     and x.observationHash == observation.observationHash
                 ):
@@ -129,15 +130,16 @@ class DataManager(Cached):
                 return True
 
             def saveIncremental() -> CachedResult:
-                ''' save this observation to the right parquet file on disk '''
+                """save this observation to the right parquet file on disk"""
                 self.streamId = observation.key  # required by Cache
                 return self.disk.appendByAttributes(
                     timestamp=observation.observationTime,
                     value=observation.value,
-                    observationHash=observation.observationHash)
+                    observationHash=observation.observationHash,
+                )
 
             def tellModels():
-                ''' tell the models that listen to this stream and these targets '''
+                """tell the models that listen to this stream and these targets"""
                 # logging.info('telling models', print=True)
                 streamId = observation.key
                 for model in models:
@@ -168,20 +170,20 @@ class DataManager(Cached):
                     #            for update in sendUpdates]])
 
             def pin(path: str = None):
-                ''' pins the data to ipfs, returns pin address '''
+                """pins the data to ipfs, returns pin address"""
                 return self.getStart().ipfs.addAndPinDirectory(
-                    path,
-                    name=hash.generatePathId(streamId=observation.key))
+                    path, name=hash.generatePathId(streamId=observation.key)
+                )
 
             def report(path, pinAddress: str):
-                ''' report's the ipfs address to the satori server '''
+                """report's the ipfs address to the satori server"""
                 peer = self.getStart().ipfs.address()
                 payload = {
-                    'author': {'pubkey': self.getStart().wallet.publicKey},
-                    'stream': observation.key.topic(asJson=False, authorAsPubkey=True),
-                    'ipfs': pinAddress,
-                    'disk': system.directorySize(path),
-                    **({'peer': peer} if peer is not None else {}),
+                    "author": {"pubkey": self.getStart().wallet.publicKey},
+                    "stream": observation.key.topic(asJson=False, authorAsPubkey=True),
+                    "ipfs": pinAddress,
+                    "disk": system.directorySize(path),
+                    **({"peer": peer} if peer is not None else {}),
                     # 'ipns': not using ipns at the moment.
                     # 'count':  count of observations in this pin, we'd have to
                     #           go get the values by load the dataset, not worth
@@ -193,7 +195,7 @@ class DataManager(Cached):
                 return Disk(id=observation.key).path()
 
             def maybeResyncWithSynergy(cachedResult: CachedResult):
-                ''' resync with the synergy server if necessary '''
+                """resync with the synergy server if necessary"""
                 if not cachedResult.validated:
                     self.getStart().syncDataset(observation.key)
 
@@ -202,27 +204,30 @@ class DataManager(Cached):
                 try:
                     maybeResyncWithSynergy(cachedResult)
                 except Exception as e:
-                    logging.error('unable to resync stream:', e, print=True)
+                    logging.error("unable to resync stream:", e, print=True)
                 tellModels()
                 # compress()
                 # path = pathForDataset()
                 # never gets to here, these never print, something fails in path
                 # report(path, pinAddress=pin(path))
 
-        self.listeners.append(self.newData.subscribe(
-            lambda x: handleNewData(models, x) if x is not None else None))
+        self.listeners.append(
+            self.newData.subscribe(
+                lambda x: handleNewData(models, x) if x is not None else None
+            )
+        )
         # self.listeners.append(self.newData.subscribe(lambda x: print('triggered')))
 
     def runPublisher(self, models):
-        def publish(model: 'ModelManager'):
-            ''' publish to the right source '''
+        def publish(model: "ModelManager"):
+            """publish to the right source"""
 
             def remember():
-                ''' in memory cache of predictions for each model '''
+                """in memory cache of predictions for each model"""
                 self.predictions[model.key] = model.prediction
 
             def post():
-                '''
+                """
                 here we save prediction to disk, but that'll change once we
                 can post it somewhere.
 
@@ -233,7 +238,7 @@ class DataManager(Cached):
                 use the pubsub connection object in the StartupDag object
                 (meaning, we might have to pass that connection object down to
                 this function in the first place.)
-                '''
+                """
                 # def saveToDisk():
                 #    if self.predictions.get(model.key) != None:
                 #        # why is there a for loop here?
@@ -256,41 +261,48 @@ class DataManager(Cached):
                     streamId: StreamId,
                     data: str = None,
                     timestamp: str = None,
-                    observationHash: str = None
+                    observationHash: str = None,
                 ):
                     start = self.getStart()
                     logging.info(
-                        'outgoing realtime prediction:',
-                        f'{streamId.source}.{streamId.stream}.{streamId.target}', data, timestamp, print=True)
+                        "outgoing realtime prediction:",
+                        f"{streamId.source}.{streamId.stream}.{streamId.target}",
+                        data,
+                        timestamp,
+                        print=True,
+                    )
                     start.publish(
                         topic=streamId.topic(),
                         data=data,
                         observationTime=timestamp,
                         observationHash=observationHash,
                         toCentral=True,
-                        isPrediction=True)
+                        isPrediction=True,
+                    )
 
                 # data = self.predictions.get(model.key)
-                if model.prediction != None and model.variable.source == 'satori':  # shouldn't it be model.output.source?
-                    cachedResult = save(
-                        streamId=model.output,
-                        data=model.prediction)
+                if (
+                    model.prediction != None and model.variable.source == "satori"
+                ):  # shouldn't it be model.output.source?
+                    cachedResult = save(streamId=model.output, data=model.prediction)
                     if cachedResult.success:  # and cachedResult.validated:
                         publishToSatori(
                             streamId=model.output,
                             data=model.prediction,
                             timestamp=cachedResult.time,
-                            observationHash=cachedResult.hash)
+                            observationHash=cachedResult.hash,
+                        )
 
             remember()
             post()
 
         for model in models:
-            self.listeners.append(model.predictionUpdate.subscribe(
-                lambda x: publish(x) if x else None))
+            self.listeners.append(
+                model.predictionUpdate.subscribe(lambda x: publish(x) if x else None)
+            )
 
     def runScholar(self, models):
-        '''
+        """
         download histories (do not subscribe, these histories are experimental)
         and tell exploratory model managers to use them as inputs in order to
         evaluat their usefulness. if they are useful, then we will officially
@@ -305,7 +317,7 @@ class DataManager(Cached):
 
         there's a lot to do here but for mvp we'll just randomly sample
         datastreams from whatever sources are available to us.
-        '''
+        """
 
         # look for new useful datastreams - something like this
         # self.download(self.bestOf(self.compileMap(models)))
