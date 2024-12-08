@@ -21,7 +21,7 @@ class XgbChronosPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
-        if 15 <= len(kwargs.get('data', [])) < 1_000:
+        if 20 <= len(kwargs.get('data', [])) < 1_000:
             return 1.0
         return 0.0
 
@@ -267,7 +267,10 @@ class XgbChronosPipeline(PipelineInterface):
                 missingRows = data[~data.index.isin(self.dataset.index)]
                 # Append only the missing rows to self.dataset
                 self.dataset = pd.concat([self.dataset, missingRows])
-            return self.dataset.drop_duplicates(subset='value', keep='first')
+            potential = self.dataset.drop_duplicates(subset='value', keep='first')
+            if len(potential) >= 20:
+                return potential
+            return self.dataset
 
         def addPercentageChange(df: pd.DataFrame) -> pd.DataFrame:
 

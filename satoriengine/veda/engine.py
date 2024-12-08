@@ -180,17 +180,18 @@ class StreamModel:
                         debug("Deleted failed model file", color="teal")
                     except Exception as e:
                         error(f"Failed to delete model file: {str(e)}")
-                self.stable = None
-                rollbackModel = self.defaultPipelines[-1]()
+                #print(self.defaultPipelines)
+                #print(self.defaultPipelines[-1])
+                backupModel = self.defaultPipelines[-1]()
+                #print(backupModel)
                 try:
-                    trainingResult = rollbackModel.fit(data=self.data)
+                    trainingResult = backupModel.fit(data=self.data)
                     if abs(trainingResult.status) == 1:
                         debug(
                             f'New model trained: '
                             f'{trainingResult.model[0].model_name}',
                             color="teal")
-                        self.stable = copy.deepcopy(rollbackModel)
-                        self.producePrediction(self.stable)
+                        self.producePrediction(backupModel)
                     else:
                         error(
                             f"Failed to train alternative model (status: {trainingResult.status})")
