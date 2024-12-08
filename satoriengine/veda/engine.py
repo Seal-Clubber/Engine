@@ -109,7 +109,7 @@ class StreamModel:
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
-        self.preferredPipelines: list[PipelineInterface] = [StarterPipeline, XgbPipeline, XgbChronosPipeline, SKPipeline]
+        self.preferredPipelines: list[PipelineInterface] = [StarterPipeline, XgbPipeline, XgbChronosPipeline]# SKPipeline #model[0] issue
         self.defaultPipelines: list[PipelineInterface] = [XgbPipeline, XgbPipeline, StarterPipeline]
         self.failedPipelines = []
         self.thread: threading.Thread = None
