@@ -122,7 +122,7 @@ class StreamModel:
         self.pilot.load(self.modelPath())
         self.stable: PipelineInterface = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        debug(f'Ai Engine using {self.pipeline.__name__} for stream id: {generatePathId(streamId=self.streamId)}', color='teal')
+        debug(f'AI Engine: stream id {generatePathId(streamId=self.streamId)} using {self.pipeline.__name__}', color='teal')
 
     def pause(self):
         self.paused = True
@@ -264,9 +264,10 @@ class StreamModel:
                 not isinstance(self.pilot, pipeline))
         ):
             info(
+                f'AI Engine: stream id {generatePathId(streamId=self.streamId)} '
                 f'switching from {self.pipeline.__name__} '
                 f'to {pipeline.__name__} on {self.streamId}',
-                color='blue')
+                color='teal')
             self.pipeline = pipeline
             self.pilot = pipeline(uid=self.streamId)
             self.pilot.load(self.modelPath())
