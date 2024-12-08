@@ -180,16 +180,13 @@ class StreamModel:
                         debug("Deleted failed model file", color="teal")
                     except Exception as e:
                         error(f"Failed to delete model file: {str(e)}")
-                #print(self.defaultPipelines)
-                #print(self.defaultPipelines[-1])
                 backupModel = self.defaultPipelines[-1]()
-                #print(backupModel)
                 try:
                     trainingResult = backupModel.fit(data=self.data)
                     if abs(trainingResult.status) == 1:
                         debug(
                             f'New model trained: '
-                            f'{trainingResult.model[0].model_name}',
+                            f'{trainingResult.model.model_name}',
                             color="teal")
                         self.producePrediction(backupModel)
                     else:
