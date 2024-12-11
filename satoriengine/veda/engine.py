@@ -285,7 +285,7 @@ class StreamModel:
                 time.sleep(10)
                 continue
             self.choosePipeline(inplace=True)
-            trainingResult = self.pilot.fit(data=self.data)
+            trainingResult = self.pilot.fit(data=self.data, stable=self.stable)
             if trainingResult.status == 1:
                 if self.pilot.compare(self.stable):
                     if self.pilot.save(self.modelPath()):
