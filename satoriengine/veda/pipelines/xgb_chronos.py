@@ -12,7 +12,7 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
-from satoriengine.veda.process import process_data
+from satoriengine.veda.pipelines.sktime.process import process_data
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 from satoriengine.veda.pipelines.chronos_adapter import ChronosVedaPipeline
 
@@ -34,13 +34,8 @@ class XgbChronosPipeline(PipelineInterface):
         self.chronos: Union[ChronosVedaPipeline, None] = ChronosVedaPipeline()
         self.dataset: pd.DataFrame = None
         self.hyperparameters: Union[dict, None] = None
-        self.trainX: pd.DataFrame = None
         self.testX: pd.DataFrame = None
-        self.trainY: np.ndarray = None
         self.testY: np.ndarray = None
-        self.fullX: pd.DataFrame = None
-        self.fullY: pd.Series = None
-        self.split: float = None
         self.rng = np.random.default_rng(37)
 
     @staticmethod
@@ -126,33 +121,33 @@ class XgbChronosPipeline(PipelineInterface):
 
     def score(self, **kwargs) -> float:
         """will score the model"""
-        if self.model is None:
+        if self.model is None or self.testX is None or self.testY is None:
             return np.inf
         self.modelError = mean_absolute_error(self.testY, self.model.predict(self.testX))
         return self.modelError
 
-    def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
+    def fit(self, data: pd.DataFrame, stable: Union[PipelineInterface, None] = None, **kwargs) -> TrainingResult:
         """ Train a new model """
         self._manageData(data)
-        pre_trainX, pre_testX, self.trainY, self.testY = train_test_split(
+        pre_trainX, pre_testX, trainY, self.testY = train_test_split(
             self.dataset.index.values,
             self.dataset['value'],
-            test_size=self.split or 0.2,
+            test_size=0.2,
             shuffle=False,
             random_state=37)
-        self.trainX = self._prepareTimeFeatures(pre_trainX)
+        trainX = self._prepareTimeFeatures(pre_trainX)
         self.testX = self._prepareTimeFeatures(pre_testX)
         self.hyperparameters = self._mutateParams(
-            prevParams=self.hyperparameters,
+            prevParams=stable.hyperparameters if isinstance(stable, XgbChronosPipeline) else self.hyperparameters,
             rng=self.rng)
         if self.model is None:
             self.model = XGBRegressor(**self.hyperparameters)
         else:
             self.model.set_params(**self.hyperparameters)
         self.model.fit(
-            self.trainX,
-            self.trainY,
-            eval_set=[(self.trainX, self.trainY), (self.testX, self.testY)],
+            trainX,
+            trainY,
+            eval_set=[(trainX, trainY), (self.testX, self.testY)],
             verbose=False)
         return TrainingResult(1, self)
 

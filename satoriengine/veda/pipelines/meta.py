@@ -1,17 +1,33 @@
+'''
+overfit lightgbm + meta model for hyperparameter selection
+
+. . . . . . . . . . . . . . . . . .
+
+. . .|?
+lightgbm 10000
+. . .|.
+lightgbm 5000
+. . . . . . .
+
+pop - perfect models (cluster -> triangulate center of the group)
+pop - near perfect models
+
+-> meta model -> new hyper paramers lgb
+
+'''
 from typing import Union
 import os
 import joblib
 import numpy as np
 import pandas as pd
-from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
-from satoriengine.veda.pipelines.sktime.process import process_data
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 
 
-class XgbPipeline(PipelineInterface):
+class MetaPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -21,7 +37,7 @@ class XgbPipeline(PipelineInterface):
 
     def __init__(self, **kwargs):
         super().__init__()
-        self.model: XGBRegressor = None
+        self.model: LGBMRegressor = None
         self.modelError: float = None
         self.hyperparameters: Union[dict, None] = None
         self.dataset: pd.DataFrame = None
@@ -29,7 +45,7 @@ class XgbPipeline(PipelineInterface):
         self.testY: np.ndarray = None
         self.rng = np.random.default_rng(37)
 
-    def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
+    def load(self, modelPath: str, **kwargs) -> Union[None, LGBMRegressor]:
         """loads the model model from disk if present"""
         try:
             saved = joblib.load(modelPath)
@@ -101,10 +117,10 @@ class XgbPipeline(PipelineInterface):
         trainX = self._prepareTimeFeatures(preTrainX)
         self.testX = self._prepareTimeFeatures(preTestX)
         self.hyperparameters = self._mutateParams(
-            prevParams=stable.hyperparameters if isinstance(stable, XgbPipeline) else self.hyperparameters,
+            prevParams=stable.hyperparameters if isinstance(stable, MetaPipeline) else self.hyperparameters,
             rng=self.rng)
         if self.model is None:
-            self.model = XGBRegressor(**self.hyperparameters)
+            self.model = LGBMRegressor(**self.hyperparameters)
         else:
             self.model.set_params(**self.hyperparameters)
         self.model.fit(
@@ -121,9 +137,9 @@ class XgbPipeline(PipelineInterface):
         _, samplingFrequency = self._manageData(data)
         if self.dataset is None:
             return None
-        self.fullX = self._prepareTimeFeatures(self.dataset.index.values)
-        self.fullY = self.dataset['value']
-        self.model.fit(self.fullX, self.fullY, verbose=False)
+        fullX = self._prepareTimeFeatures(self.dataset.index.values)
+        fullY = self.dataset['value']
+        self.model.fit(fullX, fullY, verbose=False)
         lastDate = pd.Timestamp(self.dataset.index[-1])
         futurePredictions = self._predictFuture(
             self.model,
@@ -133,7 +149,7 @@ class XgbPipeline(PipelineInterface):
 
     def _predictFuture(
         self,
-        model: XGBRegressor,
+        model: LGBMRegressor,
         lastDate: pd.Timestamp,
         sf: str = 'H',
         periods: int = 168,
@@ -213,7 +229,7 @@ class XgbPipeline(PipelineInterface):
         Generates randomized hyperparameters for XGBoost within reasonable ranges.
         Returns a dictionary of hyperparameters.
         """
-        paramBounds: dict = XgbPipeline.paramBounds()
+        paramBounds: dict = MetaPipeline.paramBounds()
         rng = rng or np.random.default_rng(37)
         params = {
             'random_state': rng.integers(0, 10000),
@@ -259,8 +275,8 @@ class XgbPipeline(PipelineInterface):
             dict: A dictionary of tweaked hyperparameters.
         """
         rng = rng or np.random.default_rng(37)
-        prevParams = prevParams or XgbPipeline._prepParams(rng)
-        paramBounds: dict = XgbPipeline.paramBounds()
+        prevParams = prevParams or MetaPipeline._prepParams(rng)
+        paramBounds: dict = MetaPipeline.paramBounds()
         mutatedParams = {}
         for param, (minBound, maxBound) in paramBounds.items():
             currentValue = prevParams[param]
