@@ -288,7 +288,8 @@ class XgbChronosPipeline(PipelineInterface):
             if chronosOnLast:
                 # just do the last row if choronos column is empty
                 if df['chronos'].iloc[-1] is np.nan:
-                    historicalData = df.iloc[:-1]
+                    #historicalData = df.iloc[:-1] #FIX
+                    historicalData = df[['value']]
                     if not historicalData.empty:
                         df.at[df.index[-1], 'chronos'] = self.chronos.predict(data=historicalData)
                 return df
@@ -298,7 +299,8 @@ class XgbChronosPipeline(PipelineInterface):
             i = 0
             for idx, row in unpredicted.iterrows():
                 # Slice the dataset up to (but not including) the current timestamp
-                historicalData = df.loc[:idx].iloc[:-1]
+                #historicalData = df.loc[:idx].iloc[:-1] #FIX
+                historicalData = df.loc[0:len(df)-2, ['value']]
                 # Ensure historicalData is non-empty before calling predict
                 if not historicalData.empty:
                     # Predict and fill the 'chronos' value for the current row

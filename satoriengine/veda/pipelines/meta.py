@@ -14,6 +14,11 @@ pop - near perfect models
 
 -> meta model -> new hyper paramers lgb
 
+
+keep a list of model params and scores
+rescore every new datapoint (every time we call fit)
+
+
 '''
 from typing import Union
 import os
@@ -105,9 +110,6 @@ class MetaPipeline(PipelineInterface):
     def fit(self, data: pd.DataFrame, stable: Union[PipelineInterface, None] = None, **kwargs) -> TrainingResult:
         """ Train a new model """
         _, _ = self._manageData(data)
-        # todo: get ready to combine features from different sources (merge)
-        # todo: keep a running dataset and update incrementally w/ process_data
-        # todo: linear, if not fractal, interpolation
         preTrainX, preTestX, trainY, self.testY = train_test_split(
             self.dataset.index.values,
             self.dataset['value'],
