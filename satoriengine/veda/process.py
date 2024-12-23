@@ -385,6 +385,13 @@ def round_time(
     offset_minutes=0,
     offset_seconds=0,
 ):
+    # Validate inputs
+    #if not isinstance(first_day, datetime) or not isinstance(dt, datetime):
+    #    raise TypeError("first_day and dt must be datetime objects")
+
+    #if round_to_hours < 0 or round_to_minutes < 0 or round_to_seconds < 0:
+    #    raise ValueError("Rounding intervals must be non-negative")
+
     # Apply offset
     dt = dt + timedelta(
         hours=offset_hours, minutes=offset_minutes, seconds=offset_seconds
@@ -392,6 +399,8 @@ def round_time(
 
     # Calculate total seconds for the rounding interval
     total_seconds = (round_to_hours * 3600) + (round_to_minutes * 60) + round_to_seconds
+    #if total_seconds <= 0:
+    #    raise ValueError("Rounding interval must be greater than zero")
 
     # Calculate seconds since first day
     seconds_since_first = round((dt - first_day).total_seconds())
@@ -434,7 +443,7 @@ def process_noisy_dataset(
         datetime_series = df_copy.index
         is_index = True
     elif datetime_column in df_copy.columns:
-        datetime_series = pd.to_datetime(df_copy[datetime_column])
+        datetime_series = pd.to_datetime(df_copy[datetime_column].str.strip(), errors='coerce')
         is_index = False
     else:
         raise ValueError(f"Datetime column '{datetime_column}' not found in DataFrame")
