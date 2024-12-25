@@ -135,7 +135,7 @@ class MyCustomPipeline(PipelineInterface):
 The library provides a helpful `process_data` function that handles most common data processing tasks:
 
 ```python
-from satoriengine.veda.process import process_data
+from satoriengine.veda.pipelines.sktime.process import process_data
 
 # Use in your pipeline, data being a dataframe with atleast 3 rows
 processed = process_data(data)
@@ -154,13 +154,13 @@ Example usage in a pipeline:
 def fit(self, data: pd.DataFrame, **kwargs):
     # Let process_data handle the heavy lifting
     processed = process_data(data)
-    
+
     # Now you have access to:
     self.dataset = processed.dataset  # Processed dataset
     self.dataset_withfeatures = processed.dataset_withfeatures
     self.sampling_frequency = processed.sampling_frequency  # Data frequency
     # and others
-    
+
     # Continue with your model training...
 ```
 
