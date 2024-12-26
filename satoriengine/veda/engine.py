@@ -254,13 +254,12 @@ class StreamModel:
             pipeline = XgbChronosPipeline
         else:
             import psutil
-            freeRamGigs = psutil.virtual_memory().available / 1e9
-            print('FREE RAM GIGS:', freeRamGigs, self.data.shape[0])
+            availableRamGigs = psutil.virtual_memory().available / 1e9
             pipeline = None
             for p in self.preferredPipelines:
                 if p in self.failedPipelines:
                     continue
-                if p.condition(data=self.data, cpu=self.cpu, freeRamGigs=freeRamGigs) == 1:
+                if p.condition(data=self.data, cpu=self.cpu, availableRamGigs=availableRamGigs) == 1:
                     pipeline = p
                     break
             if pipeline is None:
