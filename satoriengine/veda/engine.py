@@ -243,14 +243,24 @@ class StreamModel:
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
+        # TODO: this needs to be aultered. I think the logic is not right. we
+        #       should gather a list of pipelines that can be used in the
+        #       current condition we're in. if we're already using one in that
+        #       list, we should continue using it until it starts to make bad
+        #       predictions. if not, we should then choose the best one from the
+        #       list - we should optimize after we gather acceptable options.
+
         if False: # for testing specific pipelines
             pipeline = XgbChronosPipeline
         else:
+            import psutil
+            freeRamGigs = psutil.virtual_memory().available / 1e9
+            print('FREE RAM GIGS:', freeRamGigs, self.data.shape[0])
             pipeline = None
             for p in self.preferredPipelines:
                 if p in self.failedPipelines:
                     continue
-                if p.condition(data=self.data, cpu=self.cpu) == 1:
+                if p.condition(data=self.data, cpu=self.cpu, freeRamGigs=freeRamGigs) == 1:
                     pipeline = p
                     break
             if pipeline is None:

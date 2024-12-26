@@ -21,6 +21,11 @@ class XgbChronosPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
+        if (
+            isinstance(kwargs.get('availableRamGigs'), float)
+            and kwargs.get('availableRamGigs') < .1
+        ):
+            return 0
         if 20 <= len(kwargs.get('data', [])) < 1_000:
             return 1.0
         return 0.0

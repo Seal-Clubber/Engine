@@ -15,6 +15,11 @@ class XgbPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
+        if (
+            isinstance(kwargs.get('availableRamGigs'), float)
+            and kwargs.get('availableRamGigs') < .1
+        ):
+            return 0
         if kwargs.get('cpu', 0) == 1 or len(kwargs.get('data', [])) >= 10_000:
             return 1.0
         return 0.0

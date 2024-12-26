@@ -22,6 +22,11 @@ class SKPipeline(PipelineInterface):
     def condition(*args, **kwargs) -> float:
 
         def calculateRegularDataCount(data: pd.DataFrame, column: str) -> int:
+            if (
+                isinstance(kwargs.get('availableRamGigs'), float)
+                and kwargs.get('availableRamGigs') < .1
+            ):
+                return 0
             # Ensure the column is in datetime format
             data[column] = pd.to_datetime(data[column])
             # Sort data by the datetime column
