@@ -12,7 +12,7 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
-from satoriengine.veda.process import process_data
+from satoriengine.veda.pipelines.sktime.process import process_data
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 from satoriengine.veda.pipelines.chronos_adapter import ChronosVedaPipeline
 
@@ -21,6 +21,11 @@ class XgbChronosPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
+        if (
+            isinstance(kwargs.get('availableRamGigs'), float)
+            and kwargs.get('availableRamGigs') < .1
+        ):
+            return 0
         if 20 <= len(kwargs.get('data', [])) < 1_000:
             return 1.0
         return 0.0

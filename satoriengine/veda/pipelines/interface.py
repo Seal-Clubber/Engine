@@ -32,7 +32,16 @@ class PipelineInterface:
             0 meaning you should not use this model under those conditions and
             1 meaning these conditions are ideal for this model
         """
-        pass
+        # any pipeline that hasn't implemented condition should return false in
+        # the case of a condition that is not met so we can use the default
+        if (
+            isinstance(kwargs.get('availableRamGigs'), float)
+            and kwargs.get('availableRamGigs') < .1
+        ):
+            return 0
+        if len(kwargs.get('data', [])) < 10:
+            return 0
+        return 1
 
     def load(self, modelPath: str, *args, **kwargs) -> Union[None, "PipelineInterface"]:
         """

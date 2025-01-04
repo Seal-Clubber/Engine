@@ -9,6 +9,11 @@ class StarterPipeline(PipelineInterface):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
+        if (
+            isinstance(kwargs.get('availableRamGigs'), float)
+            and kwargs.get('availableRamGigs') < .1
+        ):
+            return 1.0
         if len(kwargs.get('data', [])) < 10:
             return 1.0
         return 0.0

@@ -8,9 +8,9 @@ import random
 from typing import Union, Optional, List, Any
 from satorilib.logging import info, debug, error, warning, setup, DEBUG
 
-from satoriengine.veda.process import process_data
-from satoriengine.veda.determine_features import determine_feature_set
-from satoriengine.veda.model_creation import model_create_train_test_and_predict
+from satoriengine.veda.pipelines.sktime.process import process_data
+from satoriengine.veda.pipelines.sktime.determine_features import determine_feature_set
+from satoriengine.veda.pipelines.sktime.model_creation import model_create_train_test_and_predict
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 
 setup(level=DEBUG)
@@ -22,6 +22,11 @@ class SKPipeline(PipelineInterface):
     def condition(*args, **kwargs) -> float:
 
         def calculateRegularDataCount(data: pd.DataFrame, column: str) -> int:
+            if (
+                isinstance(kwargs.get('availableRamGigs'), float)
+                and kwargs.get('availableRamGigs') < .1
+            ):
+                return 0
             # Ensure the column is in datetime format
             data[column] = pd.to_datetime(data[column])
             # Sort data by the datetime column

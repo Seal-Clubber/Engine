@@ -1,5 +1,5 @@
 from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline, XgbChronosPipeline
-from satoriengine.veda.data import StreamForecast
+from satoriengine.veda.data import StreamForecast, cleanse_dataframe, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.concepts import Stream, StreamId, Observation
@@ -86,12 +86,10 @@ class Engine:
             if streamModel.thread is None or not streamModel.thread.is_alive():
                 streamModel.choosePipeline(inplace=True)
                 streamModel.run_forever()
-            if streamModel is not None and len(streamModel.data) > 1:
+            if streamModel is not None:
                 info(
                     f'new observation, making prediction using {streamModel.pipeline.__name__}', color='blue')
                 streamModel.producePrediction()
-            else:
-                warning(f"new observation, no model found for stream {observation.streamId}")
             self.resume()
 
     def handleError(self, error):
@@ -133,15 +131,18 @@ class StreamModel:
     def handleNewObservation(self, observation: Observation):
         """extract the data and save it to self.data"""
         parsedData = json.loads(observation.raw)
-        self.data = pd.concat(
-            [
-                self.data,
-                pd.DataFrame({
-                    "date_time": [str(parsedData["time"])],
-                    "value": [float(parsedData["data"])],
-                    "id": [str(parsedData["hash"])]}),
-            ],
-            ignore_index=True)
+        if validate_single_entry(parsedData["time"], parsedData["data"]):
+            self.data = pd.concat(
+                [
+                    self.data,
+                    pd.DataFrame({
+                        "date_time": [str(parsedData["time"])],
+                        "value": [float(parsedData["data"])],
+                        "id": [str(parsedData["hash"])]}),
+                ],
+                ignore_index=True)
+        else:
+            error("Row not added due to corrupt observation")
 
     def producePrediction(self, updatedModel=None):
         """
@@ -210,10 +211,10 @@ class StreamModel:
 
     def loadData(self) -> pd.DataFrame:
         try:
-            return pd.read_csv(
+            return cleanse_dataframe(pd.read_csv(
                 self.data_path(),
                 names=["date_time", "value", "id"],
-                header=None)
+                header=None))
         except FileNotFoundError:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
@@ -242,14 +243,23 @@ class StreamModel:
             - (mapping of cases to suitable pipelines)
         examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
+        # TODO: this needs to be aultered. I think the logic is not right. we
+        #       should gather a list of pipelines that can be used in the
+        #       current condition we're in. if we're already using one in that
+        #       list, we should continue using it until it starts to make bad
+        #       predictions. if not, we should then choose the best one from the
+        #       list - we should optimize after we gather acceptable options.
+
         if False: # for testing specific pipelines
             pipeline = XgbChronosPipeline
         else:
+            import psutil
+            availableRamGigs = psutil.virtual_memory().available / 1e9
             pipeline = None
             for p in self.preferredPipelines:
                 if p in self.failedPipelines:
                     continue
-                if p.condition(data=self.data, cpu=self.cpu) == 1:
+                if p.condition(data=self.data, cpu=self.cpu, availableRamGigs=availableRamGigs) == 1:
                     pipeline = p
                     break
             if pipeline is None:
