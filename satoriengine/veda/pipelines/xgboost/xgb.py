@@ -7,7 +7,7 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
-from satoriengine.veda.pipelines.xgboost.process import process_data
+from satoriengine.veda.pipelines.xgboost.preprocess import xgbDataPreprocess, _prepareTimeFeatures
 from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
 
 
@@ -99,17 +99,19 @@ class XgbPipeline(PipelineInterface):
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
         """ Train a new model """
         _, _ = self._manageData(data)
+        x = self.dataset.iloc[:-1, :-1]
+        y = self.dataset.iloc[:-1, -1]
         # todo: get ready to combine features from different sources (merge)
         # todo: keep a running dataset and update incrementally w/ process_data
         # todo: linear, if not fractal, interpolation
-        preTrainX, preTestX, self.trainY, self.testY = train_test_split(
-            self.dataset.index.values,
-            self.dataset['value'],
+        self.trainX, self.testX, self.trainY, self.testY = train_test_split(
+            x,
+            y,
             test_size=self.split or 0.2,
             shuffle=False,
             random_state=37)
-        self.trainX = self._prepareTimeFeatures(preTrainX)
-        self.testX = self._prepareTimeFeatures(preTestX)
+        self.trainX = self.trainX.reset_index(drop=True)
+        self.testX = self.testX.reset_index(drop=True)
         self.hyperparameters = self._mutateParams(
             prevParams=self.hyperparameters,
             rng=self.rng)
@@ -131,32 +133,14 @@ class XgbPipeline(PipelineInterface):
         _, samplingFrequency = self._manageData(data)
         if self.dataset is None:
             return None
-        self.fullX = self._prepareTimeFeatures(self.dataset.index.values)
-        self.fullY = self.dataset['value']
-        self.model.fit(self.fullX, self.fullY, verbose=False)
-        lastDate = pd.Timestamp(self.dataset.index[-1])
-        futurePredictions = self._predictFuture(
-            self.model,
-            lastDate,
-            samplingFrequency)
-        return futurePredictions
-
-    def _predictFuture(
-        self,
-        model: XGBRegressor,
-        lastDate: pd.Timestamp,
-        sf: str = 'H',
-        periods: int = 168,
-    ) -> pd.DataFrame:
-        """Generate predictions for future periods"""
+        featureSet = self.dataset.iloc[[-1], :-1] 
+        prediction = self.model.predict(featureSet)
         futureDates = pd.date_range(
-            start=pd.Timestamp(lastDate) + pd.Timedelta(sf),
-            periods=periods,
-            freq=sf)
-        futureFeatures = self._prepareTimeFeatures(futureDates)
-        predictions = model.predict(futureFeatures)
-        results = pd.DataFrame({'date_time': futureDates, 'pred': predictions})
-        return results
+            start=pd.Timestamp(self.dataset.index[-1]) + pd.Timedelta(samplingFrequency),
+            periods=1,
+            freq=samplingFrequency)
+        result_df = pd.DataFrame({'date_time': futureDates, 'pred': prediction})
+        return result_df
 
     def _manageData(self, data: pd.DataFrame) -> tuple[pd.DataFrame, str]:
         '''
@@ -167,12 +151,11 @@ class XgbPipeline(PipelineInterface):
         '''
 
         def updateData(data: pd.DataFrame) -> pd.DataFrame:
-            procData = process_data(data, quick_start=False)
+            procData = xgbDataPreprocess(data)
             procData.dataset.drop(['id'], axis=1, inplace=True)
             # incrementally add missing processed data rows to the self.dataset
             if self.dataset is None:
                 self.dataset = procData.dataset
-                self.dataset['chronos'] = np.nan
             else:
                 # Identify rows in procData.dataset not present in self.dataset
                 missingRows = procData.dataset[~procData.dataset.index.isin(self.dataset.index)]
@@ -190,20 +173,11 @@ class XgbPipeline(PipelineInterface):
             return df
 
         self.dataset, samplingFrequency = updateData(data)
+        self.dataset = _prepareTimeFeatures(self.dataset)
         self.dataset = addPercentageChange(self.dataset)
+        self.dataset['tomorrow'] = self.dataset['value'].shift(-1)
         return self.dataset, samplingFrequency
-
-
-    @staticmethod
-    def _prepareTimeFeatures(dates: np.ndarray) -> pd.DataFrame:
-        """Convert datetime series into numeric features for XGBoost"""
-        df = pd.DataFrame({'date_time': pd.to_datetime(dates)})
-        df['hour'] = df['date_time'].dt.hour
-        df['day'] = df['date_time'].dt.day
-        df['month'] = df['date_time'].dt.month
-        df['year'] = df['date_time'].dt.year
-        df['day_of_week'] = df['date_time'].dt.dayofweek
-        return df.drop('date_time', axis=1)
+    
 
     @staticmethod
     def paramBounds() -> dict:
