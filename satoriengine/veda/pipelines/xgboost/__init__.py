@@ -1,1 +1,1 @@
-from satoriengine.veda.pipelines.xgboost.xgb import XgbPipeline
+from satoriengine.veda.pipelines.xgboost.xgb import XgbAdapter

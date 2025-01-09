@@ -7,12 +7,12 @@ from satorilib.logging import error, debug, info
 
 class TrainingResult:
 
-    def __init__(self, status, model: "PipelineInterface"):
+    def __init__(self, status, model: "ModelAdapter"):
         self.status = status
         self.model = model
         self.modelError = None
 
-class PipelineInterface:
+class ModelAdapter:
 
     def __init__(self, *args, **kwargs):
         self.model = None
@@ -43,7 +43,7 @@ class PipelineInterface:
             return 0
         return 1
 
-    def load(self, modelPath: str, *args, **kwargs) -> Union[None, "PipelineInterface"]:
+    def load(self, modelPath: str, *args, **kwargs) -> Union[None, "ModelAdapter"]:
         """
         loads the model model from disk if present
 
@@ -51,7 +51,7 @@ class PipelineInterface:
             modelpath: Path where the model should be loaded from
 
         Returns:
-            PipelineInterface: Model if load successful, None otherwise
+            ModelAdapter: Model if load successful, None otherwise
         """
         pass
 

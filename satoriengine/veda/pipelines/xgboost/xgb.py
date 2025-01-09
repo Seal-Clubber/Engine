@@ -8,10 +8,10 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
 from satoriengine.veda.pipelines.xgboost.preprocess import xgbDataPreprocess, _prepareTimeFeatures
-from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
+from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
 
 
-class XgbPipeline(PipelineInterface):
+class XgbAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -50,6 +50,12 @@ class XgbPipeline(PipelineInterface):
             debug(f"Error Loading Model File : {e}", print=True)
             if os.path.isfile(modelPath):
                 os.remove(modelPath)
+            try:
+                if 'XgbPipeline' not in modelPath:
+                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbPipeline.joblib'
+                    return self.load(modelPath)
+            except Exception as _:
+                pass
             return None
 
     def save(self, modelpath: str, **kwargs) -> bool:
@@ -66,7 +72,7 @@ class XgbPipeline(PipelineInterface):
             warning(f"Error saving model: {e}")
             return False
 
-    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[ModelAdapter, None] = None, **kwargs) -> bool:
         """
         Compare other (model) and this models based on their backtest error.
         Returns True if this model performs better than other model.
@@ -133,7 +139,7 @@ class XgbPipeline(PipelineInterface):
         _, samplingFrequency = self._manageData(data)
         if self.dataset is None:
             return None
-        featureSet = self.dataset.iloc[[-1], :-1] 
+        featureSet = self.dataset.iloc[[-1], :-1]
         prediction = self.model.predict(featureSet)
         futureDates = pd.date_range(
             start=pd.Timestamp(self.dataset.index[-1]) + pd.Timedelta(samplingFrequency),
@@ -172,12 +178,14 @@ class XgbPipeline(PipelineInterface):
                 df[f'percent{past}'] = calculatePercentageChange(df, past)
             return df
 
+        # equally spaced grid
+
         self.dataset, samplingFrequency = updateData(data)
         self.dataset = _prepareTimeFeatures(self.dataset)
         self.dataset = addPercentageChange(self.dataset)
         self.dataset['tomorrow'] = self.dataset['value'].shift(-1)
         return self.dataset, samplingFrequency
-    
+
 
     @staticmethod
     def paramBounds() -> dict:
@@ -197,7 +205,7 @@ class XgbPipeline(PipelineInterface):
         Generates randomized hyperparameters for XGBoost within reasonable ranges.
         Returns a dictionary of hyperparameters.
         """
-        paramBounds: dict = XgbPipeline.paramBounds()
+        paramBounds: dict = XgbAdapter.paramBounds()
         rng = rng or np.random.default_rng(37)
         params = {
             'random_state': rng.integers(0, 10000),
@@ -243,8 +251,8 @@ class XgbPipeline(PipelineInterface):
             dict: A dictionary of tweaked hyperparameters.
         """
         rng = rng or np.random.default_rng(37)
-        prevParams = prevParams or XgbPipeline._prepParams(rng)
-        paramBounds: dict = XgbPipeline.paramBounds()
+        prevParams = prevParams or XgbAdapter._prepParams(rng)
+        paramBounds: dict = XgbAdapter.paramBounds()
         mutatedParams = {}
         for param, (minBound, maxBound) in paramBounds.items():
             currentValue = prevParams[param]

@@ -7,10 +7,10 @@ import random
 import torch
 from threading import Lock
 from chronos import ChronosPipeline
-from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
+from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
 
 
-class ChronosVedaPipeline(PipelineInterface):
+class PretrainedChronosAdapter(ModelAdapter):
 
     # Class-level lock
     _model_init_lock = Lock()
@@ -23,12 +23,12 @@ class ChronosVedaPipeline(PipelineInterface):
 
     def __init__(self, useGPU: bool = False, **kwargs):
         super().__init__()
-        #ChronosVedaPipeline.set_seed(37) # does not make it deterministic
+        #PretrainedChronosAdapter.set_seed(37) # does not make it deterministic
         hfhome = os.environ.get(
             'HF_HOME', default='/Satori/Neuron/models/huggingface')
         os.makedirs(hfhome, exist_ok=True)
         deviceMap = 'cuda' if useGPU else 'cpu'
-        with ChronosVedaPipeline._model_init_lock:
+        with PretrainedChronosAdapter._model_init_lock:
             self.model = ChronosPipeline.from_pretrained(
                 "amazon/chronos-t5-large" if useGPU else "amazon/chronos-t5-small",
                 # "amazon/chronos-t5-tiny", # 8M
@@ -82,7 +82,7 @@ class ChronosVedaPipeline(PipelineInterface):
         #    f"Predictions: {predictions}")
         return np.asarray(predictions, dtype=np.float32)
 
-    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[ModelAdapter, None] = None, **kwargs) -> bool:
         """
         Compare other (model) and this models based on their backtest error.
         Returns True if this model performs better than other model.

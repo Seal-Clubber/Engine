@@ -12,11 +12,11 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
-from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
-from satoriengine.veda.pipelines.chronos.chronos_adapter import ChronosVedaPipeline
+from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
+from satoriengine.veda.pipelines.xgbchronos.chronos_adapter import PretrainedChronosAdapter
 
 
-class XgbChronosPipeline(PipelineInterface):
+class XgbChronosAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -35,7 +35,7 @@ class XgbChronosPipeline(PipelineInterface):
         self.model: XGBRegressor = None
         self.modelError: float = None
         self.modelPath = modelPath
-        self.chronos: Union[ChronosVedaPipeline, None] = ChronosVedaPipeline()
+        self.chronos: Union[PretrainedChronosAdapter, None] = PretrainedChronosAdapter()
         self.dataset: pd.DataFrame = None
         self.hyperparameters: Union[dict, None] = None
         self.trainX: pd.DataFrame = None
@@ -59,8 +59,14 @@ class XgbChronosPipeline(PipelineInterface):
     def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
         """loads the model model from disk if present"""
         modelPath = self._setModelPath(modelPath)
-        saved = XgbChronosPipeline._load(modelPath, **kwargs)
+        saved = XgbChronosAdapter._load(modelPath, **kwargs)
         if saved is None:
+            try:
+                if 'XgbChronosPipeline' not in modelPath:
+                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbChronosPipeline.joblib'
+                    return self.load(modelPath)
+            except Exception as _:
+                pass
             return None
         self.model = saved['stableModel']
         self.modelError = saved['modelError']
@@ -102,7 +108,7 @@ class XgbChronosPipeline(PipelineInterface):
             warning(f"Error saving model: {e}")
             return False
 
-    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[ModelAdapter, None] = None, **kwargs) -> bool:
         """
         Compare other (model) and this models based on their backtest error.
         Returns True if this model performs better than other model.
@@ -182,7 +188,7 @@ class XgbChronosPipeline(PipelineInterface):
         modelPath = modelPath or self.modelPath
         return modelPath
 
-    def _update(self, other: Union['XgbChronosPipeline', None] = None, **kwargs) -> bool:
+    def _update(self, other: Union['XgbChronosAdapter', None] = None, **kwargs) -> bool:
         """
         we save chronos predictions to the dataset slowly over time, since they
         are technically part of the model we want to save them as we go. So we
@@ -193,12 +199,25 @@ class XgbChronosPipeline(PipelineInterface):
         if (len(self.dataset[~self.dataset['chronos'].isna()]) > len(
                 other.dataset[~other.dataset['chronos'].isna()])
         ):
-            saved = XgbChronosPipeline._load(other.modelPath)
-            XgbChronosPipeline._save(
-                model=saved['stableModel'],
-                modelError=saved['modelError'],
-                dataset=self.dataset,
-                modelPath=other.modelPath)
+            saved = XgbChronosAdapter._load(other.modelPath)
+            if saved is None:
+                try:
+                    if 'XgbChronosPipeline' not in other.modelPath:
+                        modelPath = '/'.join(other.modelPath.split('/')[:-1]) + '/' + 'XgbChronosPipeline.joblib'
+                        saved = XgbChronosAdapter._load(modelPath)
+                        XgbChronosAdapter._save(
+                            model=saved['stableModel'],
+                            modelError=saved['modelError'],
+                            dataset=self.dataset,
+                            modelPath=other.modelPath)
+                except Exception as _:
+                    pass
+            else:
+                XgbChronosAdapter._save(
+                    model=saved['stableModel'],
+                    modelError=saved['modelError'],
+                    dataset=self.dataset,
+                    modelPath=other.modelPath)
 
     def _getSamplingFrequency(self, dataset: pd.DataFrame):
 
@@ -325,7 +344,7 @@ class XgbChronosPipeline(PipelineInterface):
         Generates randomized hyperparameters for XGBoost within reasonable ranges.
         Returns a dictionary of hyperparameters.
         """
-        paramBounds: dict = XgbChronosPipeline.paramBounds()
+        paramBounds: dict = XgbChronosAdapter.paramBounds()
         rng = rng or np.random.default_rng(37)
         params = {
             'random_state': rng.integers(0, 10000),
@@ -371,8 +390,8 @@ class XgbChronosPipeline(PipelineInterface):
             dict: A dictionary of tweaked hyperparameters.
         """
         rng = rng or np.random.default_rng(37)
-        prevParams = prevParams or XgbChronosPipeline._prepParams(rng)
-        paramBounds: dict = XgbChronosPipeline.paramBounds()
+        prevParams = prevParams or XgbChronosAdapter._prepParams(rng)
+        paramBounds: dict = XgbChronosAdapter.paramBounds()
         mutatedParams = {}
         for param, (minBound, maxBound) in paramBounds.items():
             currentValue = prevParams[param]

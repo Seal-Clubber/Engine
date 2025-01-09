@@ -1,4 +1,4 @@
-from satoriengine.veda.pipelines import PipelineInterface, SKPipeline, StarterPipeline, XgbPipeline, XgbChronosPipeline
+from satoriengine.veda.pipelines import ModelAdapter, SKAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 from satoriengine.veda.data import StreamForecast, cleanse_dataframe, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.disk.filetypes.csv import CSVManager
@@ -107,18 +107,18 @@ class StreamModel:
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
-        self.preferredPipelines: list[PipelineInterface] = [StarterPipeline, XgbPipeline, XgbChronosPipeline]# SKPipeline #model[0] issue
-        self.defaultPipelines: list[PipelineInterface] = [XgbPipeline, XgbPipeline, StarterPipeline]
+        self.preferredPipelines: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
+        self.defaultPipelines: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedPipelines = []
         self.thread: threading.Thread = None
         self.streamId: StreamId = streamId
         self.predictionStreamId: StreamId = predictionStreamId
         self.predictionProduced: StreamId = predictionProduced
         self.data: pd.DataFrame = self.loadData()
-        self.pipeline: PipelineInterface = self.choosePipeline()
-        self.pilot: PipelineInterface = self.pipeline(uid=streamId)
+        self.pipeline: ModelAdapter = self.choosePipeline()
+        self.pilot: ModelAdapter = self.pipeline(uid=streamId)
         self.pilot.load(self.modelPath())
-        self.stable: PipelineInterface = copy.deepcopy(self.pilot)
+        self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
         debug(f'AI Engine: stream id {generatePathId(streamId=self.streamId)} using {self.pipeline.__name__}', color='teal')
 
@@ -177,7 +177,7 @@ class StreamModel:
         except Exception as e:
             error(e)
             self.fallback_prediction()
-    
+
     def fallback_prediction(self):
         if os.path.isfile(self.modelPath()):
             try:
@@ -235,14 +235,14 @@ class StreamModel:
             f'{generatePathId(streamId=self.streamId)}/'
             f'{self.pipeline.__name__}.joblib')
 
-    def choosePipeline(self, inplace: bool = False) -> PipelineInterface:
+    def choosePipeline(self, inplace: bool = False) -> ModelAdapter:
         """
         everything can try to handle some cases
         Engine
-            - low resources available - SKPipeline
-            - few observations - SKPipeline
+            - low resources available - SKAdapter
+            - few observations - SKAdapter
             - (mapping of cases to suitable pipelines)
-        examples: StartPipeline, SKPipeline, XGBoostPipeline, ChronosPipeline, DNNPipeline
+        examples: StartPipeline, SKAdapter, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
         # TODO: this needs to be aultered. I think the logic is not right. we
         #       should gather a list of pipelines that can be used in the
@@ -252,7 +252,7 @@ class StreamModel:
         #       list - we should optimize after we gather acceptable options.
 
         if False: # for testing specific pipelines
-            pipeline = XgbChronosPipeline
+            pipeline = XgbChronosAdapter
         else:
             import psutil
             availableRamGigs = psutil.virtual_memory().available / 1e9
