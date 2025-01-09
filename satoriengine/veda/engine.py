@@ -1,4 +1,4 @@
-from satoriengine.veda.pipelines import ModelAdapter, SKAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
+from satoriengine.veda.adapters import ModelAdapter, SKAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 from satoriengine.veda.data import StreamForecast, cleanse_dataframe, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.disk.filetypes.csv import CSVManager
@@ -59,7 +59,7 @@ class Engine:
                 streamId=stream.streamId,
                 predictionStreamId=pubStream.streamId,
                 predictionProduced=self.predictionProduced)
-            self.streamModels[stream.streamId].choosePipeline(inplace=True)
+            self.streamModels[stream.streamId].chooseAdapter(inplace=True)
             self.streamModels[stream.streamId].run_forever()
             #break  # only one stream for testing
 
@@ -84,11 +84,11 @@ class Engine:
             self.pause()
             streamModel.handleNewObservation(observation)
             if streamModel.thread is None or not streamModel.thread.is_alive():
-                streamModel.choosePipeline(inplace=True)
+                streamModel.chooseAdapter(inplace=True)
                 streamModel.run_forever()
             if streamModel is not None:
                 info(
-                    f'new observation, making prediction using {streamModel.pipeline.__name__}', color='blue')
+                    f'new observation, making prediction using {streamModel.adapter.__name__}', color='blue')
                 streamModel.producePrediction()
             self.resume()
 
@@ -107,20 +107,20 @@ class StreamModel:
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
-        self.preferredPipelines: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
-        self.defaultPipelines: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
-        self.failedPipelines = []
+        self.preferredAdapters: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
+        self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
+        self.failedAdapters = []
         self.thread: threading.Thread = None
         self.streamId: StreamId = streamId
         self.predictionStreamId: StreamId = predictionStreamId
         self.predictionProduced: StreamId = predictionProduced
         self.data: pd.DataFrame = self.loadData()
-        self.pipeline: ModelAdapter = self.choosePipeline()
-        self.pilot: ModelAdapter = self.pipeline(uid=streamId)
+        self.adapter: ModelAdapter = self.chooseAdapter()
+        self.pilot: ModelAdapter = self.adapter(uid=streamId)
         self.pilot.load(self.modelPath())
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        debug(f'AI Engine: stream id {generatePathId(streamId=self.streamId)} using {self.pipeline.__name__}', color='teal')
+        debug(f'AI Engine: stream id {generatePathId(streamId=self.streamId)} using {self.adapter.__name__}', color='teal')
 
     def pause(self):
         self.paused = True
@@ -185,7 +185,7 @@ class StreamModel:
                 debug("Deleted failed model file", color="teal")
             except Exception as e:
                 error(f"Failed to delete model file: {str(e)}")
-        backupModel = self.defaultPipelines[-1]()
+        backupModel = self.defaultAdapters[-1]()
         try:
             trainingResult = backupModel.fit(data=self.data)
             if abs(trainingResult.status) == 1:
@@ -233,56 +233,56 @@ class StreamModel:
         return (
             '/Satori/Neuron/models/veda/'
             f'{generatePathId(streamId=self.streamId)}/'
-            f'{self.pipeline.__name__}.joblib')
+            f'{self.adapter.__name__}.joblib')
 
-    def choosePipeline(self, inplace: bool = False) -> ModelAdapter:
+    def chooseAdapter(self, inplace: bool = False) -> ModelAdapter:
         """
         everything can try to handle some cases
         Engine
             - low resources available - SKAdapter
             - few observations - SKAdapter
-            - (mapping of cases to suitable pipelines)
+            - (mapping of cases to suitable adapters)
         examples: StartPipeline, SKAdapter, XGBoostPipeline, ChronosPipeline, DNNPipeline
         """
         # TODO: this needs to be aultered. I think the logic is not right. we
-        #       should gather a list of pipelines that can be used in the
+        #       should gather a list of adapters that can be used in the
         #       current condition we're in. if we're already using one in that
         #       list, we should continue using it until it starts to make bad
         #       predictions. if not, we should then choose the best one from the
         #       list - we should optimize after we gather acceptable options.
 
-        if False: # for testing specific pipelines
-            pipeline = XgbChronosAdapter
+        if False: # for testing specific adapters
+            adapter = XgbChronosAdapter
         else:
             import psutil
             availableRamGigs = psutil.virtual_memory().available / 1e9
-            pipeline = None
-            for p in self.preferredPipelines:
-                if p in self.failedPipelines:
+            adapter = None
+            for p in self.preferredAdapters:
+                if p in self.failedAdapters:
                     continue
                 if p.condition(data=self.data, cpu=self.cpu, availableRamGigs=availableRamGigs) == 1:
-                    pipeline = p
+                    adapter = p
                     break
-            if pipeline is None:
-                for pipeline in self.defaultPipelines:
-                    if pipeline not in self.failedPipelines:
+            if adapter is None:
+                for adapter in self.defaultAdapters:
+                    if adapter not in self.failedAdapters:
                         break
-                if pipeline is None:
-                    pipeline = self.defaultPipelines[-1]
+                if adapter is None:
+                    adapter = self.defaultAdapters[-1]
         if (
             inplace and (
                 not hasattr(self, 'pilot') or
-                not isinstance(self.pilot, pipeline))
+                not isinstance(self.pilot, adapter))
         ):
             info(
                 f'AI Engine: stream id {generatePathId(streamId=self.streamId)} '
-                f'switching from {self.pipeline.__name__} '
-                f'to {pipeline.__name__} on {self.streamId}',
+                f'switching from {self.adapter.__name__} '
+                f'to {adapter.__name__} on {self.streamId}',
                 color='teal')
-            self.pipeline = pipeline
-            self.pilot = pipeline(uid=self.streamId)
+            self.adapter = adapter
+            self.pilot = adapter(uid=self.streamId)
             self.pilot.load(self.modelPath())
-        return pipeline
+        return adapter
 
     def run(self):
         """
@@ -295,7 +295,7 @@ class StreamModel:
             if self.paused:
                 time.sleep(10)
                 continue
-            self.choosePipeline(inplace=True)
+            self.chooseAdapter(inplace=True)
             trainingResult = self.pilot.fit(data=self.data, stable=self.stable)
             if trainingResult.status == 1:
                 if self.pilot.compare(self.stable):
@@ -308,7 +308,7 @@ class StreamModel:
                         self.producePrediction(self.stable)
             else:
                 debug(f'model training failed on {self.streamId} waiting 10 minutes to retry')
-                self.failedPipelines.append(self.pilot)
+                self.failedAdapters.append(self.pilot)
                 time.sleep(60*10)
 
     def run_forever(self):

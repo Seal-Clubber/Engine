@@ -1,5 +1,5 @@
 
-from satoriengine.veda.pipelines.chronos import ChronosVedaPipeline
+from satoriengine.veda.adapters.xgbchronos import ChronosVedaPipeline
 
 
 def generate_training_data(ctx_len: int, num_features: int = 1, num_samples: int = 1000):

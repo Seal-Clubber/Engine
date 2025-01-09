@@ -1,3 +1,8 @@
+'''
+run chronos on the data
+produce a feature of predictions
+feed data and chronos predictions into xgboost
+'''
 from typing import Union
 import os
 import joblib
@@ -7,11 +12,11 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 from satorilib.logging import info, debug, warning
-from satoriengine.veda.pipelines.xgboost.preprocess import xgbDataPreprocess, _prepareTimeFeatures
-from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
+from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
+from satoriengine.veda.adapters.xgbchronos.chronos_adapter import PretrainedChronosAdapter
 
 
-class XgbAdapter(ModelAdapter):
+class XgbChronosAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -20,53 +25,84 @@ class XgbAdapter(ModelAdapter):
             and kwargs.get('availableRamGigs') < .1
         ):
             return 0
-        if kwargs.get('cpu', 0) == 1 or len(kwargs.get('data', [])) >= 10_000:
+        if 20 <= len(kwargs.get('data', [])) < 1_000:
             return 1.0
         return 0.0
 
-    def __init__(self, **kwargs):
+    def __init__(self, uid: str = None, modelPath: str = None, **kwargs):
         super().__init__()
+        self.uid = uid
         self.model: XGBRegressor = None
         self.modelError: float = None
-        self.hyperparameters: Union[dict, None] = None
+        self.modelPath = modelPath
+        self.chronos: Union[PretrainedChronosAdapter, None] = PretrainedChronosAdapter()
         self.dataset: pd.DataFrame = None
+        self.hyperparameters: Union[dict, None] = None
         self.trainX: pd.DataFrame = None
         self.testX: pd.DataFrame = None
         self.trainY: np.ndarray = None
         self.testY: np.ndarray = None
-        self.fullX: pd.DataFrame = None
-        self.fullY: pd.Series = None
         self.split: float = None
         self.rng = np.random.default_rng(37)
 
-    def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
-        """loads the model model from disk if present"""
+    @staticmethod
+    def _load(modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
+        """loads and returns the model model from disk if present"""
         try:
-            saved = joblib.load(modelPath)
-            self.model = saved['stableModel']
-            self.modelError = saved['modelError']
-            return self.model
+            return joblib.load(modelPath)
         except Exception as e:
-            debug(f"Error Loading Model File : {e}", print=True)
+            debug(f"unable to load model file, creating a new one: {e}", print=True)
             if os.path.isfile(modelPath):
                 os.remove(modelPath)
+            return None
+
+    def load(self, modelPath: str, **kwargs) -> Union[None, XGBRegressor]:
+        """loads the model model from disk if present"""
+        modelPath = self._setModelPath(modelPath)
+        saved = XgbChronosAdapter._load(modelPath, **kwargs)
+        if saved is None:
             try:
-                if 'XgbPipeline' not in modelPath:
-                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbPipeline.joblib'
+                if 'XgbChronosPipeline' not in modelPath:
+                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbChronosPipeline.joblib'
                     return self.load(modelPath)
             except Exception as _:
                 pass
             return None
+        self.model = saved['stableModel']
+        self.modelError = saved['modelError']
+        self.dataset = saved['dataset']
+        return self.model
 
-    def save(self, modelpath: str, **kwargs) -> bool:
+    @staticmethod
+    def _save(
+        model: XGBRegressor,
+        modelError: float,
+        dataset: pd.DataFrame,
+        modelPath: str,
+        **kwargs,
+    ) -> bool:
         """saves the stable model to disk"""
         try:
-            os.makedirs(os.path.dirname(modelpath), exist_ok=True)
+            os.makedirs(os.path.dirname(modelPath), exist_ok=True)
+            joblib.dump({
+                'stableModel': model,
+                'modelError': modelError,
+                'dataset': dataset}, modelPath)
+            return True
+        except Exception as e:
+            warning(f"Error saving model: {e}")
+            return False
+
+    def save(self, modelPath: str = None, **kwargs) -> bool:
+        """saves the stable model to disk"""
+        modelPath = self._setModelPath(modelPath)
+        try:
+            os.makedirs(os.path.dirname(modelPath), exist_ok=True)
             self.modelError = self.score()
-            state = {
-                'stableModel' : self.model,
-                'modelError' : self.modelError}
-            joblib.dump(state, modelpath)
+            joblib.dump({
+                'stableModel': self.model,
+                'modelError': self.modelError,
+                'dataset': self.dataset}, modelPath)
             return True
         except Exception as e:
             warning(f"Error saving model: {e}")
@@ -93,6 +129,7 @@ class XgbAdapter(ModelAdapter):
             debug(
                 f'\nstable score: {otherScore}'
                 f'\npilot  score: {thisScore}')
+            self._update(other)
         return isImproved
 
     def score(self, **kwargs) -> float:
@@ -104,20 +141,17 @@ class XgbAdapter(ModelAdapter):
 
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
         """ Train a new model """
-        _, _ = self._manageData(data)
+        self._manageData(data)
         x = self.dataset.iloc[:-1, :-1]
         y = self.dataset.iloc[:-1, -1]
-        # todo: get ready to combine features from different sources (merge)
-        # todo: keep a running dataset and update incrementally w/ process_data
-        # todo: linear, if not fractal, interpolation
-        self.trainX, self.testX, self.trainY, self.testY = train_test_split(
+        pre_trainX, pre_testX, self.trainY, self.testY = train_test_split(
             x,
             y,
             test_size=self.split or 0.2,
             shuffle=False,
             random_state=37)
-        self.trainX = self.trainX.reset_index(drop=True)
-        self.testX = self.testX.reset_index(drop=True)
+        self.trainX = pre_trainX.reset_index(drop=True)
+        self.testX = pre_testX.reset_index(drop=True)
         self.hyperparameters = self._mutateParams(
             prevParams=self.hyperparameters,
             rng=self.rng)
@@ -136,19 +170,81 @@ class XgbAdapter(ModelAdapter):
         """Make predictions using the stable model"""
         if self.model is None:
             return None
-        _, samplingFrequency = self._manageData(data)
         if self.dataset is None:
             return None
+        self._manageData(data, chronosOnLast=True)
         featureSet = self.dataset.iloc[[-1], :-1]
         prediction = self.model.predict(featureSet)
+        frequency = self._getSamplingFrequency(self.dataset)
         futureDates = pd.date_range(
-            start=pd.Timestamp(self.dataset.index[-1]) + pd.Timedelta(samplingFrequency),
+            start=pd.Timestamp(self.dataset.index[-1]) + pd.Timedelta(frequency),
             periods=1,
-            freq=samplingFrequency)
+            freq=frequency)
         result_df = pd.DataFrame({'date_time': futureDates, 'pred': prediction})
         return result_df
 
-    def _manageData(self, data: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    def _setModelPath(self, modelPath: str = None) -> str:
+        self.modelPath = self.modelPath or modelPath
+        modelPath = modelPath or self.modelPath
+        return modelPath
+
+    def _update(self, other: Union['XgbChronosAdapter', None] = None, **kwargs) -> bool:
+        """
+        we save chronos predictions to the dataset slowly over time, since they
+        are technically part of the model we want to save them as we go. So we
+        must combine the existing best model with the latest chronos predictions
+        """
+        if not isinstance(other, self.__class__):
+            return True
+        if (len(self.dataset[~self.dataset['chronos'].isna()]) > len(
+                other.dataset[~other.dataset['chronos'].isna()])
+        ):
+            saved = XgbChronosAdapter._load(other.modelPath)
+            if saved is None:
+                try:
+                    if 'XgbChronosPipeline' not in other.modelPath:
+                        modelPath = '/'.join(other.modelPath.split('/')[:-1]) + '/' + 'XgbChronosPipeline.joblib'
+                        saved = XgbChronosAdapter._load(modelPath)
+                        XgbChronosAdapter._save(
+                            model=saved['stableModel'],
+                            modelError=saved['modelError'],
+                            dataset=self.dataset,
+                            modelPath=other.modelPath)
+                except Exception as _:
+                    pass
+            else:
+                XgbChronosAdapter._save(
+                    model=saved['stableModel'],
+                    modelError=saved['modelError'],
+                    dataset=self.dataset,
+                    modelPath=other.modelPath)
+
+    def _getSamplingFrequency(self, dataset: pd.DataFrame):
+
+        def fmt(sf):
+            return "".join(
+                f"{v}{abbr[k]}"
+                for k, v in sf.components._asdict().items()
+                if v != 0)
+
+        sf = dataset.index.to_series().diff().median()
+        # Convert to frequency string
+        abbr = {
+            "days": "d",
+            "hours": "h",
+            "minutes": "min",
+            "seconds": "s",
+            "milliseconds": "ms",
+            "microseconds": "us",
+            "nanoseconds": "ns"}
+        if isinstance(sf, pd.Timedelta):
+            return fmt(sf)
+        elif isinstance(sf, pd.TimedeltaIndex):
+            return sf.map(fmt)
+        else:
+            raise ValueError
+
+    def _manageData(self, data: pd.DataFrame, chronosOnLast:bool=False) -> tuple[pd.DataFrame, str]:
         '''
         here we need to merge the chronos predictions with the data, but it
         must be done incrementally because it takes too long to do it on the
@@ -157,34 +253,77 @@ class XgbAdapter(ModelAdapter):
         '''
 
         def updateData(data: pd.DataFrame) -> pd.DataFrame:
-            procData = xgbDataPreprocess(data)
-            procData.dataset.drop(['id'], axis=1, inplace=True)
+
+            def conformData(data: pd.DataFrame) -> pd.DataFrame:
+                data['date_time'] = pd.to_datetime(data['date_time'])
+                data['date_time'] = data['date_time'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                data['date_time'] = pd.to_datetime(
+                    data['date_time'],
+                    format='%Y-%m-%d %H:%M:%S')
+                data = data.set_index('date_time')
+                data.drop(['id'], axis=1, inplace=True)
+                data['hour'] = data.index.hour  # (0-23)
+                data['dayofweek'] = data.index.dayofweek  # (0=Monday, 6=Sunday)
+                data['month'] = data.index.month  # (1-12)
+                return data
+
+            data = conformData(data)
             # incrementally add missing processed data rows to the self.dataset
             if self.dataset is None:
-                self.dataset = procData.dataset
+                self.dataset = data
+                self.dataset['chronos'] = np.nan
             else:
                 # Identify rows in procData.dataset not present in self.dataset
-                missingRows = procData.dataset[~procData.dataset.index.isin(self.dataset.index)]
+                missingRows = data[~data.index.isin(self.dataset.index)]
                 # Append only the missing rows to self.dataset
                 self.dataset = pd.concat([self.dataset, missingRows])
-            return self.dataset, procData.sampling_frequency
+            # potential = self.dataset.drop_duplicates(subset='value', keep='first')
+            # if len(potential) >= 20:
+            #     return potential
+            return self.dataset
 
         def addPercentageChange(df: pd.DataFrame) -> pd.DataFrame:
 
             def calculatePercentageChange(df, past):
-                return ((df['value'] - df['value'].shift(past)) / df['value'].shift(past)) * 100
+                return (
+                    (df['value'] - df['value'].shift(past)) /
+                    df['value'].shift(past)
+                ) * 100
 
             for past in [1, 2, 3, 5, 8, 13, 21, 34, 55]:
                 df[f'percent{past}'] = calculatePercentageChange(df, past)
             return df
 
-        # equally spaced grid
+        def addChronos(df: pd.DataFrame) -> pd.DataFrame:
+            # now look at the self.dataset and where the chronos column is empty run the chronos prediction for it, filling the nan column at that row:
+            # Ensure the dataset is sorted by timestamp (index)
+            df.sort_index(inplace=True)
+            # Identify rows where the 'chronos' column is NaN - skip first row
+            unpredicted = df.iloc[1:][df['chronos'].isna()]
+            # Process rows with missing 'chronos' one at a time
+            i = 0
+            for idx, row in unpredicted.iterrows():
+                if chronosOnLast:
+                    historicalData = df.loc[:idx]
+                else:
+                    # Slice the dataset up to (but not including) the current timestamp
+                    historicalData = df.loc[:idx].iloc[:-1]
+                # print(historicalData)
+                # Ensure historicalData is non-empty before calling predict
+                if not historicalData.empty:
+                    # Predict and fill the 'chronos' value for the current row
+                    df.at[idx, 'chronos'] = self.chronos.predict(data=historicalData[['value']])
+                # adding this data can be slow, so we'll just do a few at a time
+                i += 1
+                if i > 4:
+                    break
+            return df
 
-        self.dataset, samplingFrequency = updateData(data)
-        self.dataset = _prepareTimeFeatures(self.dataset)
+        self.dataset = updateData(data)
         self.dataset = addPercentageChange(self.dataset)
+        self.dataset = addChronos(self.dataset)
         self.dataset['tomorrow'] = self.dataset['value'].shift(-1)
-        return self.dataset, samplingFrequency
+        return self.dataset
 
 
     @staticmethod
@@ -205,7 +344,7 @@ class XgbAdapter(ModelAdapter):
         Generates randomized hyperparameters for XGBoost within reasonable ranges.
         Returns a dictionary of hyperparameters.
         """
-        paramBounds: dict = XgbAdapter.paramBounds()
+        paramBounds: dict = XgbChronosAdapter.paramBounds()
         rng = rng or np.random.default_rng(37)
         params = {
             'random_state': rng.integers(0, 10000),
@@ -251,8 +390,8 @@ class XgbAdapter(ModelAdapter):
             dict: A dictionary of tweaked hyperparameters.
         """
         rng = rng or np.random.default_rng(37)
-        prevParams = prevParams or XgbAdapter._prepParams(rng)
-        paramBounds: dict = XgbAdapter.paramBounds()
+        prevParams = prevParams or XgbChronosAdapter._prepParams(rng)
+        paramBounds: dict = XgbChronosAdapter.paramBounds()
         mutatedParams = {}
         for param, (minBound, maxBound) in paramBounds.items():
             currentValue = prevParams[param]
@@ -275,14 +414,14 @@ class XgbAdapter(ModelAdapter):
 
 
     @staticmethod
-    def _straight_line_interpolation(df, valueColumn, step='10T', scale=0.0, rng: Union[np.random.Generator, None] = None):
+    def _straight_line_interpolation(df, value_col, step='10T', scale=0.0, rng: Union[np.random.Generator, None] = None):
         """
         This would probably be better to use than the stepwise pattern as it
         atleast points in the direction of the trend.
         Performs straight line interpolation on missing timestamps.
         Parameters:
         - df: DataFrame with a datetime index and a column to interpolate.
-        - valueColumn: The column name with values to interpolate.
+        - value_col: The column name with values to interpolate.
         - step: The frequency to use for resampling (e.g., '10T' for 10 minutes).
         Returns:
         - DataFrame with interpolated values.
@@ -300,9 +439,9 @@ class XgbAdapter(ModelAdapter):
         # Perform fractal interpolation
         rng = rng or np.random.default_rng(seed=37)
         for _ in range(5):  # Number of fractal iterations
-            filled = df[valueColumn].interpolate(method='linear')  # Linear interpolation
+            filled = df[value_col].interpolate(method='linear')  # Linear interpolation
             perturbation = rng.normal(scale=scale, size=len(filled))  # Small random noise
-            df[valueColumn] = filled + perturbation  # Add fractal-like noise
+            df[value_col] = filled + perturbation  # Add fractal-like noise
         return df
 
     @staticmethod

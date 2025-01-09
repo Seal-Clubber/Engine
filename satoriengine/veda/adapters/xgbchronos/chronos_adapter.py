@@ -7,7 +7,7 @@ import random
 import torch
 from threading import Lock
 from chronos import ChronosPipeline
-from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
+from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 
 
 class PretrainedChronosAdapter(ModelAdapter):

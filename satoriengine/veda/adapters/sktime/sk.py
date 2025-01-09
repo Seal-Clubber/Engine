@@ -8,10 +8,10 @@ import random
 from typing import Union, Optional, List, Any
 from satorilib.logging import info, debug, error, warning, setup, DEBUG
 
-from satoriengine.veda.pipelines.sktime.process import process_data
-from satoriengine.veda.pipelines.sktime.determine_features import determine_feature_set
-from satoriengine.veda.pipelines.sktime.model_creation import model_create_train_test_and_predict
-from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
+from satoriengine.veda.adapters.sktime.process import process_data
+from satoriengine.veda.adapters.sktime.determine_features import determine_feature_set
+from satoriengine.veda.adapters.sktime.model_creation import model_create_train_test_and_predict
+from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 
 setup(level=DEBUG)
 

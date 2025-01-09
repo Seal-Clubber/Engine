@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from satoriengine.veda.pipelines.sktime.process import process_data
+from satoriengine.veda.adapters.sktime.process import process_data
 def getData():
     return pd.DataFrame({
     'date_time': [

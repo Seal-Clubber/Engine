@@ -21,7 +21,7 @@ class ModelAdapter:
     @staticmethod
     def condition(*args, **kwargs) -> float:
         """
-        defines the condition for the pipeline to be executed
+        defines the condition for the adapter to be executed
 
         Args:
             accepts information about the environment (hardware specs, etc.)
@@ -32,7 +32,7 @@ class ModelAdapter:
             0 meaning you should not use this model under those conditions and
             1 meaning these conditions are ideal for this model
         """
-        # any pipeline that hasn't implemented condition should return false in
+        # any adapter that hasn't implemented condition should return false in
         # the case of a condition that is not met so we can use the default
         if (
             isinstance(kwargs.get('availableRamGigs'), float)

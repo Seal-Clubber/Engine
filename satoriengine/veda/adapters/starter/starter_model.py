@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Union
 from collections import namedtuple
 from sklearn.linear_model import LinearRegression
-from satoriengine.veda.pipelines.interface import ModelAdapter, TrainingResult
+from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 
 
 class StarterAdapter(ModelAdapter):
