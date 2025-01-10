@@ -1,5 +1,5 @@
 
-from satoriengine.veda.adapters.xgbchronos import ChronosVedaPipeline
+from satoriengine.veda.adapters.xgbchronos import PretrainedChronosAdapter
 
 
 def generate_training_data(ctx_len: int, num_features: int = 1, num_samples: int = 1000):
@@ -48,7 +48,7 @@ def test():
     trainX, trainY, eval_set = generate_training_data(
         ctx_len=ctx_len, num_features=num_features, num_samples=1000)
     # Pass the first sample as a DataFrame to predict
-    c = ChronosVedaPipeline()
+    c = PretrainedChronosAdapter
     # not deterministic
     c.predict(trainX[0])
     c.predict(trainX[0])

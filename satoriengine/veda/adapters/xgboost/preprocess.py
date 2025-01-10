@@ -17,8 +17,7 @@ def xgbDataPreprocess(data: pd.DataFrame) -> XgbProcessedData:
 
     def _roundToNearestMinute(dt: datetime) -> datetime:
         return dt.replace(second=0, microsecond=0) + timedelta(
-            minutes=1 if dt.second >= 30 else 0
-        )
+            minutes=1 if dt.second >= 30 else 0)
 
     def _processNoisyDataset(
         df: pd.DataFrame,
@@ -30,7 +29,6 @@ def xgbDataPreprocess(data: pd.DataFrame) -> XgbProcessedData:
         offset_seconds: int = 0,
         datetime_column: str = "date_time"
     ) -> pd.DataFrame:
-        
         df_copy = df.copy()
         if isinstance(df_copy.index, pd.DatetimeIndex):
             datetime_series = df_copy.index
@@ -50,9 +48,7 @@ def xgbDataPreprocess(data: pd.DataFrame) -> XgbProcessedData:
                 round_to_seconds,
                 offset_hours,
                 offset_minutes,
-                offset_seconds,
-            )
-        )
+                offset_seconds))
         if is_index:
             df_copy.index = rounded_datetimes
         else:
@@ -70,25 +66,31 @@ def xgbDataPreprocess(data: pd.DataFrame) -> XgbProcessedData:
         offset_seconds: int = 0
     ) -> datetime:
         dt = dt + timedelta(
-            hours=offset_hours, minutes=offset_minutes, seconds=offset_seconds
-        )
+            hours=offset_hours,
+            minutes=offset_minutes,
+            seconds=offset_seconds)
         total_seconds = (round_to_hours * 3600) + (round_to_minutes * 60) + round_to_seconds
         seconds_since_first = round((dt - first_day).total_seconds())
         rounded_seconds = round(seconds_since_first / total_seconds) * total_seconds
         rounded_dt = first_day + timedelta(seconds=rounded_seconds)
         rounded_dt -= timedelta(
-            hours=offset_hours, minutes=offset_minutes, seconds=offset_seconds
-        )
+            hours=offset_hours,
+            minutes=offset_minutes,
+            seconds=offset_seconds)
         return rounded_dt
-        
+
+    def fmt(sf):
+        return "".join(
+            f"{v}{abbr[k]}"
+            for k, v in sf.components._asdict().items()
+            if v != 0)
+
     raw_dataset = data
     raw_dataset["date_time"] = pd.to_datetime(raw_dataset["date_time"])
-    
     raw_dataset = raw_dataset.set_index("date_time")
     raw_diff_dat = raw_dataset.index.to_series().diff()
     value_counts = raw_diff_dat.value_counts().sort_index()
     num_distinct_values = len(value_counts)
-    
     if num_distinct_values > (len(raw_dataset) * 0.05):
         median = raw_dataset.index.to_series().diff().median()
         if median < timedelta(hours=1, minutes=0, seconds=29):
@@ -101,14 +103,13 @@ def xgbDataPreprocess(data: pd.DataFrame) -> XgbProcessedData:
         else:
             round_to_hour = median.total_seconds() // 3600
             round_to_minute = _roundToMinute(
-                median - timedelta(hours=round_to_hour, minutes=0, seconds=0)
-            )
+                median - timedelta(hours=round_to_hour, minutes=0, seconds=0))
         dataset = _processNoisyDataset(
-            raw_dataset, round_to_hours=round_to_hour, round_to_minutes=round_to_minute
-        )
+            raw_dataset,
+            round_to_hours=round_to_hour,
+            round_to_minutes=round_to_minute)
     else:
         dataset = raw_dataset
-
     sf = dataset.index.to_series().diff().median()
     abbr = {
         "days": "d",
@@ -117,29 +118,18 @@ def xgbDataPreprocess(data: pd.DataFrame) -> XgbProcessedData:
         "seconds": "s",
         "milliseconds": "ms",
         "microseconds": "us",
-        "nanoseconds": "ns",
-    }
-
-    def fmt(sf):
-        return "".join(
-            f"{v}{abbr[k]}" for k, v in sf.components._asdict().items() if v != 0
-        )
-
+        "nanoseconds": "ns"}
     if isinstance(sf, pd.Timedelta):
         sampling_frequency = fmt(sf)
     elif isinstance(sf, pd.TimedeltaIndex):
         sampling_frequency = sf.map(fmt)
     else:
         raise ValueError
-    
-    dataset_averaged = dataset.groupby(level=0).agg(
-        {
-            "value": "mean",
-            "id": "first",
-        }
-    )
+    dataset_averaged = dataset.groupby(level=0).agg({
+        "value": "mean",
+        "id": "first"})
     dataset = dataset_averaged
-    dataset = dataset.asfreq(sampling_frequency, method="nearest")
+    dataset = dataset.asfreq(sampling_frequency, method="nearest", fill_value=np.nan)
     return XgbProcessedData(dataset, sampling_frequency)
 
 def _prepareTimeFeatures(df: pd.DataFrame) -> pd.DataFrame:
