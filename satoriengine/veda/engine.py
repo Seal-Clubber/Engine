@@ -296,20 +296,31 @@ class StreamModel:
                 time.sleep(10)
                 continue
             self.chooseAdapter(inplace=True)
-            trainingResult = self.pilot.fit(data=self.data, stable=self.stable)
-            if trainingResult.status == 1:
-                if self.pilot.compare(self.stable):
-                    if self.pilot.save(self.modelPath()):
-                        self.stable = copy.deepcopy(self.pilot)
-                        info(
-                            "stable model updated for stream:",
-                            self.streamId.cleanId,
-                            print=True)
-                        self.producePrediction(self.stable)
-            else:
-                debug(f'model training failed on {self.streamId} waiting 10 minutes to retry')
-                self.failedAdapters.append(self.pilot)
-                time.sleep(60*10)
+            try:
+                trainingResult = self.pilot.fit(data=self.data, stable=self.stable)
+                if trainingResult.status == 1:
+                    if self.pilot.compare(self.stable):
+                        if self.pilot.save(self.modelPath()):
+                            self.stable = copy.deepcopy(self.pilot)
+                            info(
+                                "stable model updated for stream:",
+                                self.streamId.cleanId,
+                                print=True)
+                            self.producePrediction(self.stable)
+                else:
+                    debug(f'model training failed on {self.streamId} waiting 10 minutes to retry')
+                    self.failedAdapters.append(self.pilot)
+                    time.sleep(60*10)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                error(e)
+                try:
+                    import numpy as np
+                    print(self.pilot.dataset)
+                except Exception as e:
+                    pass
+
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)

@@ -319,9 +319,24 @@ class XgbChronosAdapter(ModelAdapter):
                     break
             return df
 
+        def clearoutInfinities(df: pd.DataFrame) -> pd.DataFrame:
+            """
+            Replace positive infinity with the largest finite value in the column
+            and negative infinity with the smallest finite value in the column.
+            """
+            for col in df.columns:
+                if df[col].dtype.kind in 'bifc':  # Check if the column is numeric
+                    max_val = df[col][~df[col].isin([np.inf, -np.inf])].max()  # Largest finite value
+                    min_val = df[col][~df[col].isin([np.inf, -np.inf])].min()  # Smallest finite value
+                    df[col] = df[col].replace(np.inf, max_val)
+                    df[col] = df[col].replace(-np.inf, min_val)
+            #self.dataset = self.dataset.select_dtypes(include=[np.number])  # Ensure only numeric data
+            return df
+
         self.dataset = updateData(data)
         self.dataset = addPercentageChange(self.dataset)
         self.dataset = addChronos(self.dataset)
+        self.dataset = clearoutInfinities(self.dataset)
         self.dataset['tomorrow'] = self.dataset['value'].shift(-1)
         return self.dataset
 
