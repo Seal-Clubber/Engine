@@ -60,12 +60,12 @@ class Engine:
                 streamModel.resume()
 
     async def getPubSubInfo(self):
-        debug("1", color="teal")
         async def _getSubInfo():
             subInfo = {}
             try:
-                subInfo: Message = await self.dataClient.sendRequest(method='get-sub-list')
-                self.subcriptions = subInfo.streamInfo
+                subInfo = await self.dataClient.sendRequest(method='get-sub-list')
+                for table_uuid, data_dict in subInfo.streamInfo.items():
+                    self.subcriptions[table_uuid] = PeerInfo(data_dict['subscribers'], data_dict['publishers'])
             except Exception as e:
                 error(f"Failed to send request {e}")
 
@@ -73,7 +73,8 @@ class Engine:
             pubInfo = {}
             try:
                 pubInfo = await self.dataClient.sendRequest(method='get-pub-list') 
-                self.publications = pubInfo.streamInfo
+                for table_uuid, data_dict in pubInfo.streamInfo.items():
+                    self.publications[table_uuid] = PeerInfo(data_dict['subscribers'], data_dict['publishers'])
             except Exception as e:
                 error(f"Failed to send request {e}")
         
