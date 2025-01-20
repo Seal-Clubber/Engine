@@ -7,6 +7,7 @@ from satorilib.disk import getHashBefore
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.utils.hash import hashIt, generatePathId
+from satorilib.datamanager import DataClient, PeerInfo, Message
 from reactivex.subject import BehaviorSubject
 import pandas as pd
 import threading
@@ -28,10 +29,22 @@ class Engine:
         self.streamModels: Dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
-        self.setupSubscriptions()
-        self.initializeModels()
+        self.subcriptions: dict[str, PeerInfo] = None
+        self.publications: dict[str, PeerInfo] = None
+        self.dataClient: DataClient = DataClient()
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
+    
+    @classmethod
+    async def create(cls, streams: list[Stream], pubstreams: list[Stream]) -> 'Engine':
+        engine = cls(streams, pubstreams)
+        await engine.initialize()
+        return engine
+
+    async def initialize(self):
+        await self.getPubSubInfo()
+        self.setupSubscriptions()
+        self.initializeModels()
 
     def pause(self, force: bool = False):
         if force:
@@ -45,6 +58,34 @@ class Engine:
         if not self.paused:
             for streamModel in self.streamModels.values():
                 streamModel.resume()
+
+    async def getPubSubInfo(self):
+        debug("1", color="teal")
+        async def _getSubInfo():
+            subInfo = {}
+            try:
+                subInfo = Message(await self.dataClient.sendRequest(method='get-sub-list'))
+                print(subInfo)
+                # subInfo.to_dict()
+                # print(subInfo.to_dict())
+                self.subcriptions = subInfo['table_uuid']
+            except Exception as e:
+                error(f"Failed to send request {e}")
+
+        async def _getPubInfo():
+            pubInfo = {}
+            try:
+                pubInfo = await self.dataClient.sendRequest(method='get-pub-list') 
+                self.publications = pubInfo['stream_info']
+            except Exception as e:
+                error(f"Failed to send request {e}")
+        
+        await _getSubInfo()
+        debug("Subscriptions Length : ", len(self.subcriptions), color="teal")
+        debug("Publications Length : ", len(self.publications), color="teal")
+        await _getPubInfo()
+        debug("Subscriptions Length : ", len(self.subcriptions), color="teal")
+        debug("Publications Length : ", len(self.publications), color="teal")
 
     def setupSubscriptions(self):
         self.newObservation.subscribe(
