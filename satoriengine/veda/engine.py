@@ -29,8 +29,8 @@ class Engine:
         self.streamModels: Dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
-        self.subcriptions: dict[str, PeerInfo] = None
-        self.publications: dict[str, PeerInfo] = None
+        self.subcriptions: dict[str, PeerInfo] = {}
+        self.publications: dict[str, PeerInfo] = {}
         self.dataClient: DataClient = DataClient()
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
@@ -64,11 +64,8 @@ class Engine:
         async def _getSubInfo():
             subInfo = {}
             try:
-                subInfo = Message(await self.dataClient.sendRequest(method='get-sub-list'))
-                print(subInfo)
-                # subInfo.to_dict()
-                # print(subInfo.to_dict())
-                self.subcriptions = subInfo['table_uuid']
+                subInfo: Message = await self.dataClient.sendRequest(method='get-sub-list')
+                self.subcriptions = subInfo.streamInfo
             except Exception as e:
                 error(f"Failed to send request {e}")
 
@@ -76,16 +73,12 @@ class Engine:
             pubInfo = {}
             try:
                 pubInfo = await self.dataClient.sendRequest(method='get-pub-list') 
-                self.publications = pubInfo['stream_info']
+                self.publications = pubInfo.streamInfo
             except Exception as e:
                 error(f"Failed to send request {e}")
         
         await _getSubInfo()
-        debug("Subscriptions Length : ", len(self.subcriptions), color="teal")
-        debug("Publications Length : ", len(self.publications), color="teal")
         await _getPubInfo()
-        debug("Subscriptions Length : ", len(self.subcriptions), color="teal")
-        debug("Publications Length : ", len(self.publications), color="teal")
 
     def setupSubscriptions(self):
         self.newObservation.subscribe(
