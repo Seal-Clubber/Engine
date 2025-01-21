@@ -8,6 +8,7 @@ from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.utils.hash import hashIt, generatePathId
 from satorilib.datamanager import DataClient, PeerInfo, Message
+from satorineuron import config
 from reactivex.subject import BehaviorSubject
 import pandas as pd
 import threading
@@ -31,6 +32,7 @@ class Engine:
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
         self.subcriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
+        self.dataServerIp: str = ''
         self.dataClient: DataClient = DataClient()
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
@@ -42,6 +44,7 @@ class Engine:
         return engine
 
     async def initialize(self):
+        await self.connectToDataServer()
         await self.getPubSubInfo()
         self.setupSubscriptions()
         self.initializeModels()
@@ -59,11 +62,21 @@ class Engine:
             for streamModel in self.streamModels.values():
                 streamModel.resume()
 
+    async def connectToDataServer(self):
+        self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+        try:
+            await self.dataClient.connectToServer(peerHost=self.dataServerIp)
+            info("Successfully connected to Server at :", self.dataServerIp, color="green")
+        except Exception as e:
+            error("Error connecting to server : ", e)
+            self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
+
+
     async def getPubSubInfo(self):
         async def _getSubInfo():
             subInfo = {}
             try:
-                subInfo = await self.dataClient.sendRequest(method='get-sub-list')
+                subInfo = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-sub-list')
                 for table_uuid, data_dict in subInfo.streamInfo.items():
                     self.subcriptions[table_uuid] = PeerInfo(data_dict['subscribers'], data_dict['publishers'])
             except Exception as e:
@@ -72,7 +85,7 @@ class Engine:
         async def _getPubInfo():
             pubInfo = {}
             try:
-                pubInfo = await self.dataClient.sendRequest(method='get-pub-list') 
+                pubInfo = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pub-list') 
                 for table_uuid, data_dict in pubInfo.streamInfo.items():
                     self.publications[table_uuid] = PeerInfo(data_dict['subscribers'], data_dict['publishers'])
             except Exception as e:
