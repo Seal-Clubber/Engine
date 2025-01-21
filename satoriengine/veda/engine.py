@@ -2,7 +2,7 @@ from satoriengine.veda.adapters import ModelAdapter, SKAdapter, StarterAdapter, 
 from satoriengine.veda.data import StreamForecast, cleanse_dataframe, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.disk.filetypes.csv import CSVManager
-from satorilib.concepts import Stream, StreamId, Observation
+from satorilib.concepts import Stream, StreamId, StreamUuid, Observation
 from satorilib.disk import getHashBefore
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
@@ -24,9 +24,7 @@ setup(level=INFO)
 
 
 class Engine:
-    def __init__(self, streams: list[Stream], pubstreams: list[Stream]):
-        self.streams = streams
-        self.pubstreams = pubstreams
+    def __init__(self):
         self.streamModels: Dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
@@ -46,6 +44,12 @@ class Engine:
     async def initialize(self):
         await self.connectToDataServer()
         await self.getPubSubInfo()
+        await self.getData()
+        # setup subscriptions to external dataservers
+        # on observation 
+        #   pass to data server (for it to save to disk)
+        #   pass to handle observation
+        #   make sure we update training data
         self.setupSubscriptions()
         self.initializeModels()
 
@@ -73,6 +77,22 @@ class Engine:
 
 
     async def getPubSubInfo(self):
+        async def _getMatchingInfo():
+            '''
+            a solution alternative to implicit ordering of sub and pub uuids: 
+            call to know which pub corresponds to which sub
+            alternative to this, we could make one end point that returns them 
+            both or something.
+            get-pubsub-map
+            table_uuid-table_uuid
+            '''
+            pubsubMap = {}
+            try:
+                pubsubMap = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pubsub-map')
+                # for pub_uuid, sub_uuid in subInfo.items():
+            except Exception as e:
+                error(f"Failed to send request {e}")
+
         async def _getSubInfo():
             subInfo = {}
             try:
@@ -91,8 +111,24 @@ class Engine:
             except Exception as e:
                 error(f"Failed to send request {e}")
         
+        await _getMatchingInfo()
         await _getSubInfo()
         await _getPubInfo()
+    
+    async def getData(self):
+        try:
+            for table_uuid, _ in self.subcriptions.items():
+                datasetJson = await self.dataClient.sendRequest(
+                    peerHost=self.dataServerIp, 
+                    table_uuid=table_uuid,
+                    method="stream-data"
+                    )
+                df = pd.read_json(datasetJson.data, orient='split')
+                output_path = os.path.join('datas', f'{table_uuid}.csv')
+                df.to_csv(output_path, index=False)
+        except Exception as e:
+            error(f"Failed to send request {e}")
+
 
     def setupSubscriptions(self):
         self.newObservation.subscribe(
@@ -102,13 +138,15 @@ class Engine:
             on_completed=lambda: self.handleCompletion())
 
     def initializeModels(self):
-        for stream, pubStream in zip(self.streams, self.pubstreams):
-            self.streamModels[stream.streamId] = StreamModel(
-                streamId=stream.streamId,
-                predictionStreamId=pubStream.streamId,
+        # make sure these are in order or solve in some way.
+        # [1,2,3] [a, b, c] -> [(1,a), (2,b), (3,c)]
+        for subuuid, pubuuid in zip(self.subcriptions, self.publications): #  from map
+            self.streamModels[subuuid] = StreamModel(
+                streamId=subuuid,
+                predictionStreamId=pubuuid,
                 predictionProduced=self.predictionProduced)
-            self.streamModels[stream.streamId].chooseAdapter(inplace=True)
-            self.streamModels[stream.streamId].run_forever()
+            self.streamModels[subuuid].chooseAdapter(inplace=True)
+            self.streamModels[subuuid].run_forever()
             #break  # only one stream for testing
 
     def handleNewObservation(self, observation: Observation):
@@ -150,8 +188,8 @@ class Engine:
 class StreamModel:
     def __init__(
         self,
-        streamId: StreamId,
-        predictionStreamId: StreamId,
+        streamId: StreamUuid,
+        predictionStreamId: StreamUuid,
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
@@ -159,9 +197,9 @@ class StreamModel:
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
-        self.streamId: StreamId = streamId
-        self.predictionStreamId: StreamId = predictionStreamId
-        self.predictionProduced: StreamId = predictionProduced
+        self.streamId: StreamUuid = streamId
+        self.predictionStreamId: StreamUuid = predictionStreamId
+        self.predictionProduced: BehaviorSubject = predictionProduced
         self.data: pd.DataFrame = self.loadData()
         self.adapter: ModelAdapter = self.chooseAdapter()
         self.pilot: ModelAdapter = self.adapter(uid=streamId)
