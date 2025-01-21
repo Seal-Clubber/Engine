@@ -304,7 +304,7 @@ class StreamModel:
                             self.stable = copy.deepcopy(self.pilot)
                             info(
                                 "stable model updated for stream:",
-                                self.streamId.cleanId,
+                                self.streamId.strId,
                                 print=True)
                             self.producePrediction(self.stable)
                 else:
