@@ -24,6 +24,13 @@ setup(level=INFO)
 
 
 class Engine:
+
+    @classmethod
+    async def create(cls) -> 'Engine':
+        engine = cls()
+        await engine.initialize()
+        return engine
+    
     def __init__(self):
         self.streamModels: Dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
@@ -35,11 +42,45 @@ class Engine:
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
     
-    @classmethod
-    async def create(cls) -> 'Engine':
-        engine = cls()
-        await engine.initialize()
-        return engine
+    def handlePrediction(self, predictionInputs: PredictionInputs):
+
+        def registered(pubkey: str):
+            if pubkey is not None:
+                if pubkey not in self.wallets.keys():
+                    walletId = Wallet.getIdFromPubkey(pubkey=pubkey)
+                    if walletId is not None:
+                        self.wallets[pubkey] = walletId
+                    return walletId
+                return self.wallets[pubkey]
+            return None
+
+        if auth(predictionInputs.walletPayload):
+            walletId = registered(predictionInputs.walletPubkey)
+            if walletId is not None:
+                predictionInputs.setWalletId(walletId=walletId)
+                # just record record those that are staked
+                # df = database.get.getStake(wallet_id=walletId)
+                # if df is not None and isinstance(df, pd.DataFrame) and len(df) > 0:
+                self.recordPredictionInDatabase(predictionInputs)
+
+    def processQueue(self):
+        while True:
+            try:
+                self.handlePrediction(self.queue.get())
+            except Exception as e:
+                self.logging.error(f"Error saving to database: {str(e)}")
+            finally:
+                # self.queue.task_done()
+                pass
+
+    # could use async task instead if we want
+    def startProcessing(self):
+        recordPredictionThread = threading.Thread(
+            target=self.processQueue,
+            daemon=True)
+        recordPredictionThread.start()
+
+
 
     async def initialize(self):
         await self.connectToDataServer()
@@ -74,7 +115,6 @@ class Engine:
             error("Error connecting to server : ", e)
             self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
 
-
     async def getPubSubInfo(self):
         try:
             pubsubMap = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pubsub-map')
@@ -94,10 +134,12 @@ class Engine:
 
     async def initializeModels(self):
         for subuuid, pubuuid in zip(self.subcriptions.keys(), self.publications.keys()): 
+            peers = self.subcriptions[subuuid]
             self.streamModels[subuuid] = await StreamModel.create(
                 streamId=subuuid,
                 predictionStreamId=pubuuid,
                 serverIp=self.dataServerIp,
+                peerInfo=peers,
                 predictionProduced=self.predictionProduced)
             self.streamModels[subuuid].chooseAdapter(inplace=True)
             self.streamModels[subuuid].run_forever()
@@ -139,11 +181,32 @@ class Engine:
 
 
 class StreamModel:
+    
+    @classmethod
+    async def create(
+        cls, 
+        streamId: StreamUuid,
+        predictionStreamId: StreamUuid,
+        serverIp: str,
+        peerInfo: PeerInfo,
+        predictionProduced: BehaviorSubject
+    ):
+        streamModel = cls(
+            streamId,
+            predictionStreamId,
+            serverIp,
+            peerInfo,
+            predictionProduced
+        )
+        await streamModel.initialize()
+        return streamModel
+    
     def __init__(
         self,
         streamId: StreamUuid,
         predictionStreamId: StreamUuid,
         serverIp: str,
+        peerInfo: PeerInfo,
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
@@ -155,27 +218,10 @@ class StreamModel:
         self.streamId: StreamUuid = streamId
         self.predictionStreamId: StreamUuid = predictionStreamId
         self.serverIp = serverIp
+        self.peerInfo: PeerInfo = peerInfo
         self.predictionProduced: BehaviorSubject = predictionProduced
+        self.rng = np.random.default_rng(37)
         
-
-    @classmethod
-    async def create(
-                    cls, 
-                    streamId: StreamUuid,
-                    predictionStreamId: StreamUuid,
-                    serverIp: str,
-                    predictionProduced: BehaviorSubject
-        ):
-
-        streamModel = cls(
-                streamId,
-                predictionStreamId,
-                serverIp,
-                predictionProduced
-            )
-        await streamModel.initialize()
-        return streamModel
-    
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
         self.adapter: ModelAdapter = self.chooseAdapter()
@@ -184,7 +230,60 @@ class StreamModel:
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamId} using {self.adapter.__name__}', color='teal')
+
+    def init2(self):
+        self.connectToPeer()
+        self.syncData()
+        self.makeSubscription()
+        #self.listenToSubscription()
+
+
+    def connectToPeer(self):
+        # choose peer to connect to
+        # - connect to a peer for a stream
+        #     - attempt connection to the source first (publisher)
+        self.peerInfo.publishersIp
+        #     - if able to connect, make sure they have the stream we're looking for available for subscribing to
+                # - handle subscriber list
+                #     - filter our own ip out of the subscriber list
+        self.peerInfo.subscribersIp = [ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp]
+                #     - randomize subscriber list (shuffle payload[table_uuid][1:])
+        self.rng.shuffle(self.peerInfo.subscribersIp)
+        #         - if not, keep looking for a valid peer
+        #     - go down the subscriber list until you find one...
+        pass
     
+    def syncData():
+        '''
+        - this can be highly optimized. but for now we do the simple version
+        - just ask for their entire dataset every time
+            - if it's different than the df we got from our own dataserver, 
+              then tell dataserver to save this instead
+            - replace what we have
+        '''
+        pass
+
+    def makeSubscription():
+        '''
+        - and subscribe to the stream so we get the information
+            - whenever we get an observation on this stream, pass to the DataServer
+        - continually generate predictions for prediction publication streams and pass that to 
+        '''
+        pass
+
+    def listenToSubscription():
+        '''
+        some messages will be on our response variable
+         - append to the data
+         - produce prediction if we can
+         - pass prediction to our server
+        other message will be on features
+         - append to the data
+
+        callbacks could just start a thread to do these things.
+        '''
+        pass
+
     def pause(self):
         self.paused = True
 
