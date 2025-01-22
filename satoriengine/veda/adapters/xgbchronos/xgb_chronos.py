@@ -116,7 +116,8 @@ class XgbChronosAdapter(ModelAdapter):
         if not isinstance(other, self.__class__):
             return True
         thisScore = self.score()
-        otherScore = other.score(test_x=self.testX, test_y=self.testY)
+        # test_x=self.testX, test_y=self.testY we could score on our updated data if other has the same shape
+        otherScore = other.modelError or other.score()
         isImproved = thisScore < otherScore
         if isImproved:
             info(
@@ -137,9 +138,8 @@ class XgbChronosAdapter(ModelAdapter):
         if self.model is None:
             return np.inf
         self.modelError = mean_absolute_error(
-            test_y if test_y is not None else self.testY, 
-            self.model.predict(test_x if test_x is not None else self.testX)
-            )
+            test_y if test_y is not None else self.testY,
+            self.model.predict(test_x if test_x is not None else self.testX))
         return self.modelError
 
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
