@@ -11,6 +11,7 @@ from satorilib.datamanager import DataClient, PeerInfo, Message
 from satorineuron import config
 from reactivex.subject import BehaviorSubject
 import pandas as pd
+import numpy as np
 import threading
 import json
 import copy
@@ -231,10 +232,10 @@ class StreamModel:
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamId} using {self.adapter.__name__}', color='teal')
 
-    def init2(self):
-        self.connectToPeer()
-        self.syncData()
-        self.makeSubscription()
+    async def init2(self):
+        await self.connectToPeer()
+        await self.syncData()
+        await self.makeSubscription()
         #self.listenToSubscription()
 
 
@@ -253,7 +254,7 @@ class StreamModel:
         #     - go down the subscriber list until you find one...
         pass
     
-    def syncData():
+    async def syncData(self):
         '''
         - this can be highly optimized. but for now we do the simple version
         - just ask for their entire dataset every time
@@ -261,7 +262,28 @@ class StreamModel:
               then tell dataserver to save this instead
             - replace what we have
         '''
-        pass
+        for subscriberIp in self.peerInfo.subscribersIp:
+            try:
+                externalDataJson = await self.streamDataClient.sendRequest(
+                            peerHost=subscriberIp, 
+                            table_uuid=self.streamId,
+                            method='stream-info'
+                            )
+                externalDf = pd.read_json(externalDataJson.data, orient='split')
+            except Exception as e:
+                error("Error : ", e)
+            
+            if not externalDf.equals(self.data):
+                try:
+                    await self.streamDataClient.sendRequest(
+                                peerHost=self.serverIp, 
+                                table_uuid=self.streamId,
+                                method='insert',
+                                data=externalDf,
+                                replace=False # TODO : confirm if merge or complete replacement?
+                                )
+                except Exception as e:
+                    error("Error : ", e)
 
     def makeSubscription():
         '''
