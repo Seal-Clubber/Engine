@@ -36,7 +36,7 @@ class Engine:
         self.threads: list[threading.Thread] = []
     
     @classmethod
-    async def create(cls, streams: list[Stream], pubstreams: list[Stream]) -> 'Engine':
+    async def create(cls) -> 'Engine':
         engine = cls()
         await engine.initialize()
         return engine
@@ -49,8 +49,8 @@ class Engine:
         #   pass to data server (for it to save to disk)
         #   pass to handle observation
         #   make sure we update training data
-        self.setupSubscriptions()
-        self.initializeModels()
+        # self.setupSubscriptions()
+        await self.initializeModels()
 
     def pause(self, force: bool = False):
         if force:
@@ -81,24 +81,10 @@ class Engine:
             for sub_uuid, data in pubsubMap.streamInfo.items():
                 self.subcriptions[sub_uuid] = PeerInfo(data['subscription_subscribers'], data['subscription_publishers'])
                 self.publications[data['publication_uuid']] = PeerInfo(data['publication_subscribers'], data['publication_publishers'])
-            print(len(self.subcriptions))
+            print("Inside the Engine", len(self.subcriptions))
         except Exception as e:
             error(f"Failed to send request {e}")
     
-    async def getData(self):
-        try:
-            for table_uuid, _ in self.subcriptions.items():
-                datasetJson = await self.dataClient.sendRequest(
-                    peerHost=self.dataServerIp, 
-                    table_uuid=table_uuid,
-                    method="stream-data"
-                    )
-                df = pd.read_json(datasetJson.data, orient='split')
-                print(df)
-        except Exception as e:
-            error(f"Failed to send request {e}")
-
-
     def setupSubscriptions(self):
         self.newObservation.subscribe(
             on_next=lambda x: self.handleNewObservation(
@@ -106,17 +92,15 @@ class Engine:
             on_error=lambda e: self.handleError(e),
             on_completed=lambda: self.handleCompletion())
 
-    def initializeModels(self):
-        # make sure these are in order or solve in some way.
-        # [1,2,3] [a, b, c] -> [(1,a), (2,b), (3,c)]
-        for subuuid, pubuuid in zip(self.subcriptions, self.publications): #  from map
-            self.streamModels[subuuid] = StreamModel(
+    async def initializeModels(self):
+        for subuuid, pubuuid in zip(self.subcriptions.keys(), self.publications.keys()): 
+            self.streamModels[subuuid] = await StreamModel.create(
                 streamId=subuuid,
                 predictionStreamId=pubuuid,
+                serverIp=self.dataServerIp,
                 predictionProduced=self.predictionProduced)
             self.streamModels[subuuid].chooseAdapter(inplace=True)
             self.streamModels[subuuid].run_forever()
-            #break  # only one stream for testing
 
     def handleNewObservation(self, observation: Observation):
         # spin off a new thread to handle the new observation
@@ -159,24 +143,48 @@ class StreamModel:
         self,
         streamId: StreamUuid,
         predictionStreamId: StreamUuid,
+        serverIp: str,
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
+        self.streamDataClient: DataClient = DataClient() 
         self.preferredAdapters: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
         self.streamId: StreamUuid = streamId
         self.predictionStreamId: StreamUuid = predictionStreamId
+        self.serverIp = serverIp
         self.predictionProduced: BehaviorSubject = predictionProduced
-        self.data: pd.DataFrame = self.loadData()
+        
+
+    @classmethod
+    async def create(
+                    cls, 
+                    streamId: StreamUuid,
+                    predictionStreamId: StreamUuid,
+                    serverIp: str,
+                    predictionProduced: BehaviorSubject
+        ):
+
+        streamModel = cls(
+                streamId,
+                predictionStreamId,
+                serverIp,
+                predictionProduced
+            )
+        await streamModel.initialize()
+        return streamModel
+    
+    async def initialize(self):
+        self.data: pd.DataFrame = await self.loadData()
         self.adapter: ModelAdapter = self.chooseAdapter()
-        self.pilot: ModelAdapter = self.adapter(uid=streamId)
+        self.pilot: ModelAdapter = self.adapter(uid=self.streamId)
         self.pilot.load(self.modelPath())
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        debug(f'AI Engine: stream id {generatePathId(streamId=self.streamId)} using {self.adapter.__name__}', color='teal')
-
+        debug(f'AI Engine: stream id {self.streamId} using {self.adapter.__name__}', color='teal')
+    
     def pause(self):
         self.paused = True
 
@@ -212,10 +220,11 @@ class StreamModel:
                 if isinstance(forecast, pd.DataFrame):
                     observationTime = datetimeToTimestamp(now())
                     prediction = StreamForecast.firstPredictionOf(forecast)
-                    observationHash = hashIt(
-                        getHashBefore(pd.DataFrame(), observationTime)
-                        + str(observationTime)
-                        + str(prediction))
+                    # observationHash = hashIt(
+                    #     getHashBefore(pd.DataFrame(), observationTime)
+                    #     + str(observationTime)
+                    #     + str(prediction))
+                    observationHash = 'random' # TODO : new hashing method
                     self.save_prediction(
                         observationTime, prediction, observationHash)
                     streamforecast = StreamForecast(
@@ -265,29 +274,29 @@ class StreamModel:
             header=False)
         return df
 
-    def loadData(self) -> pd.DataFrame:
+    async def loadData(self) -> pd.DataFrame:
         try:
-            return cleanse_dataframe(pd.read_csv(
-                self.data_path(),
-                names=["date_time", "value", "id"],
-                header=None))
-        except FileNotFoundError:
+            datasetJson = await self.streamDataClient.sendRequest(
+                    peerHost=self.serverIp, 
+                    table_uuid=self.streamId,
+                    method="stream-data"
+                    )
+            df = pd.read_json(datasetJson.data, orient='split')
+            output_path = os.path.join('csvs', f'{self.streamId}.csv')
+            df.to_csv(output_path, index=False)
+            return df
+        except Exception:
             return pd.DataFrame(columns=["date_time", "value", "id"])
-
-    def data_path(self) -> str:
-        return (
-            '/Satori/Neuron/data/'
-            f'{generatePathId(streamId=self.streamId)}/aggregate.csv')
 
     def prediction_data_path(self) -> str:
         return (
-            '/Satori/Neuron/data/'
-            f'{generatePathId(streamId=self.predictionStreamId)}/aggregate.csv')
+            '/Satori/Neuron/data/testprediction/'
+            f'{self.predictionStreamId}.csv')
 
     def modelPath(self) -> str:
         return (
             '/Satori/Neuron/models/veda/'
-            f'{generatePathId(streamId=self.streamId)}/'
+            f'{self.streamId}/'
             f'{self.adapter.__name__}.joblib')
 
     def chooseAdapter(self, inplace: bool = False) -> ModelAdapter:
@@ -330,7 +339,7 @@ class StreamModel:
                 not isinstance(self.pilot, adapter))
         ):
             info(
-                f'AI Engine: stream id {generatePathId(streamId=self.streamId)} '
+                f'AI Engine: stream id {self.streamId} '
                 f'switching from {self.adapter.__name__} '
                 f'to {adapter.__name__} on {self.streamId}',
                 color='teal')
@@ -359,7 +368,7 @@ class StreamModel:
                             self.stable = copy.deepcopy(self.pilot)
                             info(
                                 "stable model updated for stream:",
-                                self.streamId.cleanId,
+                                self.streamId,
                                 print=True)
                             self.producePrediction(self.stable)
                 else:
