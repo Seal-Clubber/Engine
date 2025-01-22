@@ -37,14 +37,13 @@ class Engine:
     
     @classmethod
     async def create(cls, streams: list[Stream], pubstreams: list[Stream]) -> 'Engine':
-        engine = cls(streams, pubstreams)
+        engine = cls()
         await engine.initialize()
         return engine
 
     async def initialize(self):
         await self.connectToDataServer()
         await self.getPubSubInfo()
-        await self.getData()
         # setup subscriptions to external dataservers
         # on observation 
         #   pass to data server (for it to save to disk)
@@ -77,43 +76,14 @@ class Engine:
 
 
     async def getPubSubInfo(self):
-        async def _getMatchingInfo():
-            '''
-            a solution alternative to implicit ordering of sub and pub uuids: 
-            call to know which pub corresponds to which sub
-            alternative to this, we could make one end point that returns them 
-            both or something.
-            get-pubsub-map
-            table_uuid-table_uuid
-            '''
-            pubsubMap = {}
-            try:
-                pubsubMap = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pubsub-map')
-                # for pub_uuid, sub_uuid in subInfo.items():
-            except Exception as e:
-                error(f"Failed to send request {e}")
-
-        async def _getSubInfo():
-            subInfo = {}
-            try:
-                subInfo = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-sub-list')
-                for table_uuid, data_dict in subInfo.streamInfo.items():
-                    self.subcriptions[table_uuid] = PeerInfo(data_dict['subscribers'], data_dict['publishers'])
-            except Exception as e:
-                error(f"Failed to send request {e}")
-
-        async def _getPubInfo():
-            pubInfo = {}
-            try:
-                pubInfo = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pub-list') 
-                for table_uuid, data_dict in pubInfo.streamInfo.items():
-                    self.publications[table_uuid] = PeerInfo(data_dict['subscribers'], data_dict['publishers'])
-            except Exception as e:
-                error(f"Failed to send request {e}")
-        
-        await _getMatchingInfo()
-        await _getSubInfo()
-        await _getPubInfo()
+        try:
+            pubsubMap = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pubsub-map')
+            for sub_uuid, data in pubsubMap.streamInfo.items():
+                self.subcriptions[sub_uuid] = PeerInfo(data['subscription_subscribers'], data['subscription_publishers'])
+                self.publications[data['publication_uuid']] = PeerInfo(data['publication_subscribers'], data['publication_publishers'])
+            print(len(self.subcriptions))
+        except Exception as e:
+            error(f"Failed to send request {e}")
     
     async def getData(self):
         try:
@@ -124,8 +94,7 @@ class Engine:
                     method="stream-data"
                     )
                 df = pd.read_json(datasetJson.data, orient='split')
-                output_path = os.path.join('datas', f'{table_uuid}.csv')
-                df.to_csv(output_path, index=False)
+                print(df)
         except Exception as e:
             error(f"Failed to send request {e}")
 
