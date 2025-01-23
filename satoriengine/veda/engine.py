@@ -237,6 +237,7 @@ class StreamModel:
         debug(f'AI Engine: stream id {self.streamId} using {self.adapter.__name__}', color='teal')
 
     async def init2(self):
+        # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
         await self.connectToPeer()
         await self.syncData()
         await self.makeSubscription()
@@ -247,10 +248,10 @@ class StreamModel:
         # - connect to a peer for a stream
         #     - attempt connection to the source first (publisher)
         #     - if able to connect, make sure they have the stream we're looking for available for subscribing to
-        # - handle subscriber list
-        #     - filter our own ip out of the subscriber list
-        #     - randomize subscriber list (shuffle payload[table_uuid][1:])
-        #         - if not, keep looking for a valid peer
+        #     - elif not: 
+        #       - handle subscriber list
+        #         - filter our own ip out of the subscriber list
+        #         - randomize subscriber list (shuffle payload[table_uuid][1:])
         #     - go down the subscriber list until you find one...
         try:
             response = await self.dataClient.sendRequest(
@@ -259,12 +260,28 @@ class StreamModel:
                 method='confirm-subscription',
             )
             if response.status == "success":
+                # we have a connection!
+                # sync the data and subscribe to the stream in next function
+                pass
+            else:
+                # filter out our own ip from the subscriber list
                 self.peerInfo.subscribersIp = [
                     ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
                 ]
+                # shuffle it
                 self.rng.shuffle(self.peerInfo.subscribersIp)
+                # try to connect to a subscriber until we find one
+                # must ask the other subscriber that we connect to if they have
+                # an active connection to the data (including it's own publsihed
+                # data, which it can assume is active) - make endpoint on the 
+                # DataServer and it must get that information from one of it's 
+                # local clients (meaning neuron or Engine data clients)
+                error("Publisher does not contain subscription stream")
         except Exception as e:
             error("Error, cannot connect to Publisher : ", e)
+        
+        # when finally successful we must tell our own dataserver I am
+        # subscribed to x and will pass it's observations to you.
 
     async def syncData(self):
         '''
@@ -274,29 +291,28 @@ class StreamModel:
               then tell dataserver to save this instead
             - replace what we have
         '''
-        for subscriberIp in self.peerInfo.subscribersIp:
-            try:
-                externalDataJson = await self.dataClient.sendRequest(
-                    peerHost=subscriberIp,
-                    table_uuid=self.streamId,
-                    method='stream-info',
-                )
-                externalDf = pd.read_json(externalDataJson.data, orient='split')
-            except Exception as e:
-                error("Error cannot connect to peer: ", e)
+        try:
+            externalDataJson = await self.dataClient.sendRequest(
+                peerHost=self.peerInfo.subscriberIp, # choose connection we created
+                table_uuid=self.streamId,
+                method='stream-info',
+            )
+            externalDf = pd.read_json(externalDataJson.data, orient='split')
+        except Exception as e:
+            error("Error cannot connect to peer: ", e)
 
-            if len(externalDf) > len(self.data):
-                self.data = externalDf
-                try:
-                    await self.dataClient.sendRequest(
-                        peerHost=self.serverIp,
-                        table_uuid=self.streamId,
-                        method='insert',
-                        data=externalDf,
-                        replace=False,
-                    )
-                except Exception as e:
-                    error("Error cannot connect to Server: ", e)
+        if not externalDf.equals(self.data) and len(externalDf) > 0:
+            self.data = externalDf
+            try:
+                await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    table_uuid=self.streamId,
+                    method='insert',
+                    data=externalDf,
+                    replace=True,
+                )
+            except Exception as e:
+                error("Error cannot connect to Server: ", e)
 
     def makeSubscription():
         '''
@@ -304,15 +320,21 @@ class StreamModel:
             - whenever we get an observation on this stream, pass to the DataServer
         - continually generate predictions for prediction publication streams and pass that to 
         '''
-        pass
+        # for every stream we care about - raw data stream, and all supporting streams
+        # self.dataClient.subscribe(
+        #   subscription=Subscription(
+        #       uuid= # of the stream we're subscribing to
+        #       method= # subscribe method
+        #       callback=handleSubscriptionMessage)
 
+    # async handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
     def listenToSubscription():
         '''
-        some messages will be on our response variable
-         - append to the data
-         - produce prediction if we can
-         - pass prediction to our server
-        other message will be on features
+        some messages will be on our response variable (subscription.uuid = raw data stream uuid)
+         - append to the data (handleNewObservation)
+         - produce prediction if we can (producePrediction)
+         - pass prediction to our server (create function or add call to server to end of producePrediction)
+        other message will be on features (subscription.uuid != raw data stream uuid)
          - append to the data
 
         callbacks could just start a thread to do these things.
@@ -341,6 +363,9 @@ class StreamModel:
         else:
             error("Row not added due to corrupt observation")
 
+    
+    # async producePrediction(self, subscription: Subscription, message: Message, updatedModel=None):
+    # make this async
     def producePrediction(self, updatedModel=None):
         """
         triggered by
