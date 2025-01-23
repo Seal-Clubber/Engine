@@ -226,6 +226,7 @@ class StreamModel:
         self.dataClient: DataClient = dataClient
         self.predictionProduced: BehaviorSubject = predictionProduced
         self.rng = np.random.default_rng(37)
+        self.publisherHost = None
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -260,16 +261,19 @@ class StreamModel:
                 method='confirm-subscription',
             )
             if response.status == "success":
-                # we have a connection!
-                # sync the data and subscribe to the stream in next function
-                pass
+                self.publisherHost = self.peerInfo.publishersIp[0]
             else:
-                # filter out our own ip from the subscriber list
                 self.peerInfo.subscribersIp = [
                     ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
                 ]
-                # shuffle it
                 self.rng.shuffle(self.peerInfo.subscribersIp)
+                for subscriberIp in self.peerInfo.subcribersIp:
+                    response = await self.dataClient.sendRequest(
+                        peerHost=subscriberIp,
+                        table_uuid=self.streamId,
+                        method='confirm-subscription',
+                    )
+
                 # try to connect to a subscriber until we find one
                 # must ask the other subscriber that we connect to if they have
                 # an active connection to the data (including it's own publsihed
@@ -293,7 +297,7 @@ class StreamModel:
         '''
         try:
             externalDataJson = await self.dataClient.sendRequest(
-                peerHost=self.peerInfo.subscriberIp, # choose connection we created
+                peerHost=self.publisherHost, 
                 table_uuid=self.streamId,
                 method='stream-info',
             )
@@ -314,18 +318,16 @@ class StreamModel:
             except Exception as e:
                 error("Error cannot connect to Server: ", e)
 
-    def makeSubscription():
+    async def makeSubscription(self):
         '''
         - and subscribe to the stream so we get the information
             - whenever we get an observation on this stream, pass to the DataServer
         - continually generate predictions for prediction publication streams and pass that to 
         '''
         # for every stream we care about - raw data stream, and all supporting streams
-        # self.dataClient.subscribe(
-        #   subscription=Subscription(
-        #       uuid= # of the stream we're subscribing to
-        #       method= # subscribe method
-        #       callback=handleSubscriptionMessage)
+        await self.dataClient.subscribe(
+              table_uuid=
+              callback=handleSubscriptionMessage)
 
     # async handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
     def listenToSubscription():
