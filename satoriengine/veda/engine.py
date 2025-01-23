@@ -141,6 +141,7 @@ class Engine:
                 predictionStreamId=pubuuid,
                 serverIp=self.dataServerIp,
                 peerInfo=peers,
+                dataClient=self.dataClient,
                 predictionProduced=self.predictionProduced)
             self.streamModels[subuuid].chooseAdapter(inplace=True)
             self.streamModels[subuuid].run_forever()
@@ -182,7 +183,7 @@ class Engine:
 
 
 class StreamModel:
-    
+
     @classmethod
     async def create(
         cls, 
@@ -190,6 +191,7 @@ class StreamModel:
         predictionStreamId: StreamUuid,
         serverIp: str,
         peerInfo: PeerInfo,
+        dataClient: DataClient,
         predictionProduced: BehaviorSubject
     ):
         streamModel = cls(
@@ -197,21 +199,22 @@ class StreamModel:
             predictionStreamId,
             serverIp,
             peerInfo,
+            dataClient,
             predictionProduced
         )
         await streamModel.initialize()
         return streamModel
-    
+
     def __init__(
         self,
         streamId: StreamUuid,
         predictionStreamId: StreamUuid,
         serverIp: str,
         peerInfo: PeerInfo,
+        dataClient: DataClient,
         predictionProduced: BehaviorSubject,
     ):
         self.cpu = getProcessorCount()
-        self.streamDataClient: DataClient = DataClient() 
         self.preferredAdapters: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
@@ -220,9 +223,10 @@ class StreamModel:
         self.predictionStreamId: StreamUuid = predictionStreamId
         self.serverIp = serverIp
         self.peerInfo: PeerInfo = peerInfo
+        self.dataClient: DataClient = dataClient
         self.predictionProduced: BehaviorSubject = predictionProduced
         self.rng = np.random.default_rng(37)
-        
+
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
         self.adapter: ModelAdapter = self.chooseAdapter()
@@ -236,54 +240,63 @@ class StreamModel:
         await self.connectToPeer()
         await self.syncData()
         await self.makeSubscription()
-        #self.listenToSubscription()
+        # self.listenToSubscription()
 
-
-    def connectToPeer(self):
+    async def connectToPeer(self):
         # choose peer to connect to
         # - connect to a peer for a stream
         #     - attempt connection to the source first (publisher)
-        self.peerInfo.publishersIp
         #     - if able to connect, make sure they have the stream we're looking for available for subscribing to
-                # - handle subscriber list
-                #     - filter our own ip out of the subscriber list
-        self.peerInfo.subscribersIp = [ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp]
-                #     - randomize subscriber list (shuffle payload[table_uuid][1:])
-        self.rng.shuffle(self.peerInfo.subscribersIp)
+        # - handle subscriber list
+        #     - filter our own ip out of the subscriber list
+        #     - randomize subscriber list (shuffle payload[table_uuid][1:])
         #         - if not, keep looking for a valid peer
         #     - go down the subscriber list until you find one...
-        pass
-    
+        try:
+            response = await self.dataClient.sendRequest(
+                peerHost=self.peerInfo.publishersIp[0],
+                table_uuid=self.streamId,
+                method='confirm-subscription',
+            )
+            if response.status == "success":
+                self.peerInfo.subscribersIp = [
+                    ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
+                ]
+                self.rng.shuffle(self.peerInfo.subscribersIp)
+        except Exception as e:
+            error("Error, cannot connect to Publisher : ", e)
+
     async def syncData(self):
         '''
         - this can be highly optimized. but for now we do the simple version
         - just ask for their entire dataset every time
-            - if it's different than the df we got from our own dataserver, 
+            - if it's different than the df we got from our own dataserver,
               then tell dataserver to save this instead
             - replace what we have
         '''
         for subscriberIp in self.peerInfo.subscribersIp:
             try:
-                externalDataJson = await self.streamDataClient.sendRequest(
-                            peerHost=subscriberIp, 
-                            table_uuid=self.streamId,
-                            method='stream-info'
-                            )
+                externalDataJson = await self.dataClient.sendRequest(
+                    peerHost=subscriberIp,
+                    table_uuid=self.streamId,
+                    method='stream-info',
+                )
                 externalDf = pd.read_json(externalDataJson.data, orient='split')
             except Exception as e:
-                error("Error : ", e)
-            
-            if not externalDf.equals(self.data):
+                error("Error cannot connect to peer: ", e)
+
+            if len(externalDf) > len(self.data):
+                self.data = externalDf
                 try:
-                    await self.streamDataClient.sendRequest(
-                                peerHost=self.serverIp, 
-                                table_uuid=self.streamId,
-                                method='insert',
-                                data=externalDf,
-                                replace=False # TODO : confirm if merge or complete replacement?
-                                )
+                    await self.dataClient.sendRequest(
+                        peerHost=self.serverIp,
+                        table_uuid=self.streamId,
+                        method='insert',
+                        data=externalDf,
+                        replace=False,
+                    )
                 except Exception as e:
-                    error("Error : ", e)
+                    error("Error cannot connect to Server: ", e)
 
     def makeSubscription():
         '''
@@ -397,7 +410,7 @@ class StreamModel:
 
     async def loadData(self) -> pd.DataFrame:
         try:
-            datasetJson = await self.streamDataClient.sendRequest(
+            datasetJson = await self.dataClient.sendRequest(
                     peerHost=self.serverIp, 
                     table_uuid=self.streamId,
                     method="stream-data"
@@ -505,7 +518,6 @@ class StreamModel:
                     print(self.pilot.dataset)
                 except Exception as e:
                     pass
-
 
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
