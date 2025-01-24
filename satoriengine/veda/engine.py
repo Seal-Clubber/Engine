@@ -7,7 +7,7 @@ from satorilib.disk import getHashBefore
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.utils.hash import hashIt, generatePathId
-from satorilib.datamanager import DataClient, PeerInfo, Message
+from satorilib.datamanager import DataClient, PeerInfo, Message, Subscription
 from satorineuron import config
 from reactivex.subject import BehaviorSubject
 import pandas as pd
@@ -226,7 +226,7 @@ class StreamModel:
         self.dataClient: DataClient = dataClient
         self.predictionProduced: BehaviorSubject = predictionProduced
         self.rng = np.random.default_rng(37)
-        self.publisherHost = None
+        self.publisherHost = self.peerInfo.publishersIp[0]
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -261,44 +261,23 @@ class StreamModel:
                 # TODO : Logic to check if the publisher is active
                 pass
 
-            response = await self.dataClient.sendRequest(
-                peerHost=publisherIp,
-                uuid=self.streamId,
-                method='confirm-subscription',
-            )
-            if response.status == "success":
-                if _isActive(publisherIp):
-                    return True
+            if _isActive(publisherIp):
+                return True
             return False
 
-        async def _addPublisher(publisherIp):
-            await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid={self.streamId: publisherIp},
-                    method="add-publisherIp"
-                )
-        
-        async def _removePublisher(publisherIp):
-            await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid={self.streamId: publisherIp},
-                    method="add-publisherIp"
-                )
-
-
         try:
-            if _isPublisherActive(self.peerInfo.publishersIp[0]):
-                return self.peerInfo.publishersIp[0]
+            if _isPublisherActive(self.publisherHost):
+                return self.publisherHost
             else:
                 # update the server that self.peerInfo.publishersIp[0] is not active and remove it from its list.
-                await _removePublisher(self.peerInfo.publishersIp[0])
+                await self._removePublisher(self.publisherHost)
                 self.peerInfo.subscribersIp = [
                     ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
                 ]
                 self.rng.shuffle(self.peerInfo.subscribersIp)
                 for subscriberIp in self.peerInfo.subcribersIp:
                     if _isPublisherActive(subscriberIp):
-                        await _addPublisher(subscriberIp)
+                        await self._addPublisher(subscriberIp)
                         return subscriberIp
 
                 # try to connect to a subscriber until we find one
@@ -356,7 +335,9 @@ class StreamModel:
               uuid=self.streamId,
               callback=self.handleSubscriptionMessage)
 
-    # async handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
+    async def handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
+        pass
+
     def listenToSubscription():
         '''
         some messages will be on our response variable (subscription.uuid = raw data stream uuid)
@@ -369,6 +350,22 @@ class StreamModel:
         callbacks could just start a thread to do these things.
         '''
         pass
+
+    async def _addPublisher(self, publisherIp):
+        ''' adds the publisher ip to server '''
+        await self.dataClient.sendRequest(
+                peerHost=self.serverIp,
+                uuid={self.streamId: publisherIp},
+                method="add-publisherIp"
+            )
+        
+    async def _removePublisher(self, publisherIp):
+        ''' removes the publisher ip from server '''
+        await self.dataClient.sendRequest(
+                peerHost=self.serverIp,
+                uuid={self.streamId: publisherIp},
+                method="remove-publisherIp"
+            )
 
     def pause(self):
         self.paused = True
