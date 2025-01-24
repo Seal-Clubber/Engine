@@ -239,7 +239,7 @@ class StreamModel:
 
     async def init2(self):
         # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
-        await self.connectToPeer()
+        self.publisherHost = await self.connectToPeer()
         await self.syncData()
         await self.makeSubscription()
         # self.listenToSubscription()
@@ -252,27 +252,54 @@ class StreamModel:
         #     - elif not: 
         #       - handle subscriber list
         #         - filter our own ip out of the subscriber list
-        #         - randomize subscriber list (shuffle payload[table_uuid][1:])
+        #         - randomize subscriber list (shuffle payload[uuid][1:])
         #     - go down the subscriber list until you find one...
-        try:
+
+
+        async def _isPublisherActive(publisherIp: str) -> bool:
+            async def _isActive(publisherIp):
+                # TODO : Logic to check if the publisher is active
+                pass
+
             response = await self.dataClient.sendRequest(
-                peerHost=self.peerInfo.publishersIp[0],
-                table_uuid=self.streamId,
+                peerHost=publisherIp,
+                uuid=self.streamId,
                 method='confirm-subscription',
             )
             if response.status == "success":
-                self.publisherHost = self.peerInfo.publishersIp[0]
+                if _isActive(publisherIp):
+                    return True
+            return False
+
+        async def _addPublisher(publisherIp):
+            await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    uuid={self.streamId: publisherIp},
+                    method="add-publisherIp"
+                )
+        
+        async def _removePublisher(publisherIp):
+            await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    uuid={self.streamId: publisherIp},
+                    method="add-publisherIp"
+                )
+
+
+        try:
+            if _isPublisherActive(self.peerInfo.publishersIp[0]):
+                return self.peerInfo.publishersIp[0]
             else:
+                # update the server that self.peerInfo.publishersIp[0] is not active and remove it from its list.
+                await _removePublisher(self.peerInfo.publishersIp[0])
                 self.peerInfo.subscribersIp = [
                     ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
                 ]
                 self.rng.shuffle(self.peerInfo.subscribersIp)
                 for subscriberIp in self.peerInfo.subcribersIp:
-                    response = await self.dataClient.sendRequest(
-                        peerHost=subscriberIp,
-                        table_uuid=self.streamId,
-                        method='confirm-subscription',
-                    )
+                    if _isPublisherActive(subscriberIp):
+                        await _addPublisher(subscriberIp)
+                        return subscriberIp
 
                 # try to connect to a subscriber until we find one
                 # must ask the other subscriber that we connect to if they have
@@ -298,7 +325,7 @@ class StreamModel:
         try:
             externalDataJson = await self.dataClient.sendRequest(
                 peerHost=self.publisherHost, 
-                table_uuid=self.streamId,
+                uuid=self.streamId,
                 method='stream-info',
             )
             externalDf = pd.read_json(externalDataJson.data, orient='split')
@@ -310,7 +337,7 @@ class StreamModel:
             try:
                 await self.dataClient.sendRequest(
                     peerHost=self.serverIp,
-                    table_uuid=self.streamId,
+                    uuid=self.streamId,
                     method='insert',
                     data=externalDf,
                     replace=True,
@@ -326,8 +353,8 @@ class StreamModel:
         '''
         # for every stream we care about - raw data stream, and all supporting streams
         await self.dataClient.subscribe(
-              table_uuid=
-              callback=handleSubscriptionMessage)
+              uuid=self.streamId,
+              callback=self.handleSubscriptionMessage)
 
     # async handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
     def listenToSubscription():
@@ -439,7 +466,7 @@ class StreamModel:
         try:
             datasetJson = await self.dataClient.sendRequest(
                     peerHost=self.serverIp, 
-                    table_uuid=self.streamId,
+                    uuid=self.streamId,
                     method="stream-data"
                     )
             df = pd.read_json(datasetJson.data, orient='split')
