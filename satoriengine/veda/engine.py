@@ -259,6 +259,7 @@ class StreamModel:
         async def _isPublisherActive(publisherIp: str) -> bool:
             async def _isActive(publisherIp):
                 # TODO : Logic to check if the publisher is active
+                # if get-available-subscription-streams:
                 pass
 
             if _isActive(publisherIp):
@@ -573,3 +574,36 @@ class StreamModel:
     def run_forever(self):
         self.thread = threading.Thread(target=self.run, args=(), daemon=True)
         self.thread.start()
+
+
+
+# NC : gets the peerinfo from the R-server and gives it to its own DS.
+
+# DS : saves that PeerInfo
+
+# EC : asks for the peerInfo (pubSubMap) from (our own) DS
+    
+# EC : recieves the PeerInfo and then divides sub and pub
+
+# EC : creates thread for each pub-Subscription
+    
+# EC1 : connectToPeer(), first tries to connect with PublisherPeer (an external peer) information supplied by the r-server
+
+#     if that succeeds then its good ( PublisherPeer )
+#     else : tries to connect to other subscribers 
+
+# EC1 : if we're unable to find any connection that has the stream available for subscription - just die, or maybe retry in an hour
+
+# EC1 : else, connection found and then we successfully subscribed to data
+
+# EC1 : let the DS know that they are successfully subscribed (add this stream to availableStream)
+
+# EC1 : let the DS know that they are will publish our prediction datastream (add this stream to availableStream)
+
+# EC1 : recieves a msg or a disconnect event that the publisher is no longer providing
+#       - remove the stream from list of active raw data streams/subscriptions/publictions # datastream from the activation list
+#       - (when the DS removes it from the list, it also tells all subscribers that it's no longer available, perpetuating the message)
+#       - remove the stream from list of active predictve streams/
+#       - (when the DS removes it from the list, it also tells all subscribers that it's no longer available, perpetuating the message)
+
+# PublisherPeer: if any problem arises, sends a message to all of its connected servers, ( server removes the peer from its list )
