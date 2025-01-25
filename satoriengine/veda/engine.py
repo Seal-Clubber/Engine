@@ -10,6 +10,7 @@ from satorilib.utils.hash import hashIt, generatePathId
 from satorilib.datamanager import DataClient, PeerInfo, Message, Subscription
 from satorineuron import config
 from reactivex.subject import BehaviorSubject
+import asyncio
 import pandas as pd
 import numpy as np
 import threading
@@ -165,7 +166,7 @@ class Engine:
         streamModel = self.streamModels.get(observation.streamId)
         if streamModel is not None:
             self.pause()
-            streamModel.handleNewObservation(observation)
+            streamModel.appendNewData(observation)
             if streamModel.thread is None or not streamModel.thread.is_alive():
                 streamModel.chooseAdapter(inplace=True)
                 streamModel.run_forever()
@@ -227,6 +228,7 @@ class StreamModel:
         self.predictionProduced: BehaviorSubject = predictionProduced
         self.rng = np.random.default_rng(37)
         self.publisherHost = self.peerInfo.publishersIp[0]
+        self.isConnectedToPeer = False
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -239,61 +241,63 @@ class StreamModel:
 
     async def init2(self):
         # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
-        self.publisherHost = await self.connectToPeer()
-        await self.syncData()
-        await self.makeSubscription()
-        # self.listenToSubscription()
 
-    async def connectToPeer(self):
-        # choose peer to connect to
-        # - connect to a peer for a stream
-        #     - attempt connection to the source first (publisher)
-        #     - if able to connect, make sure they have the stream we're looking for available for subscribing to
-        #     - elif not: 
-        #       - handle subscriber list
-        #         - filter our own ip out of the subscriber list
-        #         - randomize subscriber list (shuffle payload[uuid][1:])
-        #     - go down the subscriber list until you find one...
+        while True:
+            self.isConnectedToPeer = await self.connectToPeer()
+            if self.isConnectedToPeer:
+                await self._addStream()
+                await self.syncData()
+                await self.makeSubscription()
+                await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
+            else:
+                await self._removeStream()
+                await asyncio.sleep(3600)
 
+    def findSubscription(self, subscription: Subscription) -> Subscription:
+        for s in self.subscriptions.keys():
+            if s == subscription:
+                return s
+        return subscription
+
+    async def connectToPeer(self) -> bool:
+        ''' Connects to a peer to recieve subscription if it has an active subscription to the stream '''
 
         async def _isPublisherActive(publisherIp: str) -> bool:
-            async def _isActive(publisherIp):
-                # TODO : Logic to check if the publisher is active
-                # if get-available-subscription-streams:
-                pass
+            ''' conirms if the publisher has the subscription stream in its available stream '''
+            try:
+                response = await self.dataClient.sendRequest(
+                            peerHost=publisherIp,
+                            uuid=self.streamId,
+                            method='confirm-subscription'
+                        )
+                if response.status == 'success':
+                    return True
+                return False
+            except Exception as e:
+                error('Error connecting to Publisher')
+                return False
 
-            if _isActive(publisherIp):
-                return True
-            return False
 
-        try:
-            if _isPublisherActive(self.publisherHost):
-                return self.publisherHost
-            else:
-                # update the server that self.peerInfo.publishersIp[0] is not active and remove it from its list.
-                await self._removePublisher(self.publisherHost)
-                self.peerInfo.subscribersIp = [
-                    ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
-                ]
-                self.rng.shuffle(self.peerInfo.subscribersIp)
-                for subscriberIp in self.peerInfo.subcribersIp:
-                    if _isPublisherActive(subscriberIp):
-                        await self._addPublisher(subscriberIp)
-                        return subscriberIp
-
-                # try to connect to a subscriber until we find one
-                # must ask the other subscriber that we connect to if they have
-                # an active connection to the data (including it's own publsihed
-                # data, which it can assume is active) - make endpoint on the 
-                # DataServer and it must get that information from one of it's 
-                # local clients (meaning neuron or Engine data clients)
-                error("Publisher does not contain subscription stream")
-        except Exception as e:
-            error("Error, cannot connect to Publisher : ", e)
+        if _isPublisherActive(self.publisherHost):
+            return True
+        else:
+            self.peerInfo.subscribersIp = [
+                ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
+            ]
+            self.rng.shuffle(self.peerInfo.subscribersIp)
+            for subscriberIp in self.peerInfo.subcribersIp:
+                if _isPublisherActive(subscriberIp):
+                    self.publisherHost = subscriberIp
+                    return True
+        return False
+    
+    # async def tryToConnect(self):
+    #     while not self.isConnectedToPeer:
+    #         self.isConnectedToPeer = await self.connectToPeer()
+    #         if not self.isConnectedToPeer:
+    #             self._removeStream()
+    #             time.sleep(600)
         
-        # when finally successful we must tell our own dataserver I am
-        # subscribed to x and will pass it's observations to you.
-
     async def syncData(self):
         '''
         - this can be highly optimized. but for now we do the simple version
@@ -336,37 +340,64 @@ class StreamModel:
               uuid=self.streamId,
               callback=self.handleSubscriptionMessage)
 
+    # def listenToSubscription():
+    #     '''
+    #     some messages will be on our response variable (subscription.uuid = raw data stream uuid)
+    #      - append to the data (handleNewObservation)
+    #      - produce prediction if we can (producePrediction)
+    #      - pass prediction to our server (create function or add call to server to end of producePrediction)
+    #     other message will be on features (subscription.uuid != raw data stream uuid)
+    #      - append to the data
+
+    #     callbacks could just start a thread to do these things.
+    #     '''
+    #     pass
+
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
-        pass
+        if message.status != 'inactive':
+            # we pass the observation to server here instead of inside dataclient?
+            self.appendNewData(message.data) # TODO : refactor after confirming sendSubscription Endpoint
+            forecast = await self.producePrediction(updatedModel) 
+            await self.passPredictionData(forecast) # pass new data and prediction to the server
 
-    def listenToSubscription():
-        '''
-        some messages will be on our response variable (subscription.uuid = raw data stream uuid)
-         - append to the data (handleNewObservation)
-         - produce prediction if we can (producePrediction)
-         - pass prediction to our server (create function or add call to server to end of producePrediction)
-        other message will be on features (subscription.uuid != raw data stream uuid)
-         - append to the data
 
-        callbacks could just start a thread to do these things.
-        '''
-        pass
-
-    async def _addPublisher(self, publisherIp):
-        ''' adds the publisher ip to server '''
-        await self.dataClient.sendRequest(
-                peerHost=self.serverIp,
-                uuid={self.streamId: publisherIp},
-                method="add-publisherIp"
-            )
+    async def _addStream(self):
+        ''' adds the subscription and publication streams to server avaiable streams '''
+        try:
+            await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    uuid=self.streamId,
+                    method="add-available-subscription-streams"
+                )
+        except Exception as e:
+            error("Not able to send subscription stream to server")
+        try:
+            await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    uuid=self.predictionStreamId,
+                    method="add-available-publication-streams"
+                )
+        except Exception as e:
+            error("Not able to send publication stream to server")
         
-    async def _removePublisher(self, publisherIp):
-        ''' removes the publisher ip from server '''
-        await self.dataClient.sendRequest(
-                peerHost=self.serverIp,
-                uuid={self.streamId: publisherIp},
-                method="remove-publisherIp"
-            )
+    async def _removeStream(self, publisherIp):
+        ''' removes the subscription and publication streams from server available streams '''
+        try:
+            await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    uuid=self.streamId,
+                    method="remove-available-subscription-streams"
+                )
+        except Exception as e:
+            error("Not able to send subscription stream to server")
+        try:
+            await self.dataClient.sendRequest(
+                    peerHost=self.serverIp,
+                    uuid=self.predictionStreamId,
+                    method="remove-available-publication-streams"
+                )
+        except Exception as e:
+            error("Not able to send publication stream to server")
 
     def pause(self):
         self.paused = True
@@ -374,7 +405,7 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
-    def handleNewObservation(self, observation: Observation):
+    def appendNewData(self, observation: Observation):
         """extract the data and save it to self.data"""
         parsedData = json.loads(observation.raw)
         if validate_single_entry(parsedData["time"], parsedData["data"]):
@@ -393,7 +424,7 @@ class StreamModel:
     
     # async producePrediction(self, subscription: Subscription, message: Message, updatedModel=None):
     # make this async
-    def producePrediction(self, updatedModel=None):
+    def producePrediction(self, updatedModel=None) -> pd.DataFrame:
         """
         triggered by
             - model replaced with a better one
@@ -404,29 +435,34 @@ class StreamModel:
             if updatedModel is not None:
                 forecast = updatedModel.predict(data=self.data)
                 if isinstance(forecast, pd.DataFrame):
-                    observationTime = datetimeToTimestamp(now())
-                    prediction = StreamForecast.firstPredictionOf(forecast)
-                    # observationHash = hashIt(
-                    #     getHashBefore(pd.DataFrame(), observationTime)
-                    #     + str(observationTime)
-                    #     + str(prediction))
-                    observationHash = 'random' # TODO : new hashing method
-                    self.save_prediction(
-                        observationTime, prediction, observationHash)
-                    streamforecast = StreamForecast(
-                        streamId=self.streamId,
-                        predictionStreamId=self.predictionStreamId,
-                        currentValue=self.data,
-                        forecast=forecast,  # maybe we can fetch this value from predictionHistory
-                        observationTime=observationTime,
-                        observationHash=observationHash,
-                        predictionHistory=CSVManager().read(self.prediction_data_path()))
-                    self.predictionProduced.on_next(streamforecast)
+                    return pd.DataFrame({
+                        'date_time': [datetimeToTimestamp(now())],
+                        'value': [StreamForecast.firstPredictionOf(forecast)],
+                        'id': ['random'] # TODO : new hashing method
+                    })
                 else:
                     raise Exception("Forecast not in dataframe format")
         except Exception as e:
             error(e)
             self.fallback_prediction()
+
+    async def passPredictionData(self, forecast: pd.DataFrame):
+        try:
+            # send prediction data
+            await self.dataClient.passDataToServer(
+                peerHost=self.serverIp,
+                uuid=self.predictionStreamId,
+                data=forecast
+            )
+            # send updated data
+            # await self.dataClient.passDataToServer(
+            #     peerHost=self.serverIp,
+            #     uuid=self.streamId,
+            #     isSub=True,
+            #     data=self.data
+            # )
+        except Exception as e:
+            error('Failed to send Prediction')
 
     def fallback_prediction(self):
         if os.path.isfile(self.modelPath()):
