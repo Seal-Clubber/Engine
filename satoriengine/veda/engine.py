@@ -241,17 +241,15 @@ class StreamModel:
 
     async def init2(self):
         # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
-
-        while True:
-            self.isConnectedToPeer = await self.connectToPeer()
-            if self.isConnectedToPeer:
-                await self._addStream()
-                await self.syncData()
-                await self.makeSubscription()
-                await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
-            else:
-                await self._removeStream()
-                await asyncio.sleep(3600)
+        self.isConnectedToPeer = await self.connectToPeer()
+        if self.isConnectedToPeer:
+            await self._addStream()
+            await self.syncData()
+            await self.makeSubscription()
+            await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
+        else:
+            await self._removeStream()
+            await asyncio.sleep(3600)
 
     def findSubscription(self, subscription: Subscription) -> Subscription:
         for s in self.subscriptions.keys():
@@ -359,6 +357,11 @@ class StreamModel:
             self.appendNewData(message.data) # TODO : refactor after confirming sendSubscription Endpoint
             forecast = await self.producePrediction(updatedModel) 
             await self.passPredictionData(forecast) # pass new data and prediction to the server
+        else:
+            self.isConnectedToPeer = False
+            # try to connect to another peer
+            # maybe a reconnect function
+            await self.init2() # something like this
 
 
     async def _addStream(self):
@@ -642,4 +645,20 @@ class StreamModel:
 #       - remove the stream from list of active predictve streams/
 #       - (when the DS removes it from the list, it also tells all subscribers that it's no longer available, perpetuating the message)
 
-# PublisherPeer: if any problem arises, sends a message to all of its connected servers, ( server removes the peer from its list )
+# PublisherPeer: if any problem arises, sends a message to all of its connected servers, ( server removes the peer from its list ).
+
+
+
+
+
+# subscription data flow
+
+# N: grabs data from the web, sends it to NDC
+# NDC: sends it to it's own DS
+# DS: saves it to disk, sends it to any subscribing peer (EDC)
+# EDC: sends it to it's own DS, triggers callback for all 'subscribing' streamModels in the engine
+# SM: saves to ram, triggers a prediction, which it sends to EDC
+# EDC: sends prediction to it's own DS
+# DS: saves it to disk, sends it to any subscribing peer (EDC) as ancillary data for models
+
+
