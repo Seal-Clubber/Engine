@@ -188,16 +188,16 @@ class StreamModel:
     @classmethod
     async def create(
         cls, 
-        streamId: StreamUuid,
-        predictionStreamId: StreamUuid,
+        streamUuid: str,
+        predictionStreamUuid: str,
         serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
         predictionProduced: BehaviorSubject
     ):
         streamModel = cls(
-            streamId,
-            predictionStreamId,
+            streamUuid,
+            predictionStreamUuid,
             serverIp,
             peerInfo,
             dataClient,
@@ -208,8 +208,8 @@ class StreamModel:
 
     def __init__(
         self,
-        streamId: StreamUuid,
-        predictionStreamId: StreamUuid,
+        streamUuid: str,
+        predictionStreamUuid: str,
         serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
@@ -220,8 +220,8 @@ class StreamModel:
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
-        self.streamId: StreamUuid = streamId
-        self.predictionStreamId: StreamUuid = predictionStreamId
+        self.streamUuid: str = streamUuid
+        self.predictionStreamUuid: str = predictionStreamUuid
         self.serverIp = serverIp
         self.peerInfo: PeerInfo = peerInfo
         self.dataClient: DataClient = dataClient
@@ -233,11 +233,11 @@ class StreamModel:
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
         self.adapter: ModelAdapter = self.chooseAdapter()
-        self.pilot: ModelAdapter = self.adapter(uid=self.streamId)
+        self.pilot: ModelAdapter = self.adapter(uid=self.streamUuid)
         self.pilot.load(self.modelPath())
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        debug(f'AI Engine: stream id {self.streamId} using {self.adapter.__name__}', color='teal')
+        debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
 
     async def init2(self):
         # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
@@ -264,10 +264,10 @@ class StreamModel:
             ''' conirms if the publisher has the subscription stream in its available stream '''
             try:
                 response = await self.dataClient.sendRequest(
-                            peerHost=publisherIp,
-                            uuid=self.streamId,
-                            method='confirm-subscription'
-                        )
+                    peerHost=publisherIp,
+                    uuid=self.streamUuid,
+                    method='confirm-subscription'
+                )
                 if response.status == 'success':
                     return True
                 return False
@@ -307,7 +307,7 @@ class StreamModel:
         try:
             externalDataJson = await self.dataClient.sendRequest(
                 peerHost=self.publisherHost, 
-                uuid=self.streamId,
+                uuid=self.streamUuid,
                 method='stream-info',
             )
             externalDf = pd.read_json(externalDataJson.data, orient='split')
@@ -319,7 +319,7 @@ class StreamModel:
             try:
                 await self.dataClient.sendRequest(
                     peerHost=self.serverIp,
-                    uuid=self.streamId,
+                    uuid=self.streamUuid,
                     method='insert',
                     data=externalDf,
                     replace=True,
@@ -335,7 +335,8 @@ class StreamModel:
         '''
         # for every stream we care about - raw data stream, and all supporting streams
         await self.dataClient.subscribe(
-              uuid=self.streamId,
+              uuid=self.streamUuid,
+              publicationUuid=self.predictionStreamUuid,
               callback=self.handleSubscriptionMessage)
 
     # def listenToSubscription():
@@ -351,14 +352,16 @@ class StreamModel:
     #     '''
     #     pass
 
-    async def handleSubscriptionMessage(self, subscription: Subscription, message: Message, updatedModel=None):
+    async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
         if message.status != 'inactive':
             # we pass the observation to server here instead of inside dataclient?
             self.appendNewData(message.data) # TODO : refactor after confirming sendSubscription Endpoint
-            forecast = await self.producePrediction(updatedModel) 
+            forecast = await self.producePrediction() 
             await self.passPredictionData(forecast) # pass new data and prediction to the server
         else:
+            # tell the dataClient to remove the corresponding prediction stream from it's list of publications
             self.isConnectedToPeer = False
+
             # try to connect to another peer
             # maybe a reconnect function
             await self.init2() # something like this
@@ -369,7 +372,7 @@ class StreamModel:
         try:
             await self.dataClient.sendRequest(
                     peerHost=self.serverIp,
-                    uuid=self.streamId,
+                    uuid=self.streamUuid,
                     method="add-available-subscription-streams"
                 )
         except Exception as e:
@@ -377,7 +380,7 @@ class StreamModel:
         try:
             await self.dataClient.sendRequest(
                     peerHost=self.serverIp,
-                    uuid=self.predictionStreamId,
+                    uuid=self.predictionStreamUuid,
                     method="add-available-publication-streams"
                 )
         except Exception as e:
@@ -388,7 +391,7 @@ class StreamModel:
         try:
             await self.dataClient.sendRequest(
                     peerHost=self.serverIp,
-                    uuid=self.streamId,
+                    uuid=self.streamUuid,
                     method="remove-available-subscription-streams"
                 )
         except Exception as e:
@@ -396,7 +399,7 @@ class StreamModel:
         try:
             await self.dataClient.sendRequest(
                     peerHost=self.serverIp,
-                    uuid=self.predictionStreamId,
+                    uuid=self.predictionStreamUuid,
                     method="remove-available-publication-streams"
                 )
         except Exception as e:
@@ -454,13 +457,13 @@ class StreamModel:
             # send prediction data
             await self.dataClient.passDataToServer(
                 peerHost=self.serverIp,
-                uuid=self.predictionStreamId,
+                uuid=self.predictionStreamUuid,
                 data=forecast
             )
             # send updated data
             # await self.dataClient.passDataToServer(
             #     peerHost=self.serverIp,
-            #     uuid=self.streamId,
+            #     uuid=self.streamUuid,
             #     isSub=True,
             #     data=self.data
             # )
@@ -503,11 +506,11 @@ class StreamModel:
         try:
             datasetJson = await self.dataClient.sendRequest(
                     peerHost=self.serverIp, 
-                    uuid=self.streamId,
+                    uuid=self.streamUuid,
                     method="stream-data"
                     )
             df = pd.read_json(datasetJson.data, orient='split')
-            output_path = os.path.join('csvs', f'{self.streamId}.csv')
+            output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
             df.to_csv(output_path, index=False)
             return df
         except Exception:
@@ -516,12 +519,12 @@ class StreamModel:
     def prediction_data_path(self) -> str:
         return (
             '/Satori/Neuron/data/testprediction/'
-            f'{self.predictionStreamId}.csv')
+            f'{self.predictionStreamUuid}.csv')
 
     def modelPath(self) -> str:
         return (
             '/Satori/Neuron/models/veda/'
-            f'{self.streamId}/'
+            f'{self.streamUuid}/'
             f'{self.adapter.__name__}.joblib')
 
     def chooseAdapter(self, inplace: bool = False) -> ModelAdapter:
@@ -564,12 +567,12 @@ class StreamModel:
                 not isinstance(self.pilot, adapter))
         ):
             info(
-                f'AI Engine: stream id {self.streamId} '
+                f'AI Engine: stream id {self.streamUuid} '
                 f'switching from {self.adapter.__name__} '
-                f'to {adapter.__name__} on {self.streamId}',
+                f'to {adapter.__name__} on {self.streamUuid}',
                 color='teal')
             self.adapter = adapter
-            self.pilot = adapter(uid=self.streamId)
+            self.pilot = adapter(uid=self.streamUuid)
             self.pilot.load(self.modelPath())
         return adapter
 
@@ -593,11 +596,11 @@ class StreamModel:
                             self.stable = copy.deepcopy(self.pilot)
                             info(
                                 "stable model updated for stream:",
-                                self.streamId,
+                                self.streamUuid,
                                 print=True)
                             self.producePrediction(self.stable)
                 else:
-                    debug(f'model training failed on {self.streamId} waiting 10 minutes to retry')
+                    debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry')
                     self.failedAdapters.append(self.pilot)
                     time.sleep(60*10)
             except Exception as e:
