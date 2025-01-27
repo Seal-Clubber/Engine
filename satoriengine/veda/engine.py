@@ -44,55 +44,49 @@ class Engine:
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
     
-    def handlePrediction(self, predictionInputs: PredictionInputs):
+    # def handlePrediction(self, predictionInputs: PredictionInputs):
 
-        def registered(pubkey: str):
-            if pubkey is not None:
-                if pubkey not in self.wallets.keys():
-                    walletId = Wallet.getIdFromPubkey(pubkey=pubkey)
-                    if walletId is not None:
-                        self.wallets[pubkey] = walletId
-                    return walletId
-                return self.wallets[pubkey]
-            return None
+    #     def registered(pubkey: str):
+    #         if pubkey is not None:
+    #             if pubkey not in self.wallets.keys():
+    #                 walletId = Wallet.getIdFromPubkey(pubkey=pubkey)
+    #                 if walletId is not None:
+    #                     self.wallets[pubkey] = walletId
+    #                 return walletId
+    #             return self.wallets[pubkey]
+    #         return None
 
-        if auth(predictionInputs.walletPayload):
-            walletId = registered(predictionInputs.walletPubkey)
-            if walletId is not None:
-                predictionInputs.setWalletId(walletId=walletId)
-                # just record record those that are staked
-                # df = database.get.getStake(wallet_id=walletId)
-                # if df is not None and isinstance(df, pd.DataFrame) and len(df) > 0:
-                self.recordPredictionInDatabase(predictionInputs)
+    #     if auth(predictionInputs.walletPayload):
+    #         walletId = registered(predictionInputs.walletPubkey)
+    #         if walletId is not None:
+    #             predictionInputs.setWalletId(walletId=walletId)
+    #             # just record record those that are staked
+    #             # df = database.get.getStake(wallet_id=walletId)
+    #             # if df is not None and isinstance(df, pd.DataFrame) and len(df) > 0:
+    #             self.recordPredictionInDatabase(predictionInputs)
 
-    def processQueue(self):
-        while True:
-            try:
-                self.handlePrediction(self.queue.get())
-            except Exception as e:
-                self.logging.error(f"Error saving to database: {str(e)}")
-            finally:
-                # self.queue.task_done()
-                pass
+    # def processQueue(self):
+    #     while True:
+    #         try:
+    #             self.handlePrediction(self.queue.get())
+    #         except Exception as e:
+    #             self.logging.error(f"Error saving to database: {str(e)}")
+    #         finally:
+    #             # self.queue.task_done()
+    #             pass
 
     # could use async task instead if we want
-    def startProcessing(self):
-        recordPredictionThread = threading.Thread(
-            target=self.processQueue,
-            daemon=True)
-        recordPredictionThread.start()
+    # def startProcessing(self):
+    #     recordPredictionThread = threading.Thread(
+    #         target=self.processQueue,
+    #         daemon=True)
+    #     recordPredictionThread.start()
 
 
 
     async def initialize(self):
-        await self.connectToDataServer()
+        await self.getDataServerIp()
         await self.getPubSubInfo()
-        # setup subscriptions to external dataservers
-        # on observation 
-        #   pass to data server (for it to save to disk)
-        #   pass to handle observation
-        #   make sure we update training data
-        # self.setupSubscriptions()
         await self.initializeModels()
 
     def pause(self, force: bool = False):
@@ -108,7 +102,7 @@ class Engine:
             for streamModel in self.streamModels.values():
                 streamModel.resume()
 
-    async def connectToDataServer(self):
+    async def getDataServerIp(self):
         self.dataServerIp = config.get().get('server ip', '0.0.0.0')
         try:
             await self.dataClient.connectToServer(peerHost=self.dataServerIp)
@@ -147,14 +141,14 @@ class Engine:
             self.streamModels[subuuid].chooseAdapter(inplace=True)
             self.streamModels[subuuid].run_forever()
 
-    def handleNewObservation(self, observation: Observation):
-        # spin off a new thread to handle the new observation
-        thread = threading.Thread(
-            target=self.handleNewObservationThread,
-            args=(observation,))
-        thread.start()
-        self.threads.append(thread)
-        self.cleanupThreads()
+    # def handleNewObservation(self, observation: Observation):
+    #     # spin off a new thread to handle the new observation
+    #     thread = threading.Thread(
+    #         target=self.handleNewObservationThread,
+    #         args=(observation,))
+    #     thread.start()
+    #     self.threads.append(thread)
+    #     self.cleanupThreads()
 
     def cleanupThreads(self):
         for thread in self.threads:
@@ -162,25 +156,25 @@ class Engine:
                 self.threads.remove(thread)
         debug(f'prediction thread count: {len(self.threads)}')
 
-    def handleNewObservationThread(self, observation: Observation):
-        streamModel = self.streamModels.get(observation.streamId)
-        if streamModel is not None:
-            self.pause()
-            streamModel.appendNewData(observation)
-            if streamModel.thread is None or not streamModel.thread.is_alive():
-                streamModel.chooseAdapter(inplace=True)
-                streamModel.run_forever()
-            if streamModel is not None:
-                info(
-                    f'new observation, making prediction using {streamModel.adapter.__name__}', color='blue')
-                streamModel.producePrediction()
-            self.resume()
+    # def handleNewObservationThread(self, observation: Observation):
+    #     streamModel = self.streamModels.get(observation.streamId)
+    #     if streamModel is not None:
+    #         self.pause()
+    #         streamModel.appendNewData(observation)
+    #         if streamModel.thread is None or not streamModel.thread.is_alive():
+    #             streamModel.chooseAdapter(inplace=True)
+    #             streamModel.run_forever()
+    #         if streamModel is not None:
+    #             info(
+    #                 f'new observation, making prediction using {streamModel.adapter.__name__}', color='blue')
+    #             streamModel.producePrediction()
+    #         self.resume()
 
-    def handleError(self, error):
-        print(f"An error occurred new_observaiton: {error}")
+    # def handleError(self, error):
+    #     print(f"An error occurred new_observaiton: {error}")
 
-    def handleCompletion(self):
-        print("newObservation completed")
+    # def handleCompletion(self):
+    #     print("newObservation completed")
 
 
 class StreamModel:
@@ -243,13 +237,12 @@ class StreamModel:
         # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
         self.isConnectedToPeer = await self.connectToPeer()
         if self.isConnectedToPeer:
-            await self._addStream()
             await self.syncData()
             await self.makeSubscription()
-            await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
+            # await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
         else:
-            await self._removeStream()
             await asyncio.sleep(3600)
+            # TODO : reconnect after an hour
 
     def findSubscription(self, subscription: Subscription) -> Subscription:
         for s in self.subscriptions.keys():
@@ -289,13 +282,6 @@ class StreamModel:
                     return True
         return False
     
-    # async def tryToConnect(self):
-    #     while not self.isConnectedToPeer:
-    #         self.isConnectedToPeer = await self.connectToPeer()
-    #         if not self.isConnectedToPeer:
-    #             self._removeStream()
-    #             time.sleep(600)
-        
     async def syncData(self):
         '''
         - this can be highly optimized. but for now we do the simple version
@@ -361,49 +347,9 @@ class StreamModel:
         else:
             # tell the dataClient to remove the corresponding prediction stream from it's list of publications
             self.isConnectedToPeer = False
-
             # try to connect to another peer
             # maybe a reconnect function
             await self.init2() # something like this
-
-
-    async def _addStream(self):
-        ''' adds the subscription and publication streams to server avaiable streams '''
-        try:
-            await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid=self.streamUuid,
-                    method="add-available-subscription-streams"
-                )
-        except Exception as e:
-            error("Not able to send subscription stream to server")
-        try:
-            await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid=self.predictionStreamUuid,
-                    method="add-available-publication-streams"
-                )
-        except Exception as e:
-            error("Not able to send publication stream to server")
-        
-    async def _removeStream(self, publisherIp):
-        ''' removes the subscription and publication streams from server available streams '''
-        try:
-            await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid=self.streamUuid,
-                    method="remove-available-subscription-streams"
-                )
-        except Exception as e:
-            error("Not able to send subscription stream to server")
-        try:
-            await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid=self.predictionStreamUuid,
-                    method="remove-available-publication-streams"
-                )
-        except Exception as e:
-            error("Not able to send publication stream to server")
 
     def pause(self):
         self.paused = True
@@ -411,6 +357,7 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
+    # TODO : refactor after confirming how the subscription message is sent
     def appendNewData(self, observation: Observation):
         """extract the data and save it to self.data"""
         parsedData = json.loads(observation.raw)
@@ -428,8 +375,6 @@ class StreamModel:
             error("Row not added due to corrupt observation")
 
     
-    # async producePrediction(self, subscription: Subscription, message: Message, updatedModel=None):
-    # make this async
     def producePrediction(self, updatedModel=None) -> pd.DataFrame:
         """
         triggered by
@@ -460,7 +405,7 @@ class StreamModel:
                 uuid=self.predictionStreamUuid,
                 data=forecast
             )
-            # send updated data
+            # TODO :  send updated data ( this should be inside dc not done by engine dc right?)
             # await self.dataClient.passDataToServer(
             #     peerHost=self.serverIp,
             #     uuid=self.streamUuid,
@@ -485,22 +430,22 @@ class StreamModel:
         except Exception as e:
             error(f"Error training new model: {str(e)}")
 
-    def save_prediction(
-        self,
-        observationTime: str,
-        prediction: float,
-        observationHash: str,
-    ) -> pd.DataFrame:
-        # alternative - use data manager: self.predictionUpdate.on_next(self)
-        df = pd.DataFrame(
-            {"value": [prediction], "hash": [observationHash]},
-            index=[observationTime])
-        df.to_csv(
-            self.prediction_data_path(),
-            float_format="%.10f",
-            mode="a",
-            header=False)
-        return df
+    # def save_prediction(
+    #     self,
+    #     observationTime: str,
+    #     prediction: float,
+    #     observationHash: str,
+    # ) -> pd.DataFrame:
+    #     # alternative - use data manager: self.predictionUpdate.on_next(self)
+    #     df = pd.DataFrame(
+    #         {"value": [prediction], "hash": [observationHash]},
+    #         index=[observationTime])
+    #     df.to_csv(
+    #         self.prediction_data_path(),
+    #         float_format="%.10f",
+    #         mode="a",
+    #         header=False)
+    #     return df
 
     async def loadData(self) -> pd.DataFrame:
         try:
@@ -516,10 +461,10 @@ class StreamModel:
         except Exception:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
-    def prediction_data_path(self) -> str:
-        return (
-            '/Satori/Neuron/data/testprediction/'
-            f'{self.predictionStreamUuid}.csv')
+    # def prediction_data_path(self) -> str:
+    #     return (
+    #         '/Satori/Neuron/data/testprediction/'
+    #         f'{self.predictionStreamUuid}.csv')
 
     def modelPath(self) -> str:
         return (
