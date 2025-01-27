@@ -388,8 +388,7 @@ class StreamModel:
                 if isinstance(forecast, pd.DataFrame):
                     return pd.DataFrame({
                         'date_time': [datetimeToTimestamp(now())],
-                        'value': [StreamForecast.firstPredictionOf(forecast)],
-                        'id': ['random'] # TODO : new hashing method
+                        'value': [StreamForecast.firstPredictionOf(forecast)]
                     })
                 else:
                     raise Exception("Forecast not in dataframe format")
