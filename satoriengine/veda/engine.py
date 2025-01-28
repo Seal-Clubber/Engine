@@ -18,7 +18,7 @@ import json
 import copy
 import time
 import os
-from typing import Dict
+from typing import Union
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -34,13 +34,13 @@ class Engine:
         return engine
     
     def __init__(self):
-        self.streamModels: Dict[StreamId, StreamModel] = {}
+        self.streamModels: dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
         self.subcriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
-        self.dataClient: DataClient = DataClient()
+        self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
     
@@ -85,7 +85,7 @@ class Engine:
 
 
     async def initialize(self):
-        await self.getDataServerIp()
+        await self.connectToDataServer()
         await self.getPubSubInfo()
         await self.initializeModels()
 
@@ -102,14 +102,20 @@ class Engine:
             for streamModel in self.streamModels.values():
                 streamModel.resume()
 
-    async def getDataServerIp(self):
-        self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+    async def connectToDataServer(self):
         try:
-            await self.dataClient.connectToServer(peerHost=self.dataServerIp)
-            info("Successfully connected to Server at :", self.dataServerIp, color="green")
+            self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+            self.dataClient = DataClient(self.dataServerIp)
+            info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
         except Exception as e:
-            error("Error connecting to server : ", e)
-            self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
+            error("Error connecting to server ip in config : ", e)
+            try:
+                self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
+                self.dataClient = DataClient(self.dataServerIp)
+                info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
+            except Exception as e:
+                error("Failed to find a valid Server Ip : ", e)
+                # TODO : maybe retry in an hour or when we are provided with a valid server Ip
 
     async def getPubSubInfo(self):
         try:
@@ -241,6 +247,7 @@ class StreamModel:
             await self.makeSubscription()
             # await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
         else:
+            await self._sendStreamInactiveInfoToServer()
             await asyncio.sleep(3600)
             # TODO : reconnect after an hour
 
@@ -325,31 +332,31 @@ class StreamModel:
               publicationUuid=self.predictionStreamUuid,
               callback=self.handleSubscriptionMessage)
 
-    # def listenToSubscription():
-    #     '''
-    #     some messages will be on our response variable (subscription.uuid = raw data stream uuid)
-    #      - append to the data (handleNewObservation)
-    #      - produce prediction if we can (producePrediction)
-    #      - pass prediction to our server (create function or add call to server to end of producePrediction)
-    #     other message will be on features (subscription.uuid != raw data stream uuid)
-    #      - append to the data
-
-    #     callbacks could just start a thread to do these things.
-    #     '''
-    #     pass
-
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
         if message.status != 'inactive':
-            # we pass the observation to server here instead of inside dataclient?
-            self.appendNewData(message.data) # TODO : refactor after confirming sendSubscription Endpoint
+            self.appendNewData(message.data) # TODO 
             forecast = await self.producePrediction() 
-            await self.passPredictionData(forecast) # pass new data and prediction to the server
+            await self.passPredictionData(forecast) 
         else:
-            # tell the dataClient to remove the corresponding prediction stream from it's list of publications
+            await self._sendStreamInactiveInfoToServer(message)
             self.isConnectedToPeer = False
             # try to connect to another peer
             # maybe a reconnect function
             await self.init2() # something like this
+
+    async def _sendStreamInactiveInfoToServer(self, message: Message = None):
+        ''' sends stream inactive request to the server so that it can remove the streams from available streams '''
+        try:
+            # TODO : check if we can sent the message directly as rawMsg
+            await self.dataClient.sendRequest(
+                self.serverIp,
+                uuid=self.streamUuid,
+                method='stream-inactive',
+                isSub=True
+            )
+        except Exception as e:
+            error("Inactive message not sent to server: ", e)
+
 
     def pause(self):
         self.paused = True
