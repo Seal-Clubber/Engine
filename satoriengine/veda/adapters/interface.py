@@ -7,12 +7,12 @@ from satorilib.logging import error, debug, info
 
 class TrainingResult:
 
-    def __init__(self, status, model: "PipelineInterface"):
+    def __init__(self, status, model: "ModelAdapter"):
         self.status = status
         self.model = model
         self.modelError = None
 
-class PipelineInterface:
+class ModelAdapter:
 
     def __init__(self, *args, **kwargs):
         self.model = None
@@ -21,7 +21,7 @@ class PipelineInterface:
     @staticmethod
     def condition(*args, **kwargs) -> float:
         """
-        defines the condition for the pipeline to be executed
+        defines the condition for the adapter to be executed
 
         Args:
             accepts information about the environment (hardware specs, etc.)
@@ -32,7 +32,7 @@ class PipelineInterface:
             0 meaning you should not use this model under those conditions and
             1 meaning these conditions are ideal for this model
         """
-        # any pipeline that hasn't implemented condition should return false in
+        # any adapter that hasn't implemented condition should return false in
         # the case of a condition that is not met so we can use the default
         if (
             isinstance(kwargs.get('availableRamGigs'), float)
@@ -43,7 +43,7 @@ class PipelineInterface:
             return 0
         return 1
 
-    def load(self, modelPath: str, *args, **kwargs) -> Union[None, "PipelineInterface"]:
+    def load(self, modelPath: str, *args, **kwargs) -> Union[None, "ModelAdapter"]:
         """
         loads the model model from disk if present
 
@@ -51,7 +51,7 @@ class PipelineInterface:
             modelpath: Path where the model should be loaded from
 
         Returns:
-            PipelineInterface: Model if load successful, None otherwise
+            ModelAdapter: Model if load successful, None otherwise
         """
         pass
 

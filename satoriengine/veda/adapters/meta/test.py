@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from satoriengine.veda.pipelines.meta.transform import apply_transformation, fit_transformation
+from satoriengine.veda.adapters.meta.transform import apply_transformation, fit_transformation
 
 def generate_sample_dataset(num_samples=10, noise_level=0.1):
     """

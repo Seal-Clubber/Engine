@@ -8,15 +8,15 @@ import random
 from typing import Union, Optional, List, Any
 from satorilib.logging import info, debug, error, warning, setup, DEBUG
 
-from satoriengine.veda.pipelines.sktime.process import process_data
-from satoriengine.veda.pipelines.sktime.determine_features import determine_feature_set
-from satoriengine.veda.pipelines.sktime.model_creation import model_create_train_test_and_predict
-from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
+from satoriengine.veda.adapters.sktime.process import process_data
+from satoriengine.veda.adapters.sktime.determine_features import determine_feature_set
+from satoriengine.veda.adapters.sktime.model_creation import model_create_train_test_and_predict
+from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 
 setup(level=DEBUG)
 
 
-class SKPipeline(PipelineInterface):
+class SKAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -83,7 +83,7 @@ class SKPipeline(PipelineInterface):
             print(f"Error saving model: {e}")
             return False
 
-    def compare(self, other: Union[PipelineInterface, None] = None, **kwargs) -> bool:
+    def compare(self, other: Union[ModelAdapter, None] = None, **kwargs) -> bool:
         """true indicates this model is better than the other model"""
         # if isinstance(other, self.__class__):
         #     if self.score() < other.score():
@@ -128,9 +128,9 @@ class SKPipeline(PipelineInterface):
     def fit(self, **kwargs) -> TrainingResult:
         debug("model error = ", self.score(), color="white")
         if self.model is None:
-            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["quick_start"])
+            status, model = SKAdapter.skEnginePipeline(kwargs["data"], ["quick_start"])
         else:
-            status, model = SKPipeline.skEnginePipeline(kwargs["data"], ["random_model"])
+            status, model = SKAdapter.skEnginePipeline(kwargs["data"], ["random_model"])
 
         if status == 1:
             self.model = model
@@ -142,7 +142,7 @@ class SKPipeline(PipelineInterface):
     def predict(self, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         debug(f"Prediction with Model : {self.model[0].model_name}", print=True)
-        status, predictor_model = SKPipeline.skEnginePipeline(
+        status, predictor_model = SKAdapter.skEnginePipeline(
             data=kwargs["data"],
             list_of_models=[self.model[0].model_name],
             mode="predict",

@@ -2,10 +2,10 @@ import pandas as pd
 from typing import Union
 from collections import namedtuple
 from sklearn.linear_model import LinearRegression
-from satoriengine.veda.pipelines.interface import PipelineInterface, TrainingResult
+from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 
 
-class StarterPipeline(PipelineInterface):
+class StarterAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -22,7 +22,7 @@ class StarterPipeline(PipelineInterface):
         super().__init__()
         self.model = None
 
-    def load(self, modelPath: str, **kwargs) -> Union[None, "PipelineInterface"]:
+    def load(self, modelPath: str, **kwargs) -> Union[None, "ModelAdapter"]:
         """loads the model model from disk if present"""
 
     def save(self, modelpath: str, **kwargs) -> bool:
@@ -31,12 +31,12 @@ class StarterPipeline(PipelineInterface):
 
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
         # we don't need to fit anything
-        #forecast = StarterPipeline.starterEnginePipeline(data)
+        #forecast = StarterAdapter.starterEnginePipeline(data)
         #if self.model is None:
         #    self.model = forecast
         return TrainingResult(-1, self)
 
-    def compare(self, other: PipelineInterface, **kwargs) -> bool:
+    def compare(self, other: ModelAdapter, **kwargs) -> bool:
         return True
 
     def score(self, **kwargs) -> float:
@@ -44,7 +44,7 @@ class StarterPipeline(PipelineInterface):
 
     def predict(self, data, **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
-        return StarterPipeline.starterEnginePipeline(data)
+        return StarterAdapter.starterEnginePipeline(data)
 
     @staticmethod
     def starterEnginePipeline(starterDataset: pd.DataFrame) -> pd.DataFrame:

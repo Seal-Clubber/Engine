@@ -1,7 +1,7 @@
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
-from satoriengine.veda.pipelines.meta.o import optimal_circle_placement,optimal_circle_placement_gravity, optimal_circle_placement_antigravity
+from satoriengine.veda.adapters.meta.o import optimal_circle_placement,optimal_circle_placement_gravity, optimal_circle_placement_antigravity
 
 from scipy.stats import norm
 
