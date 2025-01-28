@@ -398,21 +398,13 @@ class StreamModel:
 
     async def passPredictionData(self, forecast: pd.DataFrame):
         try:
-            # send prediction data
             await self.dataClient.passDataToServer(
                 peerHost=self.serverIp,
                 uuid=self.predictionStreamUuid,
                 data=forecast
             )
-            # TODO :  send updated data ( this should be inside dc not done by engine dc right?)
-            # await self.dataClient.passDataToServer(
-            #     peerHost=self.serverIp,
-            #     uuid=self.streamUuid,
-            #     isSub=True,
-            #     data=self.data
-            # )
         except Exception as e:
-            error('Failed to send Prediction')
+            error('Failed to send Prediction to server : ', e)
 
     def fallback_prediction(self):
         if os.path.isfile(self.modelPath()):
