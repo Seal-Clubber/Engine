@@ -106,12 +106,18 @@ class Engine:
         try:
             self.dataServerIp = config.get().get('server ip', '0.0.0.0')
             self.dataClient = DataClient(self.dataServerIp)
+            await self.dataClient.sendRequest(
+                    self.dataServerIp, 
+                    method='initiate-server-connection')
             info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
         except Exception as e:
             error("Error connecting to server ip in config : ", e)
             try:
                 self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
                 self.dataClient = DataClient(self.dataServerIp)
+                await self.dataClient.sendRequest(
+                        self.dataServerIp, 
+                        method='initiate-server-connection')
                 info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
             except Exception as e:
                 error("Failed to find a valid Server Ip : ", e)
