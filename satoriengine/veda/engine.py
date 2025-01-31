@@ -1,12 +1,9 @@
 from satoriengine.veda.adapters import ModelAdapter, SKAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 from satoriengine.veda.data import StreamForecast, cleanse_dataframe, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
-from satorilib.disk.filetypes.csv import CSVManager
 from satorilib.concepts import Stream, StreamId, StreamUuid, Observation
-from satorilib.disk import getHashBefore
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
-from satorilib.utils.hash import hashIt, generatePathId
 from satorilib.datamanager import DataClient, PeerInfo, Message, Subscription
 from satorineuron import config
 from reactivex.subject import BehaviorSubject
@@ -18,6 +15,7 @@ import json
 import copy
 import time
 import os
+from io import StringIO
 from typing import Union
 import warnings
 warnings.filterwarnings('ignore')
@@ -34,13 +32,14 @@ class Engine:
         return engine
     
     def __init__(self):
-        self.streamModels: dict[StreamId, StreamModel] = {}
-        self.newObservation: BehaviorSubject = BehaviorSubject(None)
-        self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
+        self.streamModels: dict[str, StreamModel] = {}
+        # self.newObservation: BehaviorSubject = BehaviorSubject(None)
+        # self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
         self.subcriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
-        self.dataClient: Union[DataClient, None] = None
+        self.dataClient: Union[DataClient, None] = None,
+        self.isConnected = False
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
     
@@ -103,33 +102,46 @@ class Engine:
                 streamModel.resume()
 
     async def connectToDataServer(self):
-        try:
-            self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+        ''' Local engine client make connection with its own server '''
+
+        async def initiateServerConnection() -> bool:
             self.dataClient = DataClient(self.dataServerIp)
-            await self.dataClient.sendRequest(
+            responseFromServer = await self.dataClient.sendRequest(
                     self.dataServerIp, 
                     method='initiate-server-connection')
-            info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
-        except Exception as e:
-            error("Error connecting to server ip in config : ", e)
-            try:
-                self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
-                self.dataClient = DataClient(self.dataServerIp)
-                await self.dataClient.sendRequest(
-                        self.dataServerIp, 
-                        method='initiate-server-connection')
+            if responseFromServer.status == 'success':
                 info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
+                return True
+            return False
+
+        while not self.isConnected:
+            try:
+                self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+                if await initiateServerConnection():
+                    self.isConnected = True
+                else: 
+                    raise Exception("response returned from server is negative")
             except Exception as e:
-                error("Failed to find a valid Server Ip : ", e)
-                # TODO : maybe retry in an hour or when we are provided with a valid server Ip
+                error("Error connecting to server ip in config : ", e)
+                try:
+                    self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
+                    if await initiateServerConnection():
+                        self.isConnected = True
+                    else: 
+                        raise Exception("response returned from server is negative")
+                except Exception as e:
+                    error("Failed to find a valid Server Ip : ", e)
+                    info("Retrying connection in 1 hour...")
+                    await asyncio.sleep(3600) # retry in an hour
 
     async def getPubSubInfo(self):
+        ''' gets the relation info between pub-sub streams from its own server '''
         try:
             pubsubMap = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pubsub-map')
             for sub_uuid, data in pubsubMap.streamInfo.items():
                 self.subcriptions[sub_uuid] = PeerInfo(data['subscription_subscribers'], data['subscription_publishers'])
                 self.publications[data['publication_uuid']] = PeerInfo(data['publication_subscribers'], data['publication_publishers'])
-            print("Inside the Engine", len(self.subcriptions))
+            # print("Inside the Engine", len(self.subcriptions))
         except Exception as e:
             error(f"Failed to send request {e}")
     
@@ -234,7 +246,7 @@ class StreamModel:
         self.predictionProduced: BehaviorSubject = predictionProduced
         self.rng = np.random.default_rng(37)
         self.publisherHost = self.peerInfo.publishersIp[0]
-        self.isConnectedToPeer = False
+        self.isConnectedToPublisher = False
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -247,15 +259,12 @@ class StreamModel:
 
     async def init2(self):
         # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
-        self.isConnectedToPeer = await self.connectToPeer()
-        if self.isConnectedToPeer:
+        self.isConnectedToPublisher = await self.connectToPeer()
+        if self.isConnectedToPublisher:
             await self.syncData()
             await self.makeSubscription()
-            # await self.listenToSubscription() # the failure message can be sent like a subscription, then it go to the else 
-        else:
-            await self._sendStreamInactiveInfoToServer()
-            await asyncio.sleep(3600)
-            # TODO : reconnect after an hour
+        # else:
+        #     await self._sendStreamInactiveInfoToServer()
 
     def findSubscription(self, subscription: Subscription) -> Subscription:
         for s in self.subscriptions.keys():
@@ -276,24 +285,26 @@ class StreamModel:
                 )
                 if response.status == 'success':
                     return True
-                return False
+                else:
+                    raise Exception('the peer does not contain the stream in its publisher list')
             except Exception as e:
-                error('Error connecting to Publisher')
+                error('Error connecting to Publisher: ', e)
                 return False
 
-
-        if _isPublisherActive(self.publisherHost):
-            return True
-        else:
+        while True:  
+            if await _isPublisherActive(self.publisherHost):
+                self.isConnectedToPublisher = True
+                return True
             self.peerInfo.subscribersIp = [
                 ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
             ]
             self.rng.shuffle(self.peerInfo.subscribersIp)
-            for subscriberIp in self.peerInfo.subcribersIp:
-                if _isPublisherActive(subscriberIp):
+            for subscriberIp in self.peerInfo.subscribersIp:
+                if await _isPublisherActive(subscriberIp):
                     self.publisherHost = subscriberIp
+                    self.isConnectedToPublisher = True
                     return True
-        return False
+            await asyncio.sleep(3600)  # Wait for 1 hour before retrying
     
     async def syncData(self):
         '''
@@ -340,15 +351,13 @@ class StreamModel:
 
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
         if message.status != 'inactive':
-            self.appendNewData(message.data) # TODO 
+            self.appendNewData(message.data)
             forecast = await self.producePrediction() 
             await self.passPredictionData(forecast) 
         else:
             await self._sendStreamInactiveInfoToServer(message)
-            self.isConnectedToPeer = False
-            # try to connect to another peer
-            # maybe a reconnect function
-            await self.init2() # something like this
+            self.isConnectedToPublisher = False
+            await self.init2() 
 
     async def _sendStreamInactiveInfoToServer(self, message: Message = None):
         ''' sends stream inactive request to the server so that it can remove the streams from available streams '''
@@ -371,19 +380,14 @@ class StreamModel:
         self.paused = False
 
     # TODO : refactor after confirming how the subscription message is sent
-    def appendNewData(self, observation: Observation):
+    def appendNewData(self, observation: json):
         """extract the data and save it to self.data"""
-        parsedData = json.loads(observation.raw)
-        if validate_single_entry(parsedData["time"], parsedData["data"]):
-            self.data = pd.concat(
-                [
-                    self.data,
-                    pd.DataFrame({
-                        "date_time": [str(parsedData["time"])],
-                        "value": [float(parsedData["data"])],
-                        "id": [str(parsedData["hash"])]}),
-                ],
-                ignore_index=True)
+        observationDf = pd.read_json(StringIO(observation), orient='split').reset_index().rename(columns={
+                            'index': 'date_time',
+                            'hash': 'id'
+                        })
+        if validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
+            self.data = pd.concat([self.data, observationDf], ignore_index=True)
         else:
             error("Row not added due to corrupt observation")
 
@@ -458,10 +462,18 @@ class StreamModel:
                     uuid=self.streamUuid,
                     method="stream-data"
                     )
-            df = pd.read_json(datasetJson.data, orient='split')
+            df = pd.read_json(StringIO(datasetJson.data), orient='split').reset_index().rename(columns={
+                    'index': 'date_time',
+                    'hash': 'id'
+                })
             output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
             df.to_csv(output_path, index=False)
             return df
+            # TODO : after testing just return the below
+            # return pd.read_json(StringIO(datasetJson.data), orient='split').reset_index().rename(columns={
+            #         'index': 'date_time',
+            #         'hash': 'id'
+            #     })
         except Exception:
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
