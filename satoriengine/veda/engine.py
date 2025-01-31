@@ -132,7 +132,8 @@ class Engine:
                 except Exception as e:
                     error("Failed to find a valid Server Ip : ", e)
                     info("Retrying connection in 1 hour...")
-                    await asyncio.sleep(3600) # retry in an hour
+                    self.isConnected = False
+                    await asyncio.sleep(60*60)
 
     async def getPubSubInfo(self):
         ''' gets the relation info between pub-sub streams from its own server '''
@@ -145,12 +146,12 @@ class Engine:
         except Exception as e:
             error(f"Failed to send request {e}")
     
-    def setupSubscriptions(self):
-        self.newObservation.subscribe(
-            on_next=lambda x: self.handleNewObservation(
-                x) if x is not None else None,
-            on_error=lambda e: self.handleError(e),
-            on_completed=lambda: self.handleCompletion())
+    # def setupSubscriptions(self):
+    #     self.newObservation.subscribe(
+    #         on_next=lambda x: self.handleNewObservation(
+    #             x) if x is not None else None,
+    #         on_error=lambda e: self.handleError(e),
+    #         on_completed=lambda: self.handleCompletion())
 
     async def initializeModels(self):
         for subuuid, pubuuid in zip(self.subcriptions.keys(), self.publications.keys()): 
@@ -161,7 +162,9 @@ class Engine:
                 serverIp=self.dataServerIp,
                 peerInfo=peers,
                 dataClient=self.dataClient,
-                predictionProduced=self.predictionProduced)
+                predictionProduced=self.predictionProduced,
+                pauseAll=self.pause,
+                resumeAll=self.resume)
             self.streamModels[subuuid].chooseAdapter(inplace=True)
             self.streamModels[subuuid].run_forever()
 
@@ -211,7 +214,9 @@ class StreamModel:
         serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
-        predictionProduced: BehaviorSubject
+        predictionProduced: BehaviorSubject,
+        pauseAll:callable,
+        resumeAll:callable,
     ):
         streamModel = cls(
             streamUuid,
@@ -219,7 +224,9 @@ class StreamModel:
             serverIp,
             peerInfo,
             dataClient,
-            predictionProduced
+            predictionProduced,
+            pauseAll,
+            resumeAll,
         )
         await streamModel.initialize()
         return streamModel
@@ -232,8 +239,12 @@ class StreamModel:
         peerInfo: PeerInfo,
         dataClient: DataClient,
         predictionProduced: BehaviorSubject,
+        pauseAll:callable,
+        resumeAll:callable,
     ):
         self.cpu = getProcessorCount()
+        self.pauseAll = pauseAll
+        self.resumeAll = resumeAll
         self.preferredAdapters: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
@@ -352,8 +363,10 @@ class StreamModel:
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
         if message.status != 'inactive':
             self.appendNewData(message.data)
+            self.pauseAll()
             forecast = await self.producePrediction() 
             await self.passPredictionData(forecast) 
+            self.resumeAll()
         else:
             await self._sendStreamInactiveInfoToServer(message)
             self.isConnectedToPublisher = False
