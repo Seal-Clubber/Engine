@@ -356,6 +356,7 @@ class StreamModel:
         '''
         # for every stream we care about - raw data stream, and all supporting streams
         await self.dataClient.subscribe(
+              peerHost=self.publisherHost,
               uuid=self.streamUuid,
               publicationUuid=self.predictionStreamUuid,
               callback=self.handleSubscriptionMessage)
