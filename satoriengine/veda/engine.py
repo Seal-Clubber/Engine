@@ -3,9 +3,8 @@ from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
-from satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
+from Lib.satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
 from satorineuron import config
-from reactivex.subject import BehaviorSubject
 import asyncio
 import pandas as pd
 import numpy as np
@@ -231,27 +230,25 @@ class StreamModel:
             - replace what we have
         '''
         try:
-            externalDataJson = await self.dataClient.sendRequest(
-                peerHost=self.publisherHost, 
-                uuid=self.streamUuid,
-                method='stream-info',
-            )
-            externalDf = pd.read_json(externalDataJson.data, orient='split')
+            externalDataResponse = await self.dataClient.getRemoteStreamData(self.publisherHost, self.streamUuid)
+            if externalDataResponse.status == DataServerApi.statusSuccess.value:
+                externalDf = pd.read_json(externalDataResponse.data, orient='split')
+                if not externalDf.equals(self.data) and len(externalDf) > 0:
+                    self.data = externalDf
+                    response = await self.dataClient.insertStreamData(
+                                    uuid=self.streamUuid,
+                                    data=externalDf,
+                                    replace=True
+                                )
+                    if response.status == DataServerApi.statusSuccess.value:
+                        info("Data updated in server", color='green')
+                    else:
+                        raise Exception(externalDataResponse.senderMsg)
+            else:
+                raise Exception(externalDataResponse.senderMsg)
         except Exception as e:
-            error("Error cannot connect to peer: ", e)
+            error("Failed to sync data, ", e)
 
-        if not externalDf.equals(self.data) and len(externalDf) > 0:
-            self.data = externalDf
-            try:
-                await self.dataClient.sendRequest(
-                    peerHost=self.serverIp,
-                    uuid=self.streamUuid,
-                    method='insert',
-                    data=externalDf,
-                    replace=True,
-                )
-            except Exception as e:
-                error("Error cannot connect to Server: ", e)
 
     async def makeSubscription(self):
         '''
@@ -259,7 +256,6 @@ class StreamModel:
             - whenever we get an observation on this stream, pass to the DataServer
         - continually generate predictions for prediction publication streams and pass that to 
         '''
-        # for every stream we care about - raw data stream, and all supporting streams
         await self.dataClient.subscribe(
               peerHost=self.publisherHost,
               uuid=self.streamUuid,
@@ -267,30 +263,28 @@ class StreamModel:
               callback=self.handleSubscriptionMessage)
 
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
-        if message.status != 'inactive':
+        if message.status != DataServerApi.statusInactiveStream:
             self.appendNewData(message.data)
             self.pauseAll()
             forecast = await self.producePrediction() 
             await self.passPredictionData(forecast) 
             self.resumeAll()
         else:
-            await self._sendStreamInactiveInfoToServer(message)
+            await self._sendInactive(message)
             self.isConnectedToPublisher = False
             await self.init2() 
 
-    async def _sendStreamInactiveInfoToServer(self, message: Message = None):
+    async def _sendInactive(self, message: Message = None):
         ''' sends stream inactive request to the server so that it can remove the streams from available streams '''
         try:
-            # TODO : check if we can sent the message directly as rawMsg
-            await self.dataClient.sendRequest(
-                self.serverIp,
-                uuid=self.streamUuid,
-                method='stream-inactive',
-                isSub=True
-            )
+            response = await self.dataClient.streamInactive(
+                            uuid=self.streamUuid,
+                            # isSub=True # TODO : should we add isSub?
+                        )
+            if response.status != DataServerApi.statusSuccess.value:
+                raise Exception(response.senderMsg)
         except Exception as e:
             error("Inactive message not sent to server: ", e)
-
 
     def pause(self):
         self.paused = True
@@ -327,18 +321,22 @@ class StreamModel:
                         'value': [StreamForecast.firstPredictionOf(forecast)]
                     })
                 else:
-                    raise Exception("Forecast not in dataframe format")
+                    raise Exception('Forecast not in dataframe format')
         except Exception as e:
             error(e)
             self.fallback_prediction()
 
     async def passPredictionData(self, forecast: pd.DataFrame):
         try:
-            await self.dataClient.passDataToServer(
-                peerHost=self.serverIp,
-                uuid=self.predictionStreamUuid,
-                data=forecast
-            )
+            response = await self.dataClient.insertStreamData(
+                            uuid=self.predictionStreamUuid,
+                            data=forecast,
+                            isSub=True
+                        )
+            if response.status == DataServerApi.statusSuccess.value:
+                info('Prediction Data saved in Server', color='green')
+            else:
+                raise Exception(response.senderMsg)
         except Exception as e:
             error('Failed to send Prediction to server : ', e)
 
@@ -346,9 +344,9 @@ class StreamModel:
         if os.path.isfile(self.modelPath()):
             try:
                 os.remove(self.modelPath())
-                debug("Deleted failed model file", color="teal")
+                debug('Deleted failed model file', color='teal')
             except Exception as e:
-                error(f"Failed to delete model file: {str(e)}")
+                error(f'Failed to delete model file: {str(e)}')
         backupModel = self.defaultAdapters[-1]()
         try:
             trainingResult = backupModel.fit(data=self.data)
@@ -357,37 +355,19 @@ class StreamModel:
         except Exception as e:
             error(f"Error training new model: {str(e)}")
 
-    # def save_prediction(
-    #     self,
-    #     observationTime: str,
-    #     prediction: float,
-    #     observationHash: str,
-    # ) -> pd.DataFrame:
-    #     # alternative - use data manager: self.predictionUpdate.on_next(self)
-    #     df = pd.DataFrame(
-    #         {"value": [prediction], "hash": [observationHash]},
-    #         index=[observationTime])
-    #     df.to_csv(
-    #         self.prediction_data_path(),
-    #         float_format="%.10f",
-    #         mode="a",
-    #         header=False)
-    #     return df
-
     async def loadData(self) -> pd.DataFrame:
         try:
-            datasetJson = await self.dataClient.sendRequest(
-                    peerHost=self.serverIp, 
-                    uuid=self.streamUuid,
-                    method="stream-data"
-                    )
-            df = pd.read_json(StringIO(datasetJson.data), orient='split').reset_index().rename(columns={
-                    'index': 'date_time',
-                    'hash': 'id'
-                })
-            output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
-            df.to_csv(output_path, index=False)
-            return df
+            response = await self.dataClient.getLocalStreamData(uuid=self.streamUuid)
+            if response.status == DataServerApi.statusSuccess.value:
+                df = pd.read_json(StringIO(response.data), orient='split').reset_index().rename(columns={
+                        'index': 'date_time',
+                        'hash': 'id'
+                    })
+                output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
+                df.to_csv(output_path, index=False)
+                return df
+            else:
+                raise Exception(response.senderMsg)
             # TODO : after testing just return the below
             # return pd.read_json(StringIO(datasetJson.data), orient='split').reset_index().rename(columns={
             #         'index': 'date_time',
