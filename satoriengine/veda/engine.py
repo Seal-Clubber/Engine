@@ -112,7 +112,6 @@ class Engine:
                 serverIp=self.dataServerIp,
                 peerInfo=peers,
                 dataClient=self.dataClient,
-                predictionProduced=self.predictionProduced,
                 pauseAll=self.pause,
                 resumeAll=self.resume)
             self.streamModels[subuuid].chooseAdapter(inplace=True)
@@ -135,7 +134,6 @@ class StreamModel:
         serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
-        predictionProduced: BehaviorSubject,
         pauseAll:callable,
         resumeAll:callable,
     ):
@@ -145,7 +143,6 @@ class StreamModel:
             serverIp,
             peerInfo,
             dataClient,
-            predictionProduced,
             pauseAll,
             resumeAll,
         )
@@ -159,7 +156,6 @@ class StreamModel:
         serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
-        predictionProduced: BehaviorSubject,
         pauseAll:callable,
         resumeAll:callable,
     ):
@@ -175,7 +171,6 @@ class StreamModel:
         self.serverIp = serverIp
         self.peerInfo: PeerInfo = peerInfo
         self.dataClient: DataClient = dataClient
-        self.predictionProduced: BehaviorSubject = predictionProduced
         self.rng = np.random.default_rng(37)
         self.publisherHost = self.peerInfo.publishersIp[0]
         self.isConnectedToPublisher = False
@@ -188,42 +183,30 @@ class StreamModel:
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
+        await self.init2()
 
     async def init2(self):
-        # DO LATER: for loop for all the streams we want to subscribe to (raw data stream and all feature streams)
-        self.isConnectedToPublisher = await self.connectToPeer()
-        if self.isConnectedToPublisher:
-            await self.syncData()
-            await self.makeSubscription()
-        # else:
-        #     await self._sendStreamInactiveInfoToServer()
-
-    def findSubscription(self, subscription: Subscription) -> Subscription:
-        for s in self.subscriptions.keys():
-            if s == subscription:
-                return s
-        return subscription
+        await self.connectToPeer()
+        await self.syncData()
+        await self.makeSubscription()
 
     async def connectToPeer(self) -> bool:
-        ''' Connects to a peer to recieve subscription if it has an active subscription to the stream '''
+        ''' Connects to a peer to receive subscription if it has an active subscription to the stream '''
 
         async def _isPublisherActive(publisherIp: str) -> bool:
             ''' conirms if the publisher has the subscription stream in its available stream '''
             try:
-                response = await self.dataClient.sendRequest(
-                    peerHost=publisherIp,
-                    uuid=self.streamUuid,
-                    method='confirm-subscription'
-                )
-                if response.status == 'success':
+                response = await self.dataClient.isStreamActive(publisherIp, self.streamUuid)
+                if response.status == DataServerApi.statusSuccess.value:
+                    info("successfully connected to an active Publisher Ip at :", publisherIp, color="green")
                     return True
                 else:
-                    raise Exception('the peer does not contain the stream in its publisher list')
+                    raise Exception(response.senderMsg)
             except Exception as e:
                 error('Error connecting to Publisher: ', e)
                 return False
 
-        while True:  
+        while not self.isConnectedToPublisher:  
             if await _isPublisherActive(self.publisherHost):
                 self.isConnectedToPublisher = True
                 return True
@@ -236,7 +219,8 @@ class StreamModel:
                     self.publisherHost = subscriberIp
                     self.isConnectedToPublisher = True
                     return True
-            await asyncio.sleep(3600)  # Wait for 1 hour before retrying
+            await asyncio.sleep(60*60)  
+        return False
     
     async def syncData(self):
         '''
