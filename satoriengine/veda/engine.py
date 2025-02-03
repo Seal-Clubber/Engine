@@ -1,10 +1,9 @@
 from satoriengine.veda.adapters import ModelAdapter, SKAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
-from satoriengine.veda.data import StreamForecast, cleanse_dataframe, validate_single_entry
+from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
-from satorilib.concepts import Stream, StreamId, StreamUuid, Observation
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
-from satorilib.datamanager import DataClient, PeerInfo, Message, Subscription
+from satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
 from satorineuron import config
 from reactivex.subject import BehaviorSubject
 import asyncio
@@ -33,53 +32,13 @@ class Engine:
     
     def __init__(self):
         self.streamModels: dict[str, StreamModel] = {}
-        self.subcriptions: dict[str, PeerInfo] = {} # TODO : change the datastructure
+        self.subcriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
         self.dataClient: Union[DataClient, None] = None,
         self.isConnectedToServer: bool = False
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
-    
-    # def handlePrediction(self, predictionInputs: PredictionInputs):
-
-    #     def registered(pubkey: str):
-    #         if pubkey is not None:
-    #             if pubkey not in self.wallets.keys():
-    #                 walletId = Wallet.getIdFromPubkey(pubkey=pubkey)
-    #                 if walletId is not None:
-    #                     self.wallets[pubkey] = walletId
-    #                 return walletId
-    #             return self.wallets[pubkey]
-    #         return None
-
-    #     if auth(predictionInputs.walletPayload):
-    #         walletId = registered(predictionInputs.walletPubkey)
-    #         if walletId is not None:
-    #             predictionInputs.setWalletId(walletId=walletId)
-    #             # just record record those that are staked
-    #             # df = database.get.getStake(wallet_id=walletId)
-    #             # if df is not None and isinstance(df, pd.DataFrame) and len(df) > 0:
-    #             self.recordPredictionInDatabase(predictionInputs)
-
-    # def processQueue(self):
-    #     while True:
-    #         try:
-    #             self.handlePrediction(self.queue.get())
-    #         except Exception as e:
-    #             self.logging.error(f"Error saving to database: {str(e)}")
-    #         finally:
-    #             # self.queue.task_done()
-    #             pass
-
-    # could use async task instead if we want
-    # def startProcessing(self):
-    #     recordPredictionThread = threading.Thread(
-    #         target=self.processQueue,
-    #         daemon=True)
-    #     recordPredictionThread.start()
-
-
 
     async def initialize(self):
         await self.connectToDataServer()
@@ -100,33 +59,29 @@ class Engine:
                 streamModel.resume()
 
     async def connectToDataServer(self):
-        ''' Local engine client make connection with its own server '''
+        ''' connect to server, retry if failed '''
 
         async def initiateServerConnection() -> bool:
-            self.dataClient = DataClient(self.dataServerIp)
-            responseFromServer = await self.dataClient.sendRequest(
-                    self.dataServerIp, 
-                    method='initiate-server-connection')
-            if responseFromServer.status == 'success':
-                info("Successfully connected to Server Ip at :", self.dataServerIp, color="green")
-                return True
-            return False
+            ''' local engine client authorization '''
 
+            self.dataClient = DataClient(self.dataServerIp)
+            response = await self.dataClient.isLocalEngineClient()
+            if response.status == DataServerApi.statusSuccess.value:
+                info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
+                return True
+            raise Exception(response.senderMsg)
+        
         while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
                 if await initiateServerConnection():
                     self.isConnectedToServer = True
-                else: 
-                    raise Exception("response returned from server is negative")
             except Exception as e:
                 error("Error connecting to server ip in config : ", e)
                 try:
                     self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
                     if await initiateServerConnection():
                         self.isConnectedToServer = True
-                    else: 
-                        raise Exception("response returned from server is negative")
                 except Exception as e:
                     error("Failed to find a valid Server Ip : ", e)
                     info("Retrying connection in 1 hour...")
@@ -134,23 +89,20 @@ class Engine:
                     await asyncio.sleep(60*60)
 
     async def getPubSubInfo(self):
-        ''' gets the relation info between pub-sub streams from its own server '''
-        try:
-            pubsubMap = await self.dataClient.sendRequest(peerHost=self.dataServerIp, method='get-pubsub-map')
-            for sub_uuid, data in pubsubMap.streamInfo.items():
-                self.subcriptions[sub_uuid] = PeerInfo(data['subscription_subscribers'], data['subscription_publishers'])
-                self.publications[data['publication_uuid']] = PeerInfo(data['publication_subscribers'], data['publication_publishers'])
-            # print("Inside the Engine", len(self.subcriptions))
-        except Exception as e:
-            error(f"Failed to send request {e}")
-    
-    # def setupSubscriptions(self):
-    #     self.newObservation.subscribe(
-    #         on_next=lambda x: self.handleNewObservation(
-    #             x) if x is not None else None,
-    #         on_error=lambda e: self.handleError(e),
-    #         on_completed=lambda: self.handleCompletion())
+        ''' gets the relation info between pub-sub streams '''
 
+        try:
+            pubSubResponse: Message = await self.dataClient.getPubsubMap()
+            if pubSubResponse.status == DataServerApi.statusSuccess.value:
+                for sub_uuid, data in pubSubResponse.streamInfo.items():
+                    self.subcriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
+                    self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
+                debug(pubSubResponse.senderMsg, print=True)
+            else:
+                raise Exception(pubSubResponse.senderMsg)
+        except Exception as e:
+            error(f"Failed to fetch pub-sub info, {e}")
+    
     async def initializeModels(self):
         for subuuid, pubuuid in zip(self.subcriptions.keys(), self.publications.keys()): 
             peers = self.subcriptions[subuuid]
@@ -166,40 +118,11 @@ class Engine:
             self.streamModels[subuuid].chooseAdapter(inplace=True)
             self.streamModels[subuuid].run_forever()
 
-    # def handleNewObservation(self, observation: Observation):
-    #     # spin off a new thread to handle the new observation
-    #     thread = threading.Thread(
-    #         target=self.handleNewObservationThread,
-    #         args=(observation,))
-    #     thread.start()
-    #     self.threads.append(thread)
-    #     self.cleanupThreads()
-
     def cleanupThreads(self):
         for thread in self.threads:
             if not thread.is_alive():
                 self.threads.remove(thread)
         debug(f'prediction thread count: {len(self.threads)}')
-
-    # def handleNewObservationThread(self, observation: Observation):
-    #     streamModel = self.streamModels.get(observation.streamId)
-    #     if streamModel is not None:
-    #         self.pause()
-    #         streamModel.appendNewData(observation)
-    #         if streamModel.thread is None or not streamModel.thread.is_alive():
-    #             streamModel.chooseAdapter(inplace=True)
-    #             streamModel.run_forever()
-    #         if streamModel is not None:
-    #             info(
-    #                 f'new observation, making prediction using {streamModel.adapter.__name__}', color='blue')
-    #             streamModel.producePrediction()
-    #         self.resume()
-
-    # def handleError(self, error):
-    #     print(f"An error occurred new_observaiton: {error}")
-
-    # def handleCompletion(self):
-    #     print("newObservation completed")
 
 
 class StreamModel:
