@@ -33,13 +33,11 @@ class Engine:
     
     def __init__(self):
         self.streamModels: dict[str, StreamModel] = {}
-        # self.newObservation: BehaviorSubject = BehaviorSubject(None)
-        # self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
-        self.subcriptions: dict[str, PeerInfo] = {}
+        self.subcriptions: dict[str, PeerInfo] = {} # TODO : change the datastructure
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
         self.dataClient: Union[DataClient, None] = None,
-        self.isConnected = False
+        self.isConnectedToServer: bool = False
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
     
@@ -114,11 +112,11 @@ class Engine:
                 return True
             return False
 
-        while not self.isConnected:
+        while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
                 if await initiateServerConnection():
-                    self.isConnected = True
+                    self.isConnectedToServer = True
                 else: 
                     raise Exception("response returned from server is negative")
             except Exception as e:
@@ -126,13 +124,13 @@ class Engine:
                 try:
                     self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
                     if await initiateServerConnection():
-                        self.isConnected = True
+                        self.isConnectedToServer = True
                     else: 
                         raise Exception("response returned from server is negative")
                 except Exception as e:
                     error("Failed to find a valid Server Ip : ", e)
                     info("Retrying connection in 1 hour...")
-                    self.isConnected = False
+                    self.isConnectedToServer = False
                     await asyncio.sleep(60*60)
 
     async def getPubSubInfo(self):
@@ -641,15 +639,15 @@ class StreamModel:
 
 
 
+# TODO : this is how we initialize
 
-
-async def main():
-    engine = await Engine.create()
-    await asyncio.Event().wait()
-    #await asyncio.Future()
-    #await asyncio.sleep(10)
-    #await asyncio.create_task(client._keepAlive())
+# async def main():
+#     engine = await Engine.create()
+#     await asyncio.Event().wait()
+#     #await asyncio.Future()
+#     #await asyncio.sleep(10)
+#     #await asyncio.create_task(client._keepAlive())
 
 
     
-asyncio.run(main())
+# asyncio.run(main())
