@@ -309,7 +309,6 @@ class StreamModel:
             - model replaced with a better one
             - new observation on the stream
         """
-        debug('Here inside pred func', color='cyan')
         try:
             updatedModel = updatedModel or self.stable
             if updatedModel is not None:
@@ -324,7 +323,7 @@ class StreamModel:
                     raise Exception('Forecast not in dataframe format')
         except Exception as e:
             error(e)
-            self.fallback_prediction()
+            await self.fallback_prediction()
 
     async def passPredictionData(self, forecast: pd.DataFrame):
         try:
@@ -340,7 +339,7 @@ class StreamModel:
         except Exception as e:
             error('Failed to send Prediction to server : ', e)
 
-    def fallback_prediction(self):
+    async def fallback_prediction(self):
         if os.path.isfile(self.modelPath()):
             try:
                 os.remove(self.modelPath())
@@ -351,7 +350,7 @@ class StreamModel:
         try:
             trainingResult = backupModel.fit(data=self.data)
             if abs(trainingResult.status) == 1:
-                self.producePrediction(backupModel)
+                await self.producePrediction(backupModel)
         except Exception as e:
             error(f"Error training new model: {str(e)}")
 
@@ -359,29 +358,15 @@ class StreamModel:
         try:
             response = await self.dataClient.getLocalStreamData(uuid=self.streamUuid)
             if response.status == DataServerApi.statusSuccess.value:
-                df = pd.read_json(StringIO(response.data), orient='split').reset_index().rename(columns={
+                return pd.read_json(StringIO(response.data), orient='split').reset_index().rename(columns={
                         'index': 'date_time',
                         'hash': 'id'
                     })
-                # output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
-                # df.to_csv(output_path, index=False)
-                # print(df)
-                return df
             else:
                 raise Exception(response.senderMsg)
-            # TODO : after testing just return the below
-            # return pd.read_json(StringIO(datasetJson.data), orient='split').reset_index().rename(columns={
-            #         'index': 'date_time',
-            #         'hash': 'id'
-            #     })
         except Exception as e:
             error(e)
             return pd.DataFrame(columns=["date_time", "value", "id"])
-
-    # def prediction_data_path(self) -> str:
-    #     return (
-    #         '/Satori/Neuron/data/testprediction/'
-    #         f'{self.predictionStreamUuid}.csv')
 
     def modelPath(self) -> str:
         return (
@@ -460,16 +445,11 @@ class StreamModel:
                                 "stable model updated for stream:",
                                 self.streamUuid,
                                 print=True)
-                            
-                            debug('B4', color='cyan')
-                            # Create a future object to wait for the coroutine to complete
                             future = asyncio.run_coroutine_threadsafe(
                                 self.producePrediction(self.stable),
                                 self._loop
                             )
-                            # Wait for the coroutine to complete
                             future.result()
-                            debug('After', color='cyan')
                 else:
                     debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry')
                     self.failedAdapters.append(self.pilot)
@@ -490,25 +470,18 @@ class StreamModel:
         Ensures the thread has access to the event loop for async operations.
         """
         def run_with_loop():
-            # Store the loop reference in the instance
+
+            def run_loop_forever():
+                self._loop.run_forever()
+                
             try:
                 self._loop = asyncio.get_event_loop()
             except RuntimeError:
                 self._loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self._loop)
-            
-            # Start a new event loop in this thread
             asyncio.set_event_loop(self._loop)
-            
-            # Create a task to run the loop forever in this thread
-            def run_loop_forever():
-                self._loop.run_forever()
-            
-            # Start loop in a separate thread
             loop_thread = threading.Thread(target=run_loop_forever, daemon=True)
             loop_thread.start()
-            
-            # Run the main processing
             try:
                 self.run()
             finally:
