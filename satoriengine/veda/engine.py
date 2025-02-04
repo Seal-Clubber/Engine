@@ -3,7 +3,7 @@ from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
-from Lib.satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
+from satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
 from satorineuron import config
 import asyncio
 import pandas as pd
@@ -103,18 +103,22 @@ class Engine:
             error(f"Failed to fetch pub-sub info, {e}")
     
     async def initializeModels(self):
-        for subuuid, pubuuid in zip(self.subcriptions.keys(), self.publications.keys()): 
-            peers = self.subcriptions[subuuid]
-            self.streamModels[subuuid] = await StreamModel.create(
-                streamId=subuuid,
-                predictionStreamId=pubuuid,
-                serverIp=self.dataServerIp,
-                peerInfo=peers,
-                dataClient=self.dataClient,
-                pauseAll=self.pause,
-                resumeAll=self.resume)
-            self.streamModels[subuuid].chooseAdapter(inplace=True)
-            self.streamModels[subuuid].run_forever()
+        for subUuid, pubUuid in zip(self.subcriptions.keys(), self.publications.keys()): 
+            peers = self.subcriptions[subUuid]
+            try:
+                self.streamModels[subUuid] = await StreamModel.create(
+                    streamUuid=subUuid,
+                    predictionStreamUuid=pubUuid,
+                    peerInfo=peers,
+                    dataClient=self.dataClient,
+                    pauseAll=self.pause,
+                    resumeAll=self.resume)
+            except Exception as e:
+                error(e)
+            debug(3, color='cyan')
+            self.streamModels[subUuid].chooseAdapter(inplace=True)
+            debug(4, color='cyan')
+            self.streamModels[subUuid].run_forever()
 
     def cleanupThreads(self):
         for thread in self.threads:
@@ -130,7 +134,6 @@ class StreamModel:
         cls, 
         streamUuid: str,
         predictionStreamUuid: str,
-        serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
         pauseAll:callable,
@@ -139,7 +142,6 @@ class StreamModel:
         streamModel = cls(
             streamUuid,
             predictionStreamUuid,
-            serverIp,
             peerInfo,
             dataClient,
             pauseAll,
@@ -152,7 +154,6 @@ class StreamModel:
         self,
         streamUuid: str,
         predictionStreamUuid: str,
-        serverIp: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
         pauseAll:callable,
@@ -167,7 +168,6 @@ class StreamModel:
         self.thread: threading.Thread = None
         self.streamUuid: str = streamUuid
         self.predictionStreamUuid: str = predictionStreamUuid
-        self.serverIp = serverIp
         self.peerInfo: PeerInfo = peerInfo
         self.dataClient: DataClient = dataClient
         self.rng = np.random.default_rng(37)
@@ -182,7 +182,7 @@ class StreamModel:
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
-        await self.init2()
+        # await self.init2()
 
     async def init2(self):
         await self.connectToPeer()
@@ -266,8 +266,7 @@ class StreamModel:
         if message.status != DataServerApi.statusInactiveStream:
             self.appendNewData(message.data)
             self.pauseAll()
-            forecast = await self.producePrediction() 
-            await self.passPredictionData(forecast) 
+            await self.producePrediction() 
             self.resumeAll()
         else:
             await self._sendInactive(message)
@@ -292,7 +291,6 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
-    # TODO : refactor after confirming how the subscription message is sent
     def appendNewData(self, observation: json):
         """extract the data and save it to self.data"""
         observationDf = pd.read_json(StringIO(observation), orient='split').reset_index().rename(columns={
@@ -305,21 +303,23 @@ class StreamModel:
             error("Row not added due to corrupt observation")
 
     
-    def producePrediction(self, updatedModel=None) -> pd.DataFrame:
+    async def producePrediction(self, updatedModel=None):
         """
         triggered by
             - model replaced with a better one
             - new observation on the stream
         """
+        debug('Here inside pred func', color='cyan')
         try:
             updatedModel = updatedModel or self.stable
             if updatedModel is not None:
                 forecast = updatedModel.predict(data=self.data)
                 if isinstance(forecast, pd.DataFrame):
-                    return pd.DataFrame({
-                        'date_time': [datetimeToTimestamp(now())],
-                        'value': [StreamForecast.firstPredictionOf(forecast)]
-                    })
+                    predictionDf = pd.DataFrame({
+                            'date_time': [datetimeToTimestamp(now())],
+                            'value': [StreamForecast.firstPredictionOf(forecast)]
+                        })
+                    await self.passPredictionData(predictionDf) 
                 else:
                     raise Exception('Forecast not in dataframe format')
         except Exception as e:
@@ -334,7 +334,7 @@ class StreamModel:
                             isSub=True
                         )
             if response.status == DataServerApi.statusSuccess.value:
-                info('Prediction Data saved in Server', color='green')
+                info(response.senderMsg, color='green')
             else:
                 raise Exception(response.senderMsg)
         except Exception as e:
@@ -363,8 +363,9 @@ class StreamModel:
                         'index': 'date_time',
                         'hash': 'id'
                     })
-                output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
-                df.to_csv(output_path, index=False)
+                # output_path = os.path.join('csvs', f'{self.streamUuid}.csv')
+                # df.to_csv(output_path, index=False)
+                # print(df)
                 return df
             else:
                 raise Exception(response.senderMsg)
@@ -373,7 +374,8 @@ class StreamModel:
             #         'index': 'date_time',
             #         'hash': 'id'
             #     })
-        except Exception:
+        except Exception as e:
+            error(e)
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     # def prediction_data_path(self) -> str:
@@ -384,7 +386,7 @@ class StreamModel:
     def modelPath(self) -> str:
         return (
             '/Satori/Neuron/models/veda/'
-            f'{self.streamUuid}/'
+            f'{self.predictionStreamUuid}/'
             f'{self.adapter.__name__}.joblib')
 
     def chooseAdapter(self, inplace: bool = False) -> ModelAdapter:
@@ -458,7 +460,16 @@ class StreamModel:
                                 "stable model updated for stream:",
                                 self.streamUuid,
                                 print=True)
-                            self.producePrediction(self.stable)
+                            
+                            debug('B4', color='cyan')
+                            # Create a future object to wait for the coroutine to complete
+                            future = asyncio.run_coroutine_threadsafe(
+                                self.producePrediction(self.stable),
+                                self._loop
+                            )
+                            # Wait for the coroutine to complete
+                            future.result()
+                            debug('After', color='cyan')
                 else:
                     debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry')
                     self.failedAdapters.append(self.pilot)
@@ -474,59 +485,42 @@ class StreamModel:
                     pass
 
     def run_forever(self):
-        self.thread = threading.Thread(target=self.run, args=(), daemon=True)
+        """
+        Creates a new thread for running the model training loop.
+        Ensures the thread has access to the event loop for async operations.
+        """
+        def run_with_loop():
+            # Store the loop reference in the instance
+            try:
+                self._loop = asyncio.get_event_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+            
+            # Start a new event loop in this thread
+            asyncio.set_event_loop(self._loop)
+            
+            # Create a task to run the loop forever in this thread
+            def run_loop_forever():
+                self._loop.run_forever()
+            
+            # Start loop in a separate thread
+            loop_thread = threading.Thread(target=run_loop_forever, daemon=True)
+            loop_thread.start()
+            
+            # Run the main processing
+            try:
+                self.run()
+            finally:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                loop_thread.join()
+
+        self.thread = threading.Thread(target=run_with_loop, daemon=True)
         self.thread.start()
 
 
 
-# NC : gets the peerinfo from the R-server and gives it to its own DS.
-
-# DS : saves that PeerInfo
-
-# EC : asks for the peerInfo (pubSubMap) from (our own) DS
-    
-# EC : recieves the PeerInfo and then divides sub and pub
-
-# EC : creates thread for each pub-Subscription
-    
-# EC1 : connectToPeer(), first tries to connect with PublisherPeer (an external peer) information supplied by the r-server
-
-#     if that succeeds then its good ( PublisherPeer )
-#     else : tries to connect to other subscribers 
-
-# EC1 : if we're unable to find any connection that has the stream available for subscription - just die, or maybe retry in an hour
-
-# EC1 : else, connection found and then we successfully subscribed to data
-
-# EC1 : let the DS know that they are successfully subscribed (add this stream to availableStream)
-
-# EC1 : let the DS know that they are will publish our prediction datastream (add this stream to availableStream)
-
-# EC1 : recieves a msg or a disconnect event that the publisher is no longer providing
-#       - remove the stream from list of active raw data streams/subscriptions/publictions # datastream from the activation list
-#       - (when the DS removes it from the list, it also tells all subscribers that it's no longer available, perpetuating the message)
-#       - remove the stream from list of active predictve streams/
-#       - (when the DS removes it from the list, it also tells all subscribers that it's no longer available, perpetuating the message)
-
-# PublisherPeer: if any problem arises, sends a message to all of its connected servers, ( server removes the peer from its list ).
-
-
-
-
-
-# subscription data flow
-
-# N: grabs data from the web, sends it to NDC
-# NDC: sends it to it's own DS
-# DS: saves it to disk, sends it to any subscribing peer (EDC)
-# EDC: sends it to it's own DS, triggers callback for all 'subscribing' streamModels in the engine
-# SM: saves to ram, triggers a prediction, which it sends to EDC
-# EDC: sends prediction to it's own DS
-# DS: saves it to disk, sends it to any subscribing peer (EDC) as ancillary data for models
-
-
-
-# TODO : this is how we initialize
+# this is how we initialize
 
 # async def main():
 #     engine = await Engine.create()
