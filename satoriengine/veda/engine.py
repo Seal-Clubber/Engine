@@ -76,17 +76,12 @@ class Engine:
                 if await initiateServerConnection():
                     self.isConnectedToServer = True
             except Exception as e:
-                error("Error connecting to server ip in config : ", e)
-                try:
-                    self.dataServerIp = self.start.server.getPublicIp().text.split()[-1] # TODO : is this correct?
-                    if await initiateServerConnection():
-                        self.isConnectedToServer = True
-                except Exception as e:
-                    error("Failed to find a valid Server Ip : ", e)
-                    info("Retrying connection in 1 hour...")
-                    self.isConnectedToServer = False
-                    await asyncio.sleep(60*60)
+                error("Failed to find a valid Server Ip : ", e)
+                info("Retrying connection in 10 seconds...")
+                self.isConnectedToServer = False
+                await asyncio.sleep(10)
 
+    # TODO : keep pinging the server until pub-sub is fetched from it
     async def getPubSubInfo(self):
         ''' gets the relation info between pub-sub streams '''
 
