@@ -314,10 +314,8 @@ class StreamModel:
             if updatedModel is not None:
                 forecast = updatedModel.predict(data=self.data)
                 if isinstance(forecast, pd.DataFrame):
-                    predictionDf = pd.DataFrame({
-                            'date_time': [datetimeToTimestamp(now())],
-                            'value': [StreamForecast.firstPredictionOf(forecast)]
-                        })
+                    predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
+                                    }, index=[datetimeToTimestamp(now())])
                     await self.passPredictionData(predictionDf) 
                 else:
                     raise Exception('Forecast not in dataframe format')
