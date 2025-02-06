@@ -90,8 +90,9 @@ class Engine:
         while not self.subscriptions and self.isConnectedToServer:
             try:
                 pubSubResponse: Message = await self.dataClient.getPubsubMap()
-                if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubResponse.data is not None:
+                if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubResponse.streamInfo:
                     for sub_uuid, data in pubSubResponse.streamInfo.items():
+                        # TODO : deal with supportive streams, ( data['supportiveUuid'] )
                         self.subscriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
                         self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
                     if self.subscriptions:
