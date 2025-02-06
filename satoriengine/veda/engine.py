@@ -248,9 +248,12 @@ class StreamModel:
         try:
             externalDataResponse = await self.dataClient.getRemoteStreamData(self.publisherHost, self.streamUuid)
             if externalDataResponse.status == DataServerApi.statusSuccess.value:
-                externalDf = pd.read_json(externalDataResponse.data, orient='split')
-                if not externalDf.equals(self.data) and len(externalDf) > 0:
-                    self.data = externalDf
+                externalDf = pd.read_json(StringIO(externalDataResponse.data), orient='split')
+                if not externalDf.equals(self.data) and len(externalDf) > 0: # TODO : sure about this?
+                    self.data = externalDf.reset_index().rename(columns={
+                        'index': 'date_time',
+                        'hash': 'id'
+                    })
                     response = await self.dataClient.insertStreamData(
                                     uuid=self.streamUuid,
                                     data=externalDf,
