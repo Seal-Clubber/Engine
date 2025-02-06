@@ -31,7 +31,7 @@ class Engine:
     
     def __init__(self):
         self.streamModels: dict[str, StreamModel] = {}
-        self.subcriptions: dict[str, PeerInfo] = {}
+        self.subscriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
         self.dataClient: Union[DataClient, None] = None,
@@ -41,8 +41,10 @@ class Engine:
 
     async def initialize(self):
         await self.connectToDataServer()
+        asyncio.create_task(self.stayConnectedForever())
         await self.getPubSubInfo()
         await self.initializeModels()
+        await asyncio.Event().wait()
 
     def pause(self, force: bool = False):
         if force:
@@ -70,36 +72,47 @@ class Engine:
                 return True
             raise Exception(response.senderMsg)
         
+        waitingPeriod = 10
+        
         while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
                 if await initiateServerConnection():
                     self.isConnectedToServer = True
+                    return True
             except Exception as e:
-                error("Failed to find a valid Server Ip : ", e)
-                info("Retrying connection in 10 seconds...")
-                self.isConnectedToServer = False
-                await asyncio.sleep(10)
+                warning(f'Failed to find a valid Server Ip, retrying in {waitingPeriod}')
+                await asyncio.sleep(waitingPeriod)
 
-    # TODO : keep pinging the server until pub-sub is fetched from it
     async def getPubSubInfo(self):
         ''' gets the relation info between pub-sub streams '''
+        waitingPeriod = 10
+        while not self.subscriptions and self.isConnectedToServer:
+            try:
+                pubSubResponse: Message = await self.dataClient.getPubsubMap()
+                if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubResponse.data is not None:
+                    for sub_uuid, data in pubSubResponse.streamInfo.items():
+                        self.subscriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
+                        self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
+                    if self.subscriptions:
+                        info(pubSubResponse.senderMsg, color='green')
+                else:
+                    raise Exception
+            except Exception:
+                warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
+                await asyncio.sleep(waitingPeriod)
 
-        try:
-            pubSubResponse: Message = await self.dataClient.getPubsubMap()
-            if pubSubResponse.status == DataServerApi.statusSuccess.value:
-                for sub_uuid, data in pubSubResponse.streamInfo.items():
-                    self.subcriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
-                    self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
-                debug(pubSubResponse.senderMsg, print=True)
-            else:
-                raise Exception(pubSubResponse.senderMsg)
-        except Exception as e:
-            error(f"Failed to fetch pub-sub info, {e}")
+    async def stayConnectedForever(self):
+        ''' alternative to await asyncio.Event().wait() '''
+        while True:
+            await asyncio.sleep(10)
+            if not self.dataClient.isConnected():
+                self.isConnectedToServer = False
+                await self.initialize()
     
     async def initializeModels(self):
-        for subUuid, pubUuid in zip(self.subcriptions.keys(), self.publications.keys()): 
-            peers = self.subcriptions[subUuid]
+        for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()): 
+            peers = self.subscriptions[subUuid]
             try:
                 self.streamModels[subUuid] = await StreamModel.create(
                     streamUuid=subUuid,
