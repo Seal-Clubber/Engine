@@ -34,17 +34,19 @@ class Engine:
         self.subscriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
-        self.dataClient: Union[DataClient, None] = None,
-        self.isConnectedToServer: bool = False
+        self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
 
     async def initialize(self):
         await self.connectToDataServer()
         asyncio.create_task(self.stayConnectedForever())
+        await self.startService()
+
+    async def startService(self): 
         await self.getPubSubInfo()
         await self.initializeModels()
-        await asyncio.Event().wait()
+        # await asyncio.Event().wait()
 
     def pause(self, force: bool = False):
         if force:
@@ -59,6 +61,12 @@ class Engine:
             for streamModel in self.streamModels.values():
                 streamModel.resume()
 
+    @property
+    def isConnectedToServer(self):
+        if hasattr(self, 'dataClient') and self.dataClient is not None:
+            return self.dataClient.isConnected()
+        return False
+    
     async def connectToDataServer(self):
         ''' connect to server, retry if failed '''
 
@@ -78,7 +86,6 @@ class Engine:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
                 if await initiateServerConnection():
-                    self.isConnectedToServer = True
                     return True
             except Exception as e:
                 warning(f'Failed to find a valid Server Ip, retrying in {waitingPeriod}')
@@ -107,9 +114,9 @@ class Engine:
         ''' alternative to await asyncio.Event().wait() '''
         while True:
             await asyncio.sleep(10)
-            if not self.dataClient.isConnected():
-                self.isConnectedToServer = False
-                await self.initialize()
+            if not self.isConnectedToServer:
+                await self.connectToDataServer()
+                await self.startService()
     
     async def initializeModels(self):
         for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()): 
