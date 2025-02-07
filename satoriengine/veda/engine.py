@@ -310,9 +310,9 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
-    def appendNewData(self, observation: json):
+    def appendNewData(self, observation: pd.DataFrame):
         """extract the data and save it to self.data"""
-        observationDf = pd.read_json(StringIO(observation), orient='split').reset_index().rename(columns={
+        observationDf = observation.reset_index().rename(columns={
                             'index': 'date_time',
                             'hash': 'id'
                         })
@@ -375,10 +375,10 @@ class StreamModel:
         try:
             response = await self.dataClient.getLocalStreamData(uuid=self.streamUuid)
             if response.status == DataServerApi.statusSuccess.value:
-                return pd.read_json(StringIO(response.data), orient='split').reset_index().rename(columns={
-                        'index': 'date_time',
-                        'hash': 'id'
-                    })
+                return response.data.reset_index().rename(columns={
+                    'ts': 'date_time',
+                    'hash': 'id'
+                })
             else:
                 raise Exception(response.senderMsg)
         except Exception as e:
