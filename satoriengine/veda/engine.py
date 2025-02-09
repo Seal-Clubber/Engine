@@ -202,8 +202,26 @@ class StreamModel:
 
     async def init2(self):
         await self.connectToPeer()
+        asyncio.create_task(self.stayConnectedToPublisher())
+        await self.startStreamService()
+    
+    async def startStreamService(self):
         await self.syncData()
         await self.makeSubscription()
+
+    @property
+    def isConnectedToPublisher(self):
+        if hasattr(self, 'dataClient') and self.dataClient is not None:
+            return self.dataClient.isConnected(self.publisherHost)
+        return False
+
+    async def stayConnectedToPublisher(self):
+        while True:
+            await asyncio.sleep(10) 
+            if not self.isConnectedToPublisher:
+                await self.connectToPeer()
+                await self.startStreamService()
+        
 
     async def connectToPeer(self) -> bool:
         ''' Connects to a peer to receive subscription if it has an active subscription to the stream '''
@@ -221,9 +239,8 @@ class StreamModel:
                 error('Error connecting to Publisher: ', e)
                 return False
 
-        while not self.isConnectedToPublisher:  
+        while self.isConnectedToPublisher:
             if await _isPublisherActive(self.publisherHost):
-                self.isConnectedToPublisher = True
                 return True
             self.peerInfo.subscribersIp = [
                 ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
@@ -232,7 +249,6 @@ class StreamModel:
             for subscriberIp in self.peerInfo.subscribersIp:
                 if await _isPublisherActive(subscriberIp):
                     self.publisherHost = subscriberIp
-                    self.isConnectedToPublisher = True
                     return True
             await asyncio.sleep(60*60)  
         return False
@@ -288,17 +304,14 @@ class StreamModel:
             await self.producePrediction() 
             self.resumeAll()
         else:
-            await self._sendInactive(message)
-            self.isConnectedToPublisher = False
-            await self.init2() 
+            await self._sendInactive()
+            await self.connectToPeer()
+            await self.startStreamService()
 
-    async def _sendInactive(self, message: Message = None):
+    async def _sendInactive(self):
         ''' sends stream inactive request to the server so that it can remove the streams from available streams '''
         try:
-            response = await self.dataClient.streamInactive(
-                            uuid=self.streamUuid,
-                            # isSub=True # TODO : should we add isSub?
-                        )
+            response = await self.dataClient.streamInactive(self.streamUuid)
             if response.status != DataServerApi.statusSuccess.value:
                 raise Exception(response.senderMsg)
         except Exception as e:
