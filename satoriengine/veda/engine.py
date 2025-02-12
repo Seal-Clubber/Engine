@@ -70,15 +70,36 @@ class Engine:
     async def connectToDataServer(self):
         ''' connect to server, retry if failed '''
 
+        async def authenticate() -> bool:
+            auth = {
+                'client_pubkey': '123awd',
+                'client_challenge': '523adsd'
+            }
+            response = await self.dataClient.authenticate(authDict=auth)
+            if response.status == DataServerApi.statusSuccess.value:
+                authDict = response.auth
+                # TODO : sign the server_challenge with its prvt key
+                authDict = {
+                    'client_server_signature': 'xx23'
+                }
+                response = await self.dataClient.authenticate(authDict=authDict)
+                if response.status == DataServerApi.statusSuccess.value:
+                    info(response.senderMsg, color='green')
+                    return True
+            return False
+
         async def initiateServerConnection() -> bool:
             ''' local engine client authorization '''
-
             self.dataClient = DataClient(self.dataServerIp)
-            response = await self.dataClient.isLocalEngineClient()
-            if response.status == DataServerApi.statusSuccess.value:
-                info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
-                return True
-            raise Exception(response.senderMsg)
+            if await authenticate():
+                response = await self.dataClient.isLocalEngineClient()
+                if response.status == DataServerApi.statusSuccess.value:
+                    # info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
+                    return True
+                raise Exception(response.senderMsg)
+            return False
+        
+
         
         waitingPeriod = 10
         
