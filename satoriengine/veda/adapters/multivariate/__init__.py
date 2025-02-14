@@ -1,1 +1,1 @@
-from satoriengine.veda.adapters.starter.starter_model import StarterAdapter
+from Engine.satoriengine.veda.adapters.multivariate.mv import MultivariateAdapter

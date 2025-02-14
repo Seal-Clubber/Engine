@@ -3,11 +3,11 @@ import numpy as np
 from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
-from satorilib.logging import info, debug, warning
-from satoriengine.veda.adapters.multivariate.mvpreprocess import conformData, createTrainTest, getSamplingFreq
+from satorilib.logging import info, debug
+from Engine.satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
 
 
-class MultivariateFastAdapter(ModelAdapter):
+class FastMVAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
@@ -22,17 +22,16 @@ class MultivariateFastAdapter(ModelAdapter):
 
     def __init__(self, **kwargs):
         super().__init__()
-        self.model: Union[MultivariateFastAdapter, None] = None
+        self.model: Union[FastMVAdapter, None] = None
         self.dataTrain: pd.DataFrame = pd.DataFrame()
         self.dataTrainTest: pd.DataFrame = pd.DataFrame()
         self.modelError: float = 0
         self.covariateColNames: list[str] = []
         self.forecastingSteps: int = 1
-        self.hyperparameters: dict = None # TODO : confirm if needed
         self.rng = np.random.default_rng(37)
 
     # TODO : have to confirm how model is going to be loaded, since its part of autogluon training
-    def load(self, modelPath: str, **kwargs) -> Union[None, 'MultivariateFastAdapter']:
+    def load(self, modelPath: str, **kwargs) -> Union[None, 'FastMVAdapter']:
         """loads the model model from disk if present"""
         pass
 
@@ -46,7 +45,7 @@ class MultivariateFastAdapter(ModelAdapter):
         self.model = self._multivariateFit()
         return TrainingResult(1, self)
 
-    def compare(self, other: Union['MultivariateFastAdapter', None] = None, **kwargs) -> bool:
+    def compare(self, other: Union['FastMVAdapter', None] = None, **kwargs) -> bool:
         if not isinstance(other, self.__class__):
             return True
         thisScore = self.score()
@@ -57,8 +56,7 @@ class MultivariateFastAdapter(ModelAdapter):
             info(
                 'model improved!'
                 f'\n  stable score: {otherScore}'
-                f'\n  pilot  score: {thisScore}'
-                f'\n  Parameters: {self.hyperparameters}',
+                f'\n  pilot  score: {thisScore}',
                 color='green')
         else:
             debug(
@@ -77,15 +75,13 @@ class MultivariateFastAdapter(ModelAdapter):
         self._manageData(targetData, covariateData)
         dataTrainTestWithFuture = self.appendCovariateFuture(self.dataTrainTest)
         prediction = self.model.predict(self.dataTrainTest, known_covariates=dataTrainTestWithFuture.drop('value', axis=1))
-        # TODO : confirm what self.dataTrainTest and dataTrainTestWithFuture is
-        resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: we can get it easily than this ( optimize )
+        resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: can also use in-built auto-gluon stuff ( optimize )
         return resultDf
     
     def _manageData(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame]):
         conformedData, self.covariateColNames = conformData(targetData, covariateData) 
         self.dataTrain, self.dataTrainTest = createTrainTest(conformedData, self.forecastingSteps)
 
-    # TODO : should this be a property, maybe not because of the heavy computation?
     def _multivariateFit(self):
         return TimeSeriesPredictor(
                         prediction_length=self.forecastingSteps,
