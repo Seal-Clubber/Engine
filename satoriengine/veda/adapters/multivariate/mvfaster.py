@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
-from autogluon.timeseries import TimeSeriesPredictor
+from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
 from satorilib.logging import info, debug, warning
 from satoriengine.veda.adapters.multivariate.mvpreprocess import conformData, createTrainTest, getSamplingFreq
 
@@ -69,14 +69,16 @@ class MultivariateFastAdapter(ModelAdapter):
     def score(self, **kwargs) -> float:
         if self.model is None:
             return np.inf
-        self.modelError = self.model.evaluate(self.dataTrain).get('MASE')*-1
+        self.modelError = self.model.evaluate(self.dataTrainTest).get('MASE')*-1
         return self.modelError
 
     def predict(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         self._manageData(targetData, covariateData)
-        predictionsFast = self.model.predict(self.dataTrain, known_covariates=self.dataTrainTest.drop('value', axis=1))
-        resultDf = self._getPredictionDataframe(targetData, predictionsFast.mean()[0])
+        dataTrainTestWithFuture = self.appendCovariateFuture(self.dataTrainTest)
+        prediction = self.model.predict(self.dataTrainTest, known_covariates=dataTrainTestWithFuture.drop('value', axis=1))
+        # TODO : confirm what self.dataTrainTest and dataTrainTestWithFuture is
+        resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: we can get it easily than this ( optimize )
         return resultDf
     
     def _manageData(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame]):
@@ -91,6 +93,7 @@ class MultivariateFastAdapter(ModelAdapter):
                         target="value", 
                         known_covariates_names=self.covariateColNames, 
                         # log_file_path = log_file_path
+                        verbosity=0
                     ).fit(
                         self.dataTrain,
                         random_seed=self.rng,
@@ -107,6 +110,42 @@ class MultivariateFastAdapter(ModelAdapter):
                         time_limit=3600,
                         enable_ensemble=True,
                     )
+    
+    @staticmethod
+    def appendCovariateFuture(df: pd.DataFrame, covariateColNameList: list[str]) -> pd.DataFrame:
+        for colName in covariateColNameList:
+            covDf = df[[colName]]
+            if not covDf.empty:
+                predictor = TimeSeriesPredictor(
+                    prediction_length=1,
+                    eval_metric="MASE",
+                    target=colName,
+                    verbosity=0,
+                ).fit(
+                    covDf,
+                    hyperparameters={
+                        "RecursiveTabular": {"ag_args": {"name_suffix": "WithLighGBMRegressor"}}
+                    },
+                    num_val_windows=1,
+                    val_step_size=1,
+                    time_limit=600,
+                    enable_ensemble=False,
+                )
+                prediction = predictor.predict(covDf)
+                covariatePredictionValue = prediction.mean()[0]
+                covariatePredictionTimestamp = str(prediction.index[0][1])
+                new_row = pd.DataFrame({
+                    'timeseriesid': [df.index[0][0]],
+                    'date_time': [covariatePredictionTimestamp],
+                    colName: [covariatePredictionValue]
+                })
+                new_row = TimeSeriesDataFrame.from_data_frame(
+                    new_row,
+                    id_column="timeseriesid",
+                    timestamp_column="date_time"
+                )
+                df = pd.concat([df, new_row])
+        return df
     
     @staticmethod
     def _getPredictionDataframe(targetDataframe: pd.DataFrame, predictionValue: float):
