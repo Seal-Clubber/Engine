@@ -34,16 +34,19 @@ class MultivariateAdapter(ModelAdapter):
 
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         if self.model is None:
-            self.model = FastMVAdapter().fit(targetData, covariateData)  
+            self.model = FastMVAdapter()
+            self.model.fit(targetData, covariateData)  
         else:
             if 'conditionToCheckIfVps':
                 # Train on the MV Adapter, but should have light computations for VPS
                 # hyper-parameters
                 # weighted ensemble
-                self.model = LightMVAdapter().fit()
+                self.model = LightMVAdapter()
+                self.model.fit()
             else:  
                 # Train on the MV Adapter which is slower to train but more accurate, Heavy computations
-                self.model = HeavyMVAdapter().fit()  
+                self.model = HeavyMVAdapter()
+                self.model.fit()  
         return self.model
 
     def compare(self, other: ModelAdapter, **kwargs) -> bool:
