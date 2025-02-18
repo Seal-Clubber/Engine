@@ -71,10 +71,6 @@ class Engine:
         ''' connect to server, retry if failed '''
 
         async def authenticate() -> bool:
-            auth = {
-                'client_pubkey': '123awd',
-                'client_challenge': '523adsd'
-            }
             response = await self.dataClient.authenticate(authDict=auth)
             if response.status == DataServerApi.statusSuccess.value:
                 authDict = response.auth
@@ -90,7 +86,7 @@ class Engine:
 
         async def initiateServerConnection() -> bool:
             ''' local engine client authorization '''
-            self.dataClient = DataClient(self.dataServerIp)
+            self.dataClient = DataClient(self.dataServerIp, identity=EvrmoreIdentity) # TODO: fix this
             if await authenticate():
                 response = await self.dataClient.isLocalEngineClient()
                 if response.status == DataServerApi.statusSuccess.value:
@@ -250,6 +246,7 @@ class StreamModel:
         async def _isPublisherActive(publisherIp: str) -> bool:
             ''' conirms if the publisher has the subscription stream in its available stream '''
             try:
+                # TODO: authenticate only after confirming the stream is active
                 response = await self.dataClient.isStreamActive(publisherIp, self.streamUuid)
                 if response.status == DataServerApi.statusSuccess.value:
                     info("successfully connected to an active Publisher Ip at :", publisherIp, color="green")
@@ -262,6 +259,7 @@ class StreamModel:
 
         while self.isConnectedToPublisher:
             if await _isPublisherActive(self.publisherHost):
+                # auth
                 return True
             self.peerInfo.subscribersIp = [
                 ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
@@ -269,6 +267,7 @@ class StreamModel:
             self.rng.shuffle(self.peerInfo.subscribersIp)
             for subscriberIp in self.peerInfo.subscribersIp:
                 if await _isPublisherActive(subscriberIp):
+                    # auth
                     self.publisherHost = subscriberIp
                     return True
             await asyncio.sleep(60*60)  
@@ -305,7 +304,7 @@ class StreamModel:
         except Exception as e:
             error("Failed to sync data, ", e)
 
-
+    # TODO: after subscribing let others know that we are subscribed to a particular data stream
     async def makeSubscription(self):
         '''
         - and subscribe to the stream so we get the information
