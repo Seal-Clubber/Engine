@@ -38,6 +38,7 @@ class Engine:
         self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
+        self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
 
     async def initialize(self):
         await self.connectToDataServer()
@@ -72,21 +73,16 @@ class Engine:
         ''' connect to server, retry if failed '''
 
         async def authenticate() -> bool:
-            response = await self.dataClient.authenticate()
+            response = await self.dataClient.authenticate(islocal='engine')
             if response.status == DataServerApi.statusSuccess.value:
+                info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
                 return True
             return False
 
         async def initiateServerConnection() -> bool:
             ''' local engine client authorization '''
-            self.dataClient = DataClient(self.dataServerIp, identity=EvrmoreIdentity(config.walletPath('wallet.yaml'))) 
-            if await authenticate():
-                response = await self.dataClient.isLocalEngineClient()
-                if response.status == DataServerApi.statusSuccess.value:
-                    info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
-                    return True
-                # raise Exception(response.senderMsg)
-            return False
+            self.dataClient = DataClient(self.dataServerIp, identity=self.identity) 
+            return await authenticate()
         
         waitingPeriod = 10
         
