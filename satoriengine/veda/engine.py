@@ -4,6 +4,7 @@ from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
+from satorilib.wallet.evrmore.identity import EvrmoreIdentity 
 from satorineuron import config
 import asyncio
 import pandas as pd
@@ -71,31 +72,21 @@ class Engine:
         ''' connect to server, retry if failed '''
 
         async def authenticate() -> bool:
-            response = await self.dataClient.authenticate(authDict=auth)
+            response = await self.dataClient.authenticate()
             if response.status == DataServerApi.statusSuccess.value:
-                authDict = response.auth
-                # TODO : sign the server_challenge with its prvt key
-                authDict = {
-                    'client_server_signature': 'xx23'
-                }
-                response = await self.dataClient.authenticate(authDict=authDict)
-                if response.status == DataServerApi.statusSuccess.value:
-                    info(response.senderMsg, color='green')
-                    return True
+                return True
             return False
 
         async def initiateServerConnection() -> bool:
             ''' local engine client authorization '''
-            self.dataClient = DataClient(self.dataServerIp, identity=EvrmoreIdentity) # TODO: fix this
+            self.dataClient = DataClient(self.dataServerIp, identity=EvrmoreIdentity(config.walletPath('wallet.yaml'))) 
             if await authenticate():
                 response = await self.dataClient.isLocalEngineClient()
                 if response.status == DataServerApi.statusSuccess.value:
-                    # info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
+                    info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
                     return True
-                raise Exception(response.senderMsg)
+                # raise Exception(response.senderMsg)
             return False
-        
-
         
         waitingPeriod = 10
         
