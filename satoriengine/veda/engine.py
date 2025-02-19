@@ -135,9 +135,7 @@ class Engine:
                     resumeAll=self.resume)
             except Exception as e:
                 error(e)
-            debug(3, color='cyan')
             self.streamModels[subUuid].chooseAdapter(inplace=True)
-            debug(4, color='cyan')
             self.streamModels[subUuid].run_forever()
 
     def cleanupThreads(self):
@@ -192,7 +190,6 @@ class StreamModel:
         self.dataClient: DataClient = dataClient
         self.rng = np.random.default_rng(37)
         self.publisherHost = self.peerInfo.publishersIp[0]
-        self.isConnectedToPublisher = False
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
