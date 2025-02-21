@@ -199,7 +199,7 @@ class StreamModel:
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
-        # await self.init2()
+        await self.init2()
 
     async def init2(self):
         await self.connectToPeer()
@@ -243,11 +243,12 @@ class StreamModel:
                     return await authenticate(publisherIp)
                 else:
                     raise Exception(response.senderMsg)
-            except Exception as e:
-                error('Error connecting to Publisher: ', e)
+            except Exception:
+                warning('Failed to connect to a Publisher: ')
                 return False
 
-        while self.isConnectedToPublisher:
+        while not self.isConnectedToPublisher:
+            print(self.publisherHost)
             if await _isPublisherActive(self.publisherHost):
                 return True
             self.peerInfo.subscribersIp = [
@@ -258,7 +259,8 @@ class StreamModel:
                 if await _isPublisherActive(subscriberIp):
                     self.publisherHost = subscriberIp
                     return True
-            await asyncio.sleep(60*60)  
+            # await asyncio.sleep(60*60)  
+            await asyncio.sleep(10)  
         return False
     
     async def syncData(self):
