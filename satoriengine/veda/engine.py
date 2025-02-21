@@ -189,7 +189,7 @@ class StreamModel:
         self.peerInfo: PeerInfo = peerInfo
         self.dataClient: DataClient = dataClient
         self.rng = np.random.default_rng(37)
-        self.publisherHost = self.peerInfo.publishersIp[0]
+        self.publisherHost = None
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -212,7 +212,7 @@ class StreamModel:
 
     @property
     def isConnectedToPublisher(self):
-        if hasattr(self, 'dataClient') and self.dataClient is not None:
+        if hasattr(self, 'dataClient') and self.dataClient is not None and self.publisherHost is not None:
             return self.dataClient.isConnected(self.publisherHost)
         return False
 
@@ -230,24 +230,25 @@ class StreamModel:
         async def authenticate(publisherIp: str) -> bool:
             response = await self.dataClient.authenticate(publisherIp)
             if response.status == DataServerApi.statusSuccess.value:
-                info("successfully connected to an active Publisher Ip at :", publisherIp, color="green")
+                info("successfully connected to an active Publisher Ip at : ", publisherIp, color="green")
                 return True
             warning("Authentication failed for :", publisherIp)
             return False
 
         async def _isPublisherActive(publisherIp: str) -> bool:
-            ''' conirms if the publisher has the subscription stream in its available stream '''
+            ''' confirms if the publisher has the subscription stream in its available stream '''
             try:
                 response = await self.dataClient.isStreamActive(publisherIp, self.streamUuid)
                 if response.status == DataServerApi.statusSuccess.value:
                     return await authenticate(publisherIp)
                 else:
-                    raise Exception(response.senderMsg)
+                    raise Exception
             except Exception:
-                warning('Failed to connect to a Publisher: ')
+                warning('Failed to connect to an active Publisher ')
                 return False
 
         while not self.isConnectedToPublisher:
+            self.publisherHost = self.peerInfo.publishersIp[0]
             print(self.publisherHost)
             if await _isPublisherActive(self.publisherHost):
                 return True
@@ -260,6 +261,8 @@ class StreamModel:
                     self.publisherHost = subscriberIp
                     return True
             # await asyncio.sleep(60*60)  
+            self.publisherHost = None
+            debug('Waiting for some time', print=True)
             await asyncio.sleep(10)  
         return False
     
@@ -274,12 +277,8 @@ class StreamModel:
         try:
             externalDataResponse = await self.dataClient.getRemoteStreamData(self.publisherHost, self.streamUuid)
             if externalDataResponse.status == DataServerApi.statusSuccess.value:
-                externalDf = pd.read_json(StringIO(externalDataResponse.data), orient='split')
+                externalDf = externalDataResponse.data
                 if not externalDf.equals(self.data) and len(externalDf) > 0: # TODO : sure about this?
-                    self.data = externalDf.reset_index().rename(columns={
-                        'index': 'date_time',
-                        'hash': 'id'
-                    })
                     response = await self.dataClient.insertStreamData(
                                     uuid=self.streamUuid,
                                     data=externalDf,
@@ -289,8 +288,8 @@ class StreamModel:
                         info("Data updated in server", color='green')
                     else:
                         raise Exception(externalDataResponse.senderMsg)
-            else:
-                raise Exception(externalDataResponse.senderMsg)
+                else:
+                    raise Exception(externalDataResponse.senderMsg)
         except Exception as e:
             error("Failed to sync data, ", e)
 
