@@ -3,7 +3,7 @@ from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
-from satorilib.datamanager import DataClient, DataServerApi, PeerInfo, Message, Subscription
+from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity 
 from satorineuron import config
 import asyncio
@@ -307,7 +307,7 @@ class StreamModel:
               callback=self.handleSubscriptionMessage)
 
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
-        if message.status != DataServerApi.statusInactiveStream:
+        if message.status != DataClientApi.streamInactive.value:
             self.appendNewData(message.data)
             self.pauseAll()
             await self.producePrediction() 
