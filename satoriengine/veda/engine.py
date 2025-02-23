@@ -231,6 +231,13 @@ class StreamModel:
             response = await self.dataClient.authenticate(publisherIp)
             if response.status == DataServerApi.statusSuccess.value:
                 info("successfully connected to an active Publisher Ip at : ", publisherIp, color="green")
+                # send to the server that related publicationUUID is active
+                try:
+                    response = await self.dataClient.addActiveStream(self.predictionStreamUuid)
+                    if response.status != DataServerApi.statusSuccess.value:
+                        raise Exception(response.senderMsg)
+                except Exception as e:
+                    error("Active stream info not set: ", e)
                 return True
             warning("Authentication failed for :", publisherIp)
             return False
@@ -260,9 +267,9 @@ class StreamModel:
                 if await _isPublisherActive(subscriberIp):
                     self.publisherHost = subscriberIp
                     return True
-            # await asyncio.sleep(60*60)  
             self.publisherHost = None
             debug('Waiting for some time', print=True)
+            # await asyncio.sleep(60*60)  
             await asyncio.sleep(10)  
         return False
     
@@ -307,7 +314,8 @@ class StreamModel:
               callback=self.handleSubscriptionMessage)
 
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
-        if message.status != DataClientApi.streamInactive.value:
+        # if message.status = DataClientApi.streamInactive.value:
+        if message.status == DataServerApi.success.value:
             self.appendNewData(message.data)
             self.pauseAll()
             await self.producePrediction() 
@@ -324,7 +332,7 @@ class StreamModel:
             if response.status != DataServerApi.statusSuccess.value:
                 raise Exception(response.senderMsg)
         except Exception as e:
-            error("Inactive message not sent to server: ", e)
+            error("Inactive subscription stream not set: ", e)
 
     def pause(self):
         self.paused = True
