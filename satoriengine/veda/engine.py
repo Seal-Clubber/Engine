@@ -199,7 +199,6 @@ class StreamModel:
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
-        await self.init2()
 
     async def init2(self):
         await self.connectToPeer()
@@ -260,7 +259,7 @@ class StreamModel:
             if await _isPublisherActive(self.publisherHost):
                 return True
             self.peerInfo.subscribersIp = [
-                ip for ip in self.peerInfo.subscribersIp if ip != self.serverIp
+                ip for ip in self.peerInfo.subscribersIp if ip != self.dataClient.serverHostPort[0]
             ]
             self.rng.shuffle(self.peerInfo.subscribersIp)
             for subscriberIp in self.peerInfo.subscribersIp:
@@ -314,8 +313,8 @@ class StreamModel:
               callback=self.handleSubscriptionMessage)
 
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
-        # if message.status = DataClientApi.streamInactive.value:
-        if message.status == DataServerApi.success.value:
+        # if message.status == DataServerApi.success.value:
+        if message.status != DataClientApi.streamInactive.value:
             self.appendNewData(message.data)
             self.pauseAll()
             await self.producePrediction() 
@@ -470,21 +469,21 @@ class StreamModel:
             self.pilot.load(self.modelPath())
         return adapter
 
-    def run(self):
+    async def run(self):
         """
-        main loop for generating models and comparing them to the best known
+        Async main loop for generating models and comparing them to the best known
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
-        Breaks if backtest error stagnates for 3 iterations.
         """
         while len(self.data) > 0:
             if self.paused:
-                time.sleep(10)
+                await asyncio.sleep(10)
                 continue
             self.chooseAdapter(inplace=True)
             try:
                 trainingResult = self.pilot.fit(data=self.data, stable=self.stable)
                 if trainingResult.status == 1:
+                    print("Inside the loop part 2")
                     if self.pilot.compare(self.stable):
                         if self.pilot.save(self.modelPath()):
                             self.stable = copy.deepcopy(self.pilot)
@@ -492,21 +491,16 @@ class StreamModel:
                                 "stable model updated for stream:",
                                 self.streamUuid,
                                 print=True)
-                            future = asyncio.run_coroutine_threadsafe(
-                                self.producePrediction(self.stable),
-                                self._loop
-                            )
-                            future.result()
+                            await self.producePrediction(self.stable)
                 else:
-                    debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry')
+                    debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry', print=True)
                     self.failedAdapters.append(self.pilot)
-                    time.sleep(60*10)
+                    await asyncio.sleep(60*10) 
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 error(e)
                 try:
-                    import numpy as np
                     print(self.pilot.dataset)
                 except Exception as e:
                     pass
@@ -514,28 +508,36 @@ class StreamModel:
     def run_forever(self):
         """
         Creates a new thread for running the model training loop.
-        Ensures the thread has access to the event loop for async operations.
+        Makes init2 a separate task that runs concurrently with the training loop.
         """
-        def run_with_loop():
+        async def run_training():
+            """Async wrapper for the training loop"""
+            try:
+                init_task = asyncio.create_task(self.init2())
+                await self.run()
+            except Exception as e:
+                error(f"Error in training loop: {e}")
 
-            def run_loop_forever():
-                self._loop.run_forever()
-                
+        def thread_target():
             try:
-                self._loop = asyncio.get_event_loop()
-            except RuntimeError:
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-            asyncio.set_event_loop(self._loop)
-            loop_thread = threading.Thread(target=run_loop_forever, daemon=True)
-            loop_thread.start()
-            try:
-                self.run()
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                self._loop = loop 
+                loop.run_until_complete(run_training())
+                loop.run_forever()
+            except Exception as e:
+                error(f"Error in run_forever thread: {e}")
             finally:
-                self._loop.call_soon_threadsafe(self._loop.stop)
-                loop_thread.join()
+                try:
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    loop.close()
+                except Exception as e:
+                    error(f"Error during loop cleanup: {e}")
 
-        self.thread = threading.Thread(target=run_with_loop, daemon=True)
+        self.thread = threading.Thread(target=thread_target, daemon=True)
         self.thread.start()
 
 
