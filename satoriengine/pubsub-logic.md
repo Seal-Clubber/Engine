@@ -5,7 +5,7 @@ Here's how we'll support pubsub within the code defaulted for p2p:
 - Neuron
   - behave mostly the same
   - add an indication for the engine data client to connect to pubsub network for it's data instead
-    - I think this looks like passing the entire payload that the neuron uses right now to connect to the pubsub server to the data Server so the engine can pick it up.
+    - I think this looks like passing the pubusub subscription payload (that the neuron uses right now to connect to the pubsub server) to the data Server so the engine can pick it up.
   - by the way, the neuron should always publish to pubsub to accomodate those that are subscribing to it.
     - so when the neuron gets data it sends it to the central servers for scoring and pubsub for subscribers.
     - this probably means we have to give it 2 keys, which perhaps we already do: one for just publishing, and one for subscribing.
@@ -17,9 +17,9 @@ Here's how we'll support pubsub within the code defaulted for p2p:
     - if empty...
       - use p2p
     - if not empty (that we should use pubsub for subscribing) use pubsub...
-      - initializes it's data history from it's own data server instead of what it would typically do - try to sync the history from the remote data server.
+      - initializes it's data history from it's own data server instead of what p2p would do - try to sync the history from the remote data server.
       - makes connections to pubsub servers
       - sets up subscriptions on the pubsub servers
       - when it gets data (observations) from the pubsub server, it will...
         - conform the data to the correct format (if necessary) and send the data to the data server
-        - use the data as normal
+        - then use the data as it normal would
