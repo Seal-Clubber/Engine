@@ -230,8 +230,8 @@ class StreamModel:
             response = await self.dataClient.authenticate(publisherIp)
             if response.status == DataServerApi.statusSuccess.value:
                 info("successfully connected to an active Publisher Ip at : ", publisherIp, color="green")
-                # send to the server that related publicationUUID is active
                 try:
+                    # TODO: also add subsceription stream as an active stream
                     response = await self.dataClient.addActiveStream(self.predictionStreamUuid)
                     if response.status != DataServerApi.statusSuccess.value:
                         raise Exception(response.senderMsg)
