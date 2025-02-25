@@ -225,13 +225,14 @@ class StreamModel:
 
     async def connectToPeer(self) -> bool:
         ''' Connects to a peer to receive subscription if it has an active subscription to the stream '''
-
         async def authenticate(publisherIp: str) -> bool:
             response = await self.dataClient.authenticate(publisherIp)
             if response.status == DataServerApi.statusSuccess.value:
                 info("successfully connected to an active Publisher Ip at : ", publisherIp, color="green")
                 try:
-                    # TODO: also add subsceription stream as an active stream
+                    response = await self.dataClient.addActiveStream(self.streamUuid)
+                    if response.status != DataServerApi.statusSuccess.value:
+                        raise Exception(response.senderMsg)
                     response = await self.dataClient.addActiveStream(self.predictionStreamUuid)
                     if response.status != DataServerApi.statusSuccess.value:
                         raise Exception(response.senderMsg)
@@ -320,6 +321,7 @@ class StreamModel:
             await self.producePrediction() 
             self.resumeAll()
         else:
+            # TODO: fix this
             await self._sendInactive()
             await self.connectToPeer()
             await self.startStreamService()
@@ -404,10 +406,12 @@ class StreamModel:
         try:
             response = await self.dataClient.getLocalStreamData(uuid=self.streamUuid)
             if response.status == DataServerApi.statusSuccess.value:
-                return response.data.reset_index().rename(columns={
+                conformedData = response.data.reset_index().rename(columns={
                     'ts': 'date_time',
                     'hash': 'id'
                 })
+                del conformedData['provider']
+                return conformedData
             else:
                 raise Exception(response.senderMsg)
         except Exception as e:
@@ -483,7 +487,6 @@ class StreamModel:
             try:
                 trainingResult = self.pilot.fit(data=self.data, stable=self.stable)
                 if trainingResult.status == 1:
-                    print("Inside the loop part 2")
                     if self.pilot.compare(self.stable):
                         if self.pilot.save(self.modelPath()):
                             self.stable = copy.deepcopy(self.pilot)
