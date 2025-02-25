@@ -314,26 +314,15 @@ class StreamModel:
               callback=self.handleSubscriptionMessage)
 
     async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
-        # if message.status == DataServerApi.success.value:
-        if message.status != DataClientApi.streamInactive.value:
+        if message.status == DataClientApi.streamInactive.value:
+            self.publisherHost = None
+            await self.connectToPeer()
+            await self.startStreamService()
+        else:
             self.appendNewData(message.data)
             self.pauseAll()
             await self.producePrediction() 
             self.resumeAll()
-        else:
-            # TODO: fix this
-            await self._sendInactive()
-            await self.connectToPeer()
-            await self.startStreamService()
-
-    async def _sendInactive(self):
-        ''' sends stream inactive request to the server so that it can remove the streams from available streams '''
-        try:
-            response = await self.dataClient.streamInactive(self.streamUuid)
-            if response.status != DataServerApi.statusSuccess.value:
-                raise Exception(response.senderMsg)
-        except Exception as e:
-            error("Inactive subscription stream not set: ", e)
 
     def pause(self):
         self.paused = True
