@@ -6,7 +6,7 @@ from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet import EvrmoreWallet
 from satorineuron.init.wallet import WalletVaultManager
-from satorilib.wallet.evrmore.identity import EvrmoreIdentity 
+from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
 from satorineuron import config
 import asyncio
@@ -30,7 +30,7 @@ class Engine:
         engine = cls()
         await engine.initialize()
         return engine
-    
+
     def __init__(self):
         self.streamModels: dict[str, StreamModel] = {}
         self.subscriptions: dict[str, PeerInfo] = {}
@@ -39,17 +39,44 @@ class Engine:
         self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
-        self.transferProtocol: Union[str, None] = None 
+        self.transferProtocol: Union[str, None] = None
         self.server: SatoriServerClient = None
         self.walletVaultManager: WalletVaultManager
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
+
+
+
+    def subConnect(self):
+        """establish a random pubsub connection used only for subscribing"""
+        if self.sub is not None:
+            self.sub.disconnect()
+            self.updateConnectionStatus(
+                connTo=ConnectionTo.pubsub, status=False)
+            self.sub = None
+        if self.key:
+            signature = self.wallet.sign(self.key)
+            self.sub = engine.establishConnection(
+                url=random.choice(self.urlPubsubs),
+                # url='ws://pubsub3.satorinet.io:24603',
+                pubkey=self.wallet.publicKey,
+                key=signature.decode() + "|" + self.key,
+                emergencyRestart=self.emergencyRestart,
+                onConnect=lambda: self.updateConnectionStatus(
+                    connTo=ConnectionTo.pubsub,
+                    status=True),
+                onDisconnect=lambda: self.updateConnectionStatus(
+                    connTo=ConnectionTo.pubsub,
+                    status=False))
+        else:
+            time.sleep(30)
+            raise Exception("no key provided by satori server")
 
     async def initialize(self):
         await self.connectToDataServer()
         asyncio.create_task(self.stayConnectedForever())
         await self.startService()
 
-    async def startService(self): 
+    async def startService(self):
         await self.getPubSubInfo()
         await self.initializeModels()
         # await asyncio.Event().wait()
@@ -72,7 +99,7 @@ class Engine:
         if hasattr(self, 'dataClient') and self.dataClient is not None:
             return self.dataClient.isConnected()
         return False
-    
+
     async def connectToDataServer(self):
         ''' connect to server, retry if failed '''
 
@@ -85,11 +112,11 @@ class Engine:
 
         async def initiateServerConnection() -> bool:
             ''' local engine client authorization '''
-            self.dataClient = DataClient(self.dataServerIp, identity=self.identity) 
+            self.dataClient = DataClient(self.dataServerIp, identity=self.identity)
             return await authenticate()
-        
+
         waitingPeriod = 10
-        
+
         while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
@@ -142,9 +169,9 @@ class Engine:
         self.server = SatoriServerClient(
             self.wallet, url=urlServer, sendingUrl=urlMundo
         )
-    
+
     async def initializeModels(self):
-        for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()): 
+        for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()):
             peers = self.subscriptions[subUuid]
             try:
                 self.streamModels[subUuid] = await StreamModel.create(
@@ -172,7 +199,7 @@ class StreamModel:
 
     @classmethod
     async def create(
-        cls, 
+        cls,
         streamUuid: str,
         predictionStreamUuid: str,
         peerInfo: PeerInfo,
@@ -231,7 +258,7 @@ class StreamModel:
         await self.connectToPeer()
         asyncio.create_task(self.stayConnectedToPublisher())
         await self.startStreamService()
-    
+
     async def startStreamService(self):
         await self.syncData()
         await self.makeSubscription()
@@ -244,11 +271,11 @@ class StreamModel:
 
     async def stayConnectedToPublisher(self):
         while True:
-            await asyncio.sleep(10) 
+            await asyncio.sleep(10)
             if not self.isConnectedToPublisher:
                 await self.connectToPeer()
                 await self.startStreamService()
-        
+
 
     async def connectToPeer(self) -> bool:
         ''' Connects to a peer to receive subscription if it has an active subscription to the stream '''
@@ -296,10 +323,10 @@ class StreamModel:
                     return True
             self.publisherHost = None
             debug('Waiting for some time', print=True)
-            # await asyncio.sleep(60*60)  
-            await asyncio.sleep(10)  
+            # await asyncio.sleep(60*60)
+            await asyncio.sleep(10)
         return False
-    
+
     async def syncData(self):
         '''
         - this can be highly optimized. but for now we do the simple version
@@ -332,7 +359,7 @@ class StreamModel:
         '''
         - and subscribe to the stream so we get the information
             - whenever we get an observation on this stream, pass to the DataServer
-        - continually generate predictions for prediction publication streams and pass that to 
+        - continually generate predictions for prediction publication streams and pass that to
         '''
         await self.dataClient.subscribe(
               peerHost=self.publisherHost,
@@ -348,7 +375,7 @@ class StreamModel:
         else:
             self.appendNewData(message.data)
             self.pauseAll()
-            await self.producePrediction() 
+            await self.producePrediction()
             self.resumeAll()
 
     def pause(self):
@@ -399,11 +426,11 @@ class StreamModel:
                     predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
                                     }, index=[datetimeToTimestamp(now())])
                     if self.transferProtocol == 'p2p':
-                        await self.passPredictionData(predictionDf) 
+                        await self.passPredictionData(predictionDf)
                     elif self.transferProtocol == 'pubsub':
                         # TODO conform data for publishing data
                         pass
-                        # self.server.publish( 
+                        # self.server.publish(
                         #     topic=streamForecast.predictionStreamId.topic(),
                         #     data=streamForecast.forecast["pred"].iloc[0],
                         #     observationTime=streamForecast.observationTime,
@@ -527,7 +554,7 @@ class StreamModel:
                 else:
                     debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry', print=True)
                     self.failedAdapters.append(self.pilot)
-                    await asyncio.sleep(60*10) 
+                    await asyncio.sleep(60*10)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -558,7 +585,7 @@ class StreamModel:
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                self._loop = loop 
+                self._loop = loop
                 loop.run_until_complete(run_training())
                 loop.run_forever()
             except Exception as e:
@@ -588,5 +615,5 @@ class StreamModel:
 #     #await asyncio.create_task(client._keepAlive())
 
 
-    
+
 # asyncio.run(main())
