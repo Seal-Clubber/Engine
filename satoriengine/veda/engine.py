@@ -38,6 +38,7 @@ class Engine:
         self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
+        self.transferProtocol: Union[str, None] = None 
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
 
     async def initialize(self):
@@ -101,13 +102,21 @@ class Engine:
         while not self.subscriptions and self.isConnectedToServer:
             try:
                 pubSubResponse: Message = await self.dataClient.getPubsubMap()
-                if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubResponse.streamInfo:
-                    for sub_uuid, data in pubSubResponse.streamInfo.items():
-                        # TODO : deal with supportive streams, ( data['supportiveUuid'] )
-                        self.subscriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
-                        self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
-                    if self.subscriptions:
-                        info(pubSubResponse.senderMsg, color='green')
+                self.transferProtocol = pubSubResponse.streamInfo.get('transferProtocol')
+                info(f'Transfer protocol : {self.transferProtocol}', color='green')
+                if self.transferProtocol == 'p2p':
+                    pubSubMapping = pubSubResponse.streamInfo.get('pubSubMapping')
+                    if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubMapping:
+                        for sub_uuid, data in pubSubMapping.items():
+                            # TODO : deal with supportive streams, ( data['supportiveUuid'] )
+                            self.subscriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
+                            self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
+                        if self.subscriptions:
+                            info(pubSubResponse.senderMsg, color='green')
+                    else:
+                        raise Exception
+                elif self.transferProtocol == 'pubsub':
+                    self.switchToPubSubProtocol()
                 else:
                     raise Exception
             except Exception:
@@ -121,6 +130,9 @@ class Engine:
             if not self.isConnectedToServer:
                 await self.connectToDataServer()
                 await self.startService()
+
+    def switchToPubSubProtocol(self):
+        pass
     
     async def initializeModels(self):
         for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()): 
