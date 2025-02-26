@@ -22,9 +22,10 @@ setup(level=INFO)
 
 
 class Engine:
-    def __init__(self, streams: list[Stream], pubstreams: list[Stream]):
+
+    def __init__(self, streams: list[Stream], pubStreams: list[Stream]):
         self.streams = streams
-        self.pubstreams = pubstreams
+        self.pubStreams = pubStreams
         self.streamModels: Dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
@@ -32,6 +33,20 @@ class Engine:
         self.initializeModels()
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
+
+    def addStream(self, stream: Stream, pubStream: Stream):
+        ''' add streams to a running engine '''
+        # don't duplicate effort
+        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
+            return
+        self.streams.append(stream)
+        self.pubStreams.append(pubStream)
+        self.streamModels[stream.streamId] = StreamModel(
+            streamId=stream.streamId,
+            predictionStreamId=pubStream.streamId,
+            predictionProduced=self.predictionProduced)
+        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
+        self.streamModels[stream.streamId].run_forever()
 
     def pause(self, force: bool = False):
         if force:
@@ -54,7 +69,7 @@ class Engine:
             on_completed=lambda: self.handleCompletion())
 
     def initializeModels(self):
-        for stream, pubStream in zip(self.streams, self.pubstreams):
+        for stream, pubStream in zip(self.streams, self.pubStreams):
             self.streamModels[stream.streamId] = StreamModel(
                 streamId=stream.streamId,
                 predictionStreamId=pubStream.streamId,
