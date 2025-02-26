@@ -1,18 +1,19 @@
-from satoriengine.veda.adapters import ModelAdapter, SKAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
+from satoriengine.veda.adapters import ModelAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
+from satorilib.wallet import EvrmoreWallet
+from satorineuron.init.wallet import WalletVaultManager
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity 
+from satorilib.server import SatoriServerClient
 from satorineuron import config
 import asyncio
 import pandas as pd
 import numpy as np
 import threading
-import json
 import copy
-import time
 import os
 from io import StringIO
 from typing import Union
@@ -39,6 +40,8 @@ class Engine:
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
         self.transferProtocol: Union[str, None] = None 
+        self.server: SatoriServerClient = None
+        self.walletVaultManager: WalletVaultManager
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
 
     async def initialize(self):
@@ -131,8 +134,14 @@ class Engine:
                 await self.connectToDataServer()
                 await self.startService()
 
-    def switchToPubSubProtocol(self):
-        pass
+    @property
+    def wallet(self) -> EvrmoreWallet:
+        return self.walletVaultManager.wallet
+
+    def switchToPubSubProtocol(self, urlServer, urlMundo):
+        self.server = SatoriServerClient(
+            self.wallet, url=urlServer, sendingUrl=urlMundo
+        )
     
     async def initializeModels(self):
         for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()): 
@@ -144,7 +153,9 @@ class Engine:
                     peerInfo=peers,
                     dataClient=self.dataClient,
                     pauseAll=self.pause,
-                    resumeAll=self.resume)
+                    resumeAll=self.resume,
+                    transferProtocol=self.transferProtocol
+                    )
             except Exception as e:
                 error(e)
             self.streamModels[subUuid].chooseAdapter(inplace=True)
@@ -168,6 +179,7 @@ class StreamModel:
         dataClient: DataClient,
         pauseAll:callable,
         resumeAll:callable,
+        transferProtocol: str
     ):
         streamModel = cls(
             streamUuid,
@@ -176,6 +188,7 @@ class StreamModel:
             dataClient,
             pauseAll,
             resumeAll,
+            transferProtocol
         )
         await streamModel.initialize()
         return streamModel
@@ -188,6 +201,7 @@ class StreamModel:
         dataClient: DataClient,
         pauseAll:callable,
         resumeAll:callable,
+        transferProtocol: str
     ):
         self.cpu = getProcessorCount()
         self.pauseAll = pauseAll
@@ -202,6 +216,7 @@ class StreamModel:
         self.dataClient: DataClient = dataClient
         self.rng = np.random.default_rng(37)
         self.publisherHost = None
+        self.transferProtocol: str = transferProtocol
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -212,7 +227,7 @@ class StreamModel:
         self.paused: bool = False
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
 
-    async def init2(self):
+    async def p2pInit(self):
         await self.connectToPeer()
         asyncio.create_task(self.stayConnectedToPublisher())
         await self.startStreamService()
@@ -353,27 +368,6 @@ class StreamModel:
         else:
             error("Row not added due to corrupt observation")
 
-    
-    async def producePrediction(self, updatedModel=None):
-        """
-        triggered by
-            - model replaced with a better one
-            - new observation on the stream
-        """
-        try:
-            updatedModel = updatedModel or self.stable
-            if updatedModel is not None:
-                forecast = updatedModel.predict(data=self.data)
-                if isinstance(forecast, pd.DataFrame):
-                    predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
-                                    }, index=[datetimeToTimestamp(now())])
-                    await self.passPredictionData(predictionDf) 
-                else:
-                    raise Exception('Forecast not in dataframe format')
-        except Exception as e:
-            error(e)
-            await self.fallback_prediction()
-
     async def passPredictionData(self, forecast: pd.DataFrame):
         try:
             response = await self.dataClient.insertStreamData(
@@ -387,6 +381,40 @@ class StreamModel:
                 raise Exception(response.senderMsg)
         except Exception as e:
             error('Failed to send Prediction to server : ', e)
+
+    #pubsub functions
+
+
+    async def producePrediction(self, updatedModel=None):
+        """
+        triggered by
+            - model replaced with a better one
+            - new observation on the stream
+        """
+        try:
+            updatedModel = updatedModel or self.stable
+            if updatedModel is not None:
+                forecast = updatedModel.predict(data=self.data)
+                if isinstance(forecast, pd.DataFrame):
+                    predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
+                                    }, index=[datetimeToTimestamp(now())])
+                    if self.transferProtocol == 'p2p':
+                        await self.passPredictionData(predictionDf) 
+                    elif self.transferProtocol == 'pubsub':
+                        # TODO conform data for publishing data
+                        pass
+                        # self.server.publish( 
+                        #     topic=streamForecast.predictionStreamId.topic(),
+                        #     data=streamForecast.forecast["pred"].iloc[0],
+                        #     observationTime=streamForecast.observationTime,
+                        #     observationHash=streamForecast.observationHash,
+                        #     isPrediction=True,
+                        #     useAuthorizedCall=self.version >= Version("0.2.6"))
+                else:
+                    raise Exception('Forecast not in dataframe format')
+        except Exception as e:
+            error(e)
+            await self.fallback_prediction()
 
     async def fallback_prediction(self):
         if os.path.isfile(self.modelPath()):
@@ -517,7 +545,11 @@ class StreamModel:
         async def run_training():
             """Async wrapper for the training loop"""
             try:
-                init_task = asyncio.create_task(self.init2())
+                if self.transferProtocol == 'p2p':
+                    init_task = asyncio.create_task(self.p2pInit())
+                else:
+                    # TODO: pubsub mechanism
+                    pass
                 await self.run()
             except Exception as e:
                 error(f"Error in training loop: {e}")
