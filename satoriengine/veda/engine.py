@@ -1,27 +1,30 @@
+from typing import Union
+import os
+import copy
+import asyncio
+import warnings
+import threading
+import numpy as np
+import pandas as pd
+from io import StringIO
 from satoriengine.veda.adapters import ModelAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 from satoriengine.veda.data import StreamForecast, validate_single_entry
+from satorilib.concepts.structs import Stream
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet import EvrmoreWallet
-from satorineuron.init.wallet import WalletVaultManager
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
+from satorilib.pubsub import SatoriPubSubConn
+
+#TODO: remove.
 from satorineuron import config
-import asyncio
-import pandas as pd
-import numpy as np
-import threading
-import copy
-import os
-from io import StringIO
-from typing import Union
-import warnings
+from satorineuron.init.wallet import WalletVaultManager
+
 warnings.filterwarnings('ignore')
-
 setup(level=INFO)
-
 
 class Engine:
 
@@ -43,8 +46,21 @@ class Engine:
         self.server: SatoriServerClient = None
         self.walletVaultManager: WalletVaultManager
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
+        self.sub: SatoriPubSubConn = None
 
-
+    def addStream(self, stream: Stream, pubStream: Stream):
+        ''' add streams to a running engine '''
+        # don't duplicate effort
+        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
+            return
+        self.streams.append(stream)
+        self.pubStreams.append(pubStream)
+        self.streamModels[stream.streamId] = StreamModel(
+            streamId=stream.streamId,
+            predictionStreamId=pubStream.streamId,
+            predictionProduced=self.predictionProduced)
+        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
+        self.streamModels[stream.streamId].run_forever()
 
     def subConnect(self):
         """establish a random pubsub connection used only for subscribing"""
