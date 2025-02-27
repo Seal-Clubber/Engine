@@ -23,9 +23,9 @@ setup(level=INFO)
 
 class Engine:
 
-    def __init__(self, streams: list[Stream], pubStreams: list[Stream]):
+    def __init__(self, streams: list[Stream], pubstreams: list[Stream]):
         self.streams = streams
-        self.pubStreams = pubStreams
+        self.pubstreams = pubstreams
         self.streamModels: Dict[StreamId, StreamModel] = {}
         self.newObservation: BehaviorSubject = BehaviorSubject(None)
         self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
@@ -40,7 +40,7 @@ class Engine:
         if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
             return
         self.streams.append(stream)
-        self.pubStreams.append(pubStream)
+        self.pubstreams.append(pubStream)
         self.streamModels[stream.streamId] = StreamModel(
             streamId=stream.streamId,
             predictionStreamId=pubStream.streamId,
@@ -69,7 +69,7 @@ class Engine:
             on_completed=lambda: self.handleCompletion())
 
     def initializeModels(self):
-        for stream, pubStream in zip(self.streams, self.pubStreams):
+        for stream, pubStream in zip(self.streams, self.pubstreams):
             self.streamModels[stream.streamId] = StreamModel(
                 streamId=stream.streamId,
                 predictionStreamId=pubStream.streamId,
