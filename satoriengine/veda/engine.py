@@ -8,24 +8,15 @@ import warnings
 import threading
 import numpy as np
 import pandas as pd
-from io import StringIO
 from satoriengine.veda.adapters import ModelAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 from satoriengine.veda.data import StreamForecast, validate_single_entry
-from satorilib.concepts.structs import Stream
+from satorilib.concepts import Observation
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
-from satorilib.wallet import EvrmoreWallet
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
-from satorilib.server import SatoriServerClient
 from satorilib.pubsub import SatoriPubSubConn
-
-from satorilib.wallet import EvrmoreWallet
-
-#TODO: remove.
-from satorineuron import config
-from satorineuron.init.wallet import WalletVaultManager
 
 warnings.filterwarnings('ignore')
 setup(level=INFO)
@@ -46,7 +37,7 @@ class Engine:
         self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
-        self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
+        self.identity: EvrmoreIdentity = EvrmoreIdentity('/Satori/Neuron/wallet/wallet.yaml')
         # TODO: handle the server - doesn't the neuron send our predictions to the central server to be scored? if so we don't need this here.
         #self.server: SatoriServerClient = None
         self.sub: SatoriPubSubConn = None
@@ -112,26 +103,21 @@ class Engine:
                 ):
                     if response.startswith('{"topic":') or response.startswith('{"data":'):
                         try:
-                            # TODO: instead of the following old code below...
-                            #       conform observation to the form that the local DataServer wants it
-                            #       send to DataServer and trigger prediction as we otherwise would...
-                            #obs = Observation.parse(response)
-                            #logging.info(
-                            #    'received:',
-                            #    f'\n {obs.streamId.cleanId}',
-                            #    f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
-                            #    print=True)
-                            #getStart().engine.data.newData.on_next(obs)
-                            #getStart().aiengine.newObservation.on_next(obs)
-                            #
-                            #       so we need to to call the correct
-                            # self.StreaModel.handleSubscriptionMessage(
-                            #   subscription=Subscription(
-                            #       uuid=observation.streamId.uuid,
-                            #       callback=?),
-                            #   message=Message(obseration.dictionary?))
-                            #
-                            #       I think that should do it.
+                            obs = Observation.parse(response)
+                            info(
+                                'received:',
+                                f'\n {obs.streamId.cleanId}',
+                                f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
+                                print=True)
+                            streamModel = self.streamModels.get(obs.streamId.uuid)
+                            if isinstance(streamModel, StreamModel):
+                                streamModel.handleSubscriptionMessage(
+                                    subscription=Subscription(
+                                        uuid=obs.streamId.uuid,
+                                        callback=lambda x: x),
+                                    message=Message({
+                                        **obs.dictionary,
+                                        'status': 'stream/observation'}))
                         except json.JSONDecodeError:
                             info('received unparsable message:', response, print=True)
                     else:
