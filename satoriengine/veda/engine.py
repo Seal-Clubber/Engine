@@ -1,6 +1,8 @@
 from typing import Union
 import os
+import json
 import copy
+import random
 import asyncio
 import warnings
 import threading
@@ -47,45 +49,125 @@ class Engine:
         self.walletVaultManager: WalletVaultManager
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
         self.sub: SatoriPubSubConn = None
+        # TOOD: cleanup - maybe this should be passed in and key'ed off ENV like was done before?
+        self.urlPubsubs={
+                # 'local': ['ws://192.168.0.10:24603'],
+                'local': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603'],
+                'dev': ['ws://localhost:24603'],
+                'test': ['ws://test.satorinet.io:24603'],
+                'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod'],
 
-    def addStream(self, stream: Stream, pubStream: Stream):
-        ''' add streams to a running engine '''
-        # don't duplicate effort
-        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
-            return
-        self.streams.append(stream)
-        self.pubStreams.append(pubStream)
-        self.streamModels[stream.streamId] = StreamModel(
-            streamId=stream.streamId,
-            predictionStreamId=pubStream.streamId,
-            predictionProduced=self.predictionProduced)
-        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
-        self.streamModels[stream.streamId].run_forever()
 
-    def subConnect(self):
+    ## TODO: fix addStream to work with the new way init looks, not the old way:
+    #
+    #def __init__(self, streams: list[Stream], pubStreams: list[Stream]):
+    #    self.streams = streams
+    #    self.pubStreams = pubStreams
+    #    self.streamModels: Dict[StreamId, StreamModel] = {}
+    #    self.newObservation: BehaviorSubject = BehaviorSubject(None)
+    #    self.predictionProduced: BehaviorSubject = BehaviorSubject(None)
+    #    self.setupSubscriptions()
+    #    self.initializeModels()
+    #    self.paused: bool = False
+    #    self.threads: list[threading.Thread] = []
+    #
+    #def addStream(self, stream: Stream, pubStream: Stream):
+    #    ''' add streams to a running engine '''
+    #    # don't duplicate effort
+    #    if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
+    #        return
+    #    self.streams.append(stream)
+    #    self.pubStreams.append(pubStream)
+    #    self.streamModels[stream.streamId] = StreamModel(
+    #        streamId=stream.streamId,
+    #        predictionStreamId=pubStream.streamId,
+    #        predictionProduced=self.predictionProduced)
+    #    self.streamModels[stream.streamId].chooseAdapter(inplace=True)
+    #    self.streamModels[stream.streamId].run_forever()
+
+    def subConnect(self, key: str):
         """establish a random pubsub connection used only for subscribing"""
-        if self.sub is not None:
-            self.sub.disconnect()
-            self.updateConnectionStatus(
-                connTo=ConnectionTo.pubsub, status=False)
-            self.sub = None
-        if self.key:
-            signature = self.wallet.sign(self.key)
-            self.sub = engine.establishConnection(
-                url=random.choice(self.urlPubsubs),
-                # url='ws://pubsub3.satorinet.io:24603',
-                pubkey=self.wallet.publicKey,
-                key=signature.decode() + "|" + self.key,
-                emergencyRestart=self.emergencyRestart,
-                onConnect=lambda: self.updateConnectionStatus(
-                    connTo=ConnectionTo.pubsub,
-                    status=True),
-                onDisconnect=lambda: self.updateConnectionStatus(
-                    connTo=ConnectionTo.pubsub,
-                    status=False))
-        else:
-            time.sleep(30)
-            raise Exception("no key provided by satori server")
+
+        def establishConnection(
+            pubkey: str,
+            key: str,
+            url: str = None,
+            onConnect: callable = None,
+            onDisconnect: callable = None,
+            emergencyRestart: callable = None,
+            subscription: bool = True,
+        ):
+            """establishes a connection to the satori server, returns connection object"""
+            from satorineuron.init.start import getStart
+
+            def router(response: str):
+                ''' gets observation from pubsub servers '''
+                # response:
+                # {"topic": "{\"source\": \"satori\", \"author\": \"021bd7999774a59b6d0e40d650c2ed24a49a54bdb0b46c922fd13afe8a4f3e4aeb\", \"stream\": \"coinbaseALGO-USD\", \"target\": \"data.rates.ALGO\"}", "data": "0.23114999999999997"}
+                if (
+                    response
+                    != "failure: error, a minimum 10 seconds between publications per topic."
+                ):
+                    if response.startswith('{"topic":') or response.startswith('{"data":'):
+                        try:
+                            # TODO: instead of the following old code below...
+                            #       conform observation to the form that the local DataServer wants it
+                            #       send to DataServer and trigger prediction as we otherwise would...
+                            #obs = Observation.parse(response)
+                            #logging.info(
+                            #    'received:',
+                            #    f'\n {obs.streamId.cleanId}',
+                            #    f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
+                            #    print=True)
+                            #getStart().engine.data.newData.on_next(obs)
+                            #getStart().aiengine.newObservation.on_next(obs)
+                        except json.JSONDecodeError:
+                            info('received unparsable message:', response, print=True)
+                    else:
+                        info('received:', response, print=True)
+
+            info(
+                'subscribing to:' if subscription else 'publishing to:', url, color='blue')
+            return SatoriPubSubConn(
+                uid=pubkey,
+                router=router if subscription else None,
+                payload=key,
+                url=url,
+                emergencyRestart=emergencyRestart,
+                onConnect=onConnect,
+                onDisconnect=onDisconnect,
+            )
+            # payload={
+            #    'publisher': ['stream-a'],
+            #    'subscriptions': ['stream-b', 'stream-c', 'stream-d']})
+
+
+        # accept optional data necessary to generate models data and learner
+
+
+        # TODO: should we even do this?
+        #if self.sub is not None:
+        #    self.sub.disconnect()
+        #    # TODO replace to get this information to the UI somehow.
+        #    #self.updateConnectionStatus(
+        #    #    connTo=ConnectionTo.pubsub, status=False)
+        #    self.sub = None
+        signature = self.wallet.sign(key)
+        self.sub = establishConnection(
+            url=random.choice(self.urlPubsubs),
+            # url='ws://pubsub3.satorinet.io:24603',
+            pubkey=self.wallet.publicKey,
+            key=signature.decode() + "|" + key,
+            emergencyRestart=lambda: print('emergencyRestart not implemented'),
+            onConnect=lambda: print('onConnect not implemented'),
+            onDisconnect=lambda: print('onDisconnect not implemented'))
+            # TODO: tell the UI we disconnected, and reconnected... somehow...
+            #onConnect=lambda: self.updateConnectionStatus(
+            #    connTo=ConnectionTo.pubsub,
+            #    status=True),
+            #onDisconnect=lambda: self.updateConnectionStatus(
+            #    connTo=ConnectionTo.pubsub,
+            #    status=False))
 
     async def initialize(self):
         await self.connectToDataServer()
