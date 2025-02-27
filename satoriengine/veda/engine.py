@@ -123,6 +123,15 @@ class Engine:
                             #    print=True)
                             #getStart().engine.data.newData.on_next(obs)
                             #getStart().aiengine.newObservation.on_next(obs)
+                            #
+                            #       so we need to to call the correct
+                            # self.StreaModel.handleSubscriptionMessage(
+                            #   subscription=Subscription(
+                            #       uuid=observation.streamId.uuid,
+                            #       callback=?),
+                            #   message=Message(obseration.dictionary?))
+                            #
+                            #       I think that should do it.
                         except json.JSONDecodeError:
                             info('received unparsable message:', response, print=True)
                     else:
