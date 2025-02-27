@@ -21,6 +21,8 @@ from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.server import SatoriServerClient
 from satorilib.pubsub import SatoriPubSubConn
 
+from satorilib.wallet import EvrmoreWallet
+
 #TODO: remove.
 from satorineuron import config
 from satorineuron.init.wallet import WalletVaultManager
@@ -44,10 +46,9 @@ class Engine:
         self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
-        self.transferProtocol: Union[str, None] = None
-        self.server: SatoriServerClient = None
-        self.walletVaultManager: WalletVaultManager
         self.identity: EvrmoreIdentity = EvrmoreIdentity(config.walletPath('wallet.yaml'))
+        # TODO: handle the server - doesn't the neuron send our predictions to the central server to be scored? if so we don't need this here.
+        #self.server: SatoriServerClient = None
         self.sub: SatoriPubSubConn = None
         # TOOD: cleanup - maybe this should be passed in and key'ed off ENV like was done before?
         self.urlPubsubs={
@@ -55,7 +56,8 @@ class Engine:
                 'local': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603'],
                 'dev': ['ws://localhost:24603'],
                 'test': ['ws://test.satorinet.io:24603'],
-                'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod'],
+                'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod']
+        self.transferProtocol: Union[str, None] = None
 
 
     ## TODO: fix addStream to work with the new way init looks, not the old way:
@@ -152,11 +154,11 @@ class Engine:
         #    #self.updateConnectionStatus(
         #    #    connTo=ConnectionTo.pubsub, status=False)
         #    self.sub = None
-        signature = self.wallet.sign(key)
+        signature = self.identity.sign(key)
         self.sub = establishConnection(
             url=random.choice(self.urlPubsubs),
             # url='ws://pubsub3.satorinet.io:24603',
-            pubkey=self.wallet.publicKey,
+            pubkey=self.identity.publicKey,
             key=signature.decode() + "|" + key,
             emergencyRestart=lambda: print('emergencyRestart not implemented'),
             onConnect=lambda: print('onConnect not implemented'),
@@ -214,7 +216,6 @@ class Engine:
             return await authenticate()
 
         waitingPeriod = 10
-
         while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
@@ -244,7 +245,7 @@ class Engine:
                     else:
                         raise Exception
                 elif self.transferProtocol == 'pubsub':
-                    self.switchToPubSubProtocol()
+                    self.subConnect(key='TODO: fill me out')
                 else:
                     raise Exception
             except Exception:
@@ -259,15 +260,6 @@ class Engine:
                 await self.connectToDataServer()
                 await self.startService()
 
-    @property
-    def wallet(self) -> EvrmoreWallet:
-        return self.walletVaultManager.wallet
-
-    def switchToPubSubProtocol(self, urlServer, urlMundo):
-        self.server = SatoriServerClient(
-            self.wallet, url=urlServer, sendingUrl=urlMundo
-        )
-
     async def initializeModels(self):
         for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()):
             peers = self.subscriptions[subUuid]
@@ -279,8 +271,7 @@ class Engine:
                     dataClient=self.dataClient,
                     pauseAll=self.pause,
                     resumeAll=self.resume,
-                    transferProtocol=self.transferProtocol
-                    )
+                    transferProtocol=self.transferProtocol)
             except Exception as e:
                 error(e)
             self.streamModels[subUuid].chooseAdapter(inplace=True)
