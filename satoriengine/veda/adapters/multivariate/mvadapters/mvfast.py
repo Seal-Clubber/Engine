@@ -24,7 +24,7 @@ class FastMVAdapter(ModelAdapter):
         super().__init__()
         self.model: Union[FastMVAdapter, None] = None
         self.dataTrain: pd.DataFrame = pd.DataFrame()
-        self.dataTrainTest: pd.DataFrame = pd.DataFrame()
+        self.fullDataset: pd.DataFrame = pd.DataFrame()
         self.modelError: float = 0
         self.covariateColNames: list[str] = []
         self.forecastingSteps: int = 1
@@ -43,55 +43,57 @@ class FastMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
+        # TODO : confirm about .refit stuff
         return TrainingResult(1, self)
 
     def compare(self, other: Union['FastMVAdapter', None] = None, **kwargs) -> bool:
-        if not isinstance(other, self.__class__):
-            return True
-        thisScore = self.score()
-        #otherScore = other.score(test_x=self.testX, test_y=self.testY)
-        otherScore = other.modelError or other.score()
-        isImproved = thisScore < otherScore
-        if isImproved:
-            info(
-                'model improved!'
-                f'\n  stable score: {otherScore}'
-                f'\n  pilot  score: {thisScore}',
-                color='green')
-        else:
-            debug(
-                f'\nstable score: {otherScore}'
-                f'\npilot  score: {thisScore}')
-        return isImproved
+        # if not isinstance(other, self.__class__):
+        #     return True
+        # thisScore = self.score()
+        # #otherScore = other.score(test_x=self.testX, test_y=self.testY)
+        # otherScore = other.modelError or other.score()
+        # isImproved = thisScore < otherScore
+        # if isImproved:
+        #     info(
+        #         'model improved!'
+        #         f'\n  stable score: {otherScore}'
+        #         f'\n  pilot  score: {thisScore}',
+        #         color='green')
+        # else:
+        #     debug(
+        #         f'\nstable score: {otherScore}'
+        #         f'\npilot  score: {thisScore}')
+        # return isImproved
+        return True
 
     def score(self, **kwargs) -> float:
-        if self.model is None:
-            return np.inf
-        self.modelError = self.model.evaluate(self.dataTrainTest).get('MASE')*-1
-        return self.modelError
+        # if self.model is None:
+        #     return np.inf
+        # self.modelError = self.model.evaluate(self.fullDataset).get('MASE')*-1
+        # return self.modelError
+        return 0.0
 
     def predict(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         self._manageData(targetData, covariateData)
-        dataTrainTestWithFuture = self.appendCovariateFuture(self.dataTrainTest)
-        prediction = self.model.predict(self.dataTrainTest, known_covariates=dataTrainTestWithFuture.drop('value', axis=1))
+        datasetWithFutureCov = self.appendCovariateFuture(self.fullDataset)
+        prediction = self.model.predict(self.fullDataset, known_covariates=datasetWithFutureCov.drop('value', axis=1))
         resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: can also use in-built auto-gluon stuff ( optimize )
         return resultDf
     
     def _manageData(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame]):
         conformedData, self.covariateColNames = conformData(targetData, covariateData) 
-        self.dataTrain, self.dataTrainTest = createTrainTest(conformedData, self.forecastingSteps)
+        self.dataTrain, self.fullDataset = createTrainTest(conformedData, self.forecastingSteps)
 
-    def _multivariateFit(self):
+    def _multivariateFit(self) -> TimeSeriesPredictor:
         return TimeSeriesPredictor(
                         prediction_length=self.forecastingSteps,
                         eval_metric="MASE",
                         target="value", 
                         known_covariates_names=self.covariateColNames, 
-                        # log_file_path = log_file_path
                         verbosity=0
                     ).fit(
-                        self.dataTrain,
+                        self.fullDataset,
                         random_seed=self.rng,
                         hyperparameters={
                             "Naive": {}, 
@@ -144,7 +146,7 @@ class FastMVAdapter(ModelAdapter):
         return df
     
     @staticmethod
-    def _getPredictionDataframe(targetDataframe: pd.DataFrame, predictionValue: float):
+    def _getPredictionDataframe(targetDataframe: pd.DataFrame, predictionValue: float) -> pd.DataFrame:
         targetDataframe['date_time'] = pd.to_datetime(targetDataframe['date_time'])
         target_df = targetDataframe.set_index('date_time')
         samplingFrequency = getSamplingFreq(target_df)
