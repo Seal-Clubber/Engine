@@ -283,7 +283,7 @@ class Engine:
                     dataClient=self.dataClient,
                     pauseAll=self.pause,
                     resumeAll=self.resume,
-                    transferProtocol=self.transferProtocolFlag)
+                    transferProtocol=self.transferProtocol)
             except Exception as e:
                 error(e)
             self.streamModels[subUuid].chooseAdapter(inplace=True)
@@ -440,7 +440,7 @@ class StreamModel:
             externalDataResponse = await self.dataClient.getRemoteStreamData(self.publisherHost, self.streamUuid)
             if externalDataResponse.status == DataServerApi.statusSuccess.value:
                 externalDf = externalDataResponse.data
-                if not externalDf.equals(self.data) and len(externalDf) > 0: # TODO : sure about this?
+                if not externalDf.equals(self.data) and len(externalDf) > 0: # TODO : maybe we can find a better logic so that we don't lose the host server's valuable data ( krishna )
                     response = await self.dataClient.insertStreamData(
                                     uuid=self.streamUuid,
                                     data=externalDf,
@@ -485,7 +485,7 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
-    async def appendNewData(self, observation: pd.DataFrame, pubSubFlag: bool): # TODO: change obs type
+    async def appendNewData(self, observation: Union[pd.DataFrame, dict], pubSubFlag: bool): 
         """extract the data and save it to self.data"""
         if pubSubFlag: 
             parsedData = json.loads(observation.raw)
@@ -493,7 +493,7 @@ class StreamModel:
                 await self.dataClient.insertStreamData(
                         uuid=self.streamUuid,
                         data=pd.DataFrame({ 'value': [float(parsedData["data"])]
-                                    }, index=[str(parsedData["hash"])]),
+                                    }, index=[str(parsedData["time"])]),
                         isSub=True
                     )
                 self.data = pd.concat(
@@ -547,18 +547,7 @@ class StreamModel:
                 if isinstance(forecast, pd.DataFrame):
                     predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
                                     }, index=[datetimeToTimestamp(now())])
-                    if self.transferProtocol == 'p2p':
-                        await self.passPredictionData(predictionDf)
-                    elif self.transferProtocol == 'pubsub':
-                        # TODO conform data for publishing data
-                        pass
-                        # self.server.publish(
-                        #     topic=streamForecast.predictionStreamId.topic(),
-                        #     data=streamForecast.forecast["pred"].iloc[0],
-                        #     observationTime=streamForecast.observationTime,
-                        #     observationHash=streamForecast.observationHash,
-                        #     isPrediction=True,
-                        #     useAuthorizedCall=self.version >= Version("0.2.6"))
+                    await self.passPredictionData(predictionDf)
                 else:
                     raise Exception('Forecast not in dataframe format')
         except Exception as e:
@@ -696,9 +685,6 @@ class StreamModel:
             try:
                 if self.transferProtocol == 'p2p':
                     init_task = asyncio.create_task(self.p2pInit())
-                else:
-                    # TODO: pubsub mechanism
-                    pass
                 await self.run()
             except Exception as e:
                 error(f"Error in training loop: {e}")
