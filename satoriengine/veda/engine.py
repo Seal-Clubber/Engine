@@ -17,6 +17,7 @@ from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.pubsub import SatoriPubSubConn
+from satorineuron import config
 
 warnings.filterwarnings('ignore')
 setup(level=INFO)
@@ -48,6 +49,7 @@ class Engine:
                 'dev': ['ws://localhost:24603'],
                 'test': ['ws://test.satorinet.io:24603'],
                 'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod']
+        self.transferProtocolFlag: Union[dict, None] = None
         self.transferProtocol: Union[str, None] = None
 
 
@@ -111,13 +113,26 @@ class Engine:
                                 print=True)
                             streamModel = self.streamModels.get(obs.streamId.uuid)
                             if isinstance(streamModel, StreamModel):
-                                streamModel.handleSubscriptionMessage(
-                                    subscription=Subscription(
-                                        uuid=obs.streamId.uuid,
-                                        callback=lambda x: x),
-                                    message=Message({
-                                        **obs.dictionary,
-                                        'status': 'stream/observation'}))
+                                def run_async_in_thread():
+                                    try:
+                                        loop = asyncio.new_event_loop()
+                                        asyncio.set_event_loop(loop)
+                                        loop.run_until_complete(
+                                            streamModel.handleSubscriptionMessage(
+                                                message=Message({
+                                                    'data': obs, 
+                                                    'status': 'stream/observation'}),
+                                                pubSubFlag=True)
+                                        )
+                                    except Exception as e:
+                                        print(f"Exception in async thread: {e}")
+                                        import traceback
+                                        traceback.print_exc()
+                                    finally:
+                                        loop.close()
+                                thread = threading.Thread(target=run_async_in_thread)
+                                thread.daemon = True
+                                thread.start()
                         except json.JSONDecodeError:
                             info('received unparsable message:', response, print=True)
                     else:
@@ -226,23 +241,24 @@ class Engine:
         while not self.subscriptions and self.isConnectedToServer:
             try:
                 pubSubResponse: Message = await self.dataClient.getPubsubMap()
-                self.transferProtocol = pubSubResponse.streamInfo.get('transferProtocol')
-                info(f'Transfer protocol : {self.transferProtocol}', color='green')
-                if self.transferProtocol == 'p2p':
-                    pubSubMapping = pubSubResponse.streamInfo.get('pubSubMapping')
-                    if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubMapping:
-                        for sub_uuid, data in pubSubMapping.items():
-                            # TODO : deal with supportive streams, ( data['supportiveUuid'] )
-                            self.subscriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
-                            self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
-                        if self.subscriptions:
-                            info(pubSubResponse.senderMsg, color='green')
-                    else:
-                        raise Exception
-                elif self.transferProtocol == 'pubsub':
-                    self.subConnect(key='TODO: fill me out')
+                self.transferProtocolFlag = pubSubResponse.streamInfo.get('transferProtocolFlag')
+                if not self.transferProtocolFlag:
+                    self.transferProtocol = 'p2p'
+                else:
+                    self.transferProtocol = 'pubsub'
+                pubSubMapping = pubSubResponse.streamInfo.get('pubSubMapping')
+                if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubMapping:
+                    for sub_uuid, data in pubSubMapping.items():
+                        # TODO : deal with supportive streams, ( data['supportiveUuid'] )
+                        self.subscriptions[sub_uuid] = PeerInfo(data['dataStreamSubscribers'], data['dataStreamPublishers'])
+                        self.publications[data['publicationUuid']] = PeerInfo(data['predictiveStreamSubscribers'], data['predictiveStreamPublishers'])
+                    if self.subscriptions:
+                        info(pubSubResponse.senderMsg, color='green')
                 else:
                     raise Exception
+                if self.transferProtocol == 'pubsub':
+                    self.subConnect(key=self.transferProtocolFlag)
+                    return
             except Exception:
                 warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
                 await asyncio.sleep(waitingPeriod)
@@ -256,6 +272,7 @@ class Engine:
                 await self.startService()
 
     async def initializeModels(self):
+        info(f'Transfer protocol : {self.transferProtocol}', color='green')
         for subUuid, pubUuid in zip(self.subscriptions.keys(), self.publications.keys()):
             peers = self.subscriptions[subUuid]
             try:
@@ -266,11 +283,11 @@ class Engine:
                     dataClient=self.dataClient,
                     pauseAll=self.pause,
                     resumeAll=self.resume,
-                    transferProtocol=self.transferProtocol)
+                    transferProtocol=self.transferProtocolFlag)
             except Exception as e:
                 error(e)
             self.streamModels[subUuid].chooseAdapter(inplace=True)
-            self.streamModels[subUuid].run_forever()
+            # self.streamModels[subUuid].run_forever()
 
     def cleanupThreads(self):
         for thread in self.threads:
@@ -451,13 +468,13 @@ class StreamModel:
               publicationUuid=self.predictionStreamUuid,
               callback=self.handleSubscriptionMessage)
 
-    async def handleSubscriptionMessage(self, subscription: Subscription, message: Message):
+    async def handleSubscriptionMessage(self,  message: Message, pubSubFlag: bool = False):
         if message.status == DataClientApi.streamInactive.value:
             self.publisherHost = None
             await self.connectToPeer()
             await self.startStreamService()
         else:
-            self.appendNewData(message.data)
+            await self.appendNewData(message.data, pubSubFlag)
             self.pauseAll()
             await self.producePrediction()
             self.resumeAll()
@@ -468,16 +485,37 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
-    def appendNewData(self, observation: pd.DataFrame):
+    async def appendNewData(self, observation: pd.DataFrame, pubSubFlag: bool): # TODO: change obs type
         """extract the data and save it to self.data"""
-        observationDf = observation.reset_index().rename(columns={
-                            'index': 'date_time',
-                            'hash': 'id'
-                        })
-        if validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
-            self.data = pd.concat([self.data, observationDf], ignore_index=True)
+        if pubSubFlag: 
+            parsedData = json.loads(observation.raw)
+            if validate_single_entry(parsedData["time"], parsedData["data"]):
+                await self.dataClient.insertStreamData(
+                        uuid=self.streamUuid,
+                        data=pd.DataFrame({ 'value': [float(parsedData["data"])]
+                                    }, index=[str(parsedData["hash"])]),
+                        isSub=True
+                    )
+                self.data = pd.concat(
+                    [
+                        self.data,
+                        pd.DataFrame({
+                            "date_time": [str(parsedData["time"])],
+                            "value": [float(parsedData["data"])],
+                            "id": [str(parsedData["hash"])]})
+                    ],
+                    ignore_index=True)
+            else:
+                error("Row not added due to corrupt observation")
         else:
-            error("Row not added due to corrupt observation")
+            observationDf = observation.reset_index().rename(columns={
+                                'index': 'date_time',
+                                'hash': 'id'
+                            })
+            if validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
+                self.data = pd.concat([self.data, observationDf], ignore_index=True)
+            else:
+                error("Row not added due to corrupt observation")
 
     async def passPredictionData(self, forecast: pd.DataFrame):
         try:
