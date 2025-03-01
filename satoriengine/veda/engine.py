@@ -287,7 +287,7 @@ class Engine:
             except Exception as e:
                 error(e)
             self.streamModels[subUuid].chooseAdapter(inplace=True)
-            # self.streamModels[subUuid].run_forever()
+            self.streamModels[subUuid].run_forever()
 
     def cleanupThreads(self):
         for thread in self.threads:
@@ -411,7 +411,6 @@ class StreamModel:
 
         while not self.isConnectedToPublisher:
             self.publisherHost = self.peerInfo.publishersIp[0]
-            print(self.publisherHost)
             if await _isPublisherActive(self.publisherHost):
                 return True
             self.peerInfo.subscribersIp = [
@@ -426,7 +425,6 @@ class StreamModel:
             debug('Waiting for some time', print=True)
             # await asyncio.sleep(60*60)
             await asyncio.sleep(10)
-        return False
 
     async def syncData(self):
         '''
@@ -468,7 +466,7 @@ class StreamModel:
               publicationUuid=self.predictionStreamUuid,
               callback=self.handleSubscriptionMessage)
 
-    async def handleSubscriptionMessage(self,  message: Message, pubSubFlag: bool = False):
+    async def handleSubscriptionMessage(self, subscription: any,  message: Message, pubSubFlag: bool = False):
         if message.status == DataClientApi.streamInactive.value:
             self.publisherHost = None
             await self.connectToPeer()
@@ -646,6 +644,7 @@ class StreamModel:
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         """
+        print(len(self.data))
         while len(self.data) > 0:
             if self.paused:
                 await asyncio.sleep(10)
@@ -675,40 +674,38 @@ class StreamModel:
                 except Exception as e:
                     pass
 
+
     def run_forever(self):
         """
-        Creates a new thread for running the model training loop.
-        Makes init2 a separate task that runs concurrently with the training loop.
+        Creates separate threads for running the peer connections and model training loop.
         """
-        async def run_training():
-            """Async wrapper for the training loop"""
-            try:
-                if self.transferProtocol == 'p2p':
-                    init_task = asyncio.create_task(self.p2pInit())
-                await self.run()
-            except Exception as e:
-                error(f"Error in training loop: {e}")
-
-        def thread_target():
+        def p2p_init_thread():
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                self._loop = loop
-                loop.run_until_complete(run_training())
-                loop.run_forever()
+                loop.run_until_complete(self.p2pInit())
+                loop.close()
             except Exception as e:
-                error(f"Error in run_forever thread: {e}")
-            finally:
-                try:
-                    pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    loop.close()
-                except Exception as e:
-                    error(f"Error during loop cleanup: {e}")
+                error(f"Error in p2p thread: {e}")
+                import traceback
+                traceback.print_exc()
 
-        self.thread = threading.Thread(target=thread_target, daemon=True)
+        def training_loop_thread():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.run())
+                loop.close()
+            except Exception as e:
+                error(f"Error in training loop thread: {e}")
+                import traceback
+                traceback.print_exc()
+
+        if self.transferProtocol == 'p2p':
+            p2p_thread = threading.Thread(target=p2p_init_thread, daemon=True)
+            p2p_thread.start()
+            
+        self.thread = threading.Thread(target=training_loop_thread, daemon=True)
         self.thread.start()
 
 
