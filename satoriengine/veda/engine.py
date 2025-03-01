@@ -644,7 +644,6 @@ class StreamModel:
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         """
-        print(len(self.data))
         while len(self.data) > 0:
             if self.paused:
                 await asyncio.sleep(10)
@@ -676,19 +675,7 @@ class StreamModel:
 
 
     def run_forever(self):
-        """
-        Creates separate threads for running the peer connections and model training loop.
-        """
-        def p2p_init_thread():
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self.p2pInit())
-                loop.close()
-            except Exception as e:
-                error(f"Error in p2p thread: {e}")
-                import traceback
-                traceback.print_exc()
+        '''Creates separate threads for running the peer connections and model training loop'''
 
         def training_loop_thread():
             try:
@@ -702,23 +689,9 @@ class StreamModel:
                 traceback.print_exc()
 
         if self.transferProtocol == 'p2p':
-            p2p_thread = threading.Thread(target=p2p_init_thread, daemon=True)
-            p2p_thread.start()
+            init_task = asyncio.create_task(self.p2pInit())
             
         self.thread = threading.Thread(target=training_loop_thread, daemon=True)
         self.thread.start()
 
 
-
-# this is how we initialize
-
-# async def main():
-#     engine = await Engine.create()
-#     await asyncio.Event().wait()
-#     #await asyncio.Future()
-#     #await asyncio.sleep(10)
-#     #await asyncio.create_task(client._keepAlive())
-
-
-
-# asyncio.run(main())
