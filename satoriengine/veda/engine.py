@@ -80,12 +80,24 @@ class Engine:
     #    self.streamModels[stream.streamId].chooseAdapter(inplace=True)
     #    self.streamModels[stream.streamId].run_forever()
 
-    def proactivelyConnectToSubscribers(self, key: str):
+    def proactivelyConnectToSubscribers(self, subscribers: str):
         '''
         establish connections to subscriber data servers and provide
-        observations on the datastreams they subscribe to
+        observations on the datastreams they subscribe to.
+        subscribers should look lik this:
+        [{
+            'subscription_ds_uuid': '588d9361-64cc-5fb7-8a1d-9395d70f622d',
+            'ip': '70.30.39.94',
+            'ip_ts': Timestamp('2025-03-02 21:03:47.628513'),
+            'author': '038cc6020b9ef6a3437c032a07a3b9ef7c32101c7d7baf8d567e1d15ef4d68374d',
+            'prediction_ds_uuid': '1a854c56-4093-5182-b17a-99dd3bbe9e79'},
+            ...
+        ]
         '''
-
+        # we need to loop through the subscribers to compile a list of subscription_ds_uuids for each unique author-ip combo.
+        # we can use the 'author' to validate their identity
+        # we can use the 'ip' to connect to their data server
+        # we can use the 'subscription_ds_uuid' to tell them what datastreams we'll be sending to them
 
 
     def subConnect(self, key: str):
@@ -265,7 +277,7 @@ class Engine:
                     self.subConnect(key=self.transferProtocolPayload)
                     return
                 if self.transferProtocol == 'p2p-proactive':
-                    self.proactivelyConnectToSubscribers(key=self.transferProtocolPayload)
+                    self.proactivelyConnectToSubscribers(subscribers==self.transferProtocolPayload)
                     return
             except Exception:
                 warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
@@ -698,8 +710,6 @@ class StreamModel:
 
         if self.transferProtocol == 'p2p':
             init_task = asyncio.create_task(self.p2pInit())
-            
+
         self.thread = threading.Thread(target=training_loop_thread, daemon=True)
         self.thread.start()
-
-
