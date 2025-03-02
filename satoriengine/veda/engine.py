@@ -197,7 +197,7 @@ class StreamModel:
         if os.path.isfile(self.modelPath()):
             try:
                 os.remove(self.modelPath())
-                debug("Deleted failed model file", color="teal")
+                debug("Deleted failed model file:", self.modelPath(), color="teal")
             except Exception as e:
                 error(f"Failed to delete model file: {str(e)}")
         backupModel = self.defaultAdapters[-1]()
@@ -306,6 +306,9 @@ class StreamModel:
         using the best known model to make predictions on demand.
         Breaks if backtest error stagnates for 3 iterations.
         """
+        # for testing
+        #if self.modelPath() != "/Satori/Neuron/models/veda/YyBHl6bN1GejAEyjKwEDmywFU-M-/XgbChronosAdapter.joblib":
+        #    return
         while len(self.data) > 0:
             if self.paused:
                 time.sleep(10)

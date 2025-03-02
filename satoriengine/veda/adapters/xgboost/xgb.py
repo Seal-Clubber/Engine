@@ -51,8 +51,8 @@ class XgbAdapter(ModelAdapter):
             if os.path.isfile(modelPath):
                 os.remove(modelPath)
             try:
-                if 'XgbPipeline' not in modelPath:
-                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbPipeline.joblib'
+                if 'XgbAdapter' not in modelPath:
+                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbAdapter.joblib'
                     return self.load(modelPath)
             except Exception as _:
                 pass

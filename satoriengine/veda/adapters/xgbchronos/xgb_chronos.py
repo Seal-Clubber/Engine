@@ -62,8 +62,8 @@ class XgbChronosAdapter(ModelAdapter):
         saved = XgbChronosAdapter._load(modelPath, **kwargs)
         if saved is None:
             try:
-                if 'XgbChronosPipeline' not in modelPath:
-                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbChronosPipeline.joblib'
+                if 'XgbChronosAdapter' not in modelPath:
+                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbChronosAdapter.joblib'
                     return self.load(modelPath)
             except Exception as _:
                 pass
