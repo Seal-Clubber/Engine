@@ -49,7 +49,7 @@ class Engine:
                 'dev': ['ws://localhost:24603'],
                 'test': ['ws://test.satorinet.io:24603'],
                 'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod']
-        self.transferProtocolFlag: Union[dict, None] = None
+        self.transferProtocol: Union[dict, None] = None
         self.transferProtocol: Union[str, None] = None
 
 
@@ -79,6 +79,14 @@ class Engine:
     #        predictionProduced=self.predictionProduced)
     #    self.streamModels[stream.streamId].chooseAdapter(inplace=True)
     #    self.streamModels[stream.streamId].run_forever()
+
+    def proactivelyConnectToSubscribers(self, key: str):
+        '''
+        establish connections to subscriber data servers and provide
+        observations on the datastreams they subscribe to
+        '''
+
+
 
     def subConnect(self, key: str):
         """establish a random pubsub connection used only for subscribing"""
@@ -120,7 +128,7 @@ class Engine:
                                         loop.run_until_complete(
                                             streamModel.handleSubscriptionMessage(
                                                 message=Message({
-                                                    'data': obs, 
+                                                    'data': obs,
                                                     'status': 'stream/observation'}),
                                                 pubSubFlag=True)
                                         )
@@ -241,11 +249,8 @@ class Engine:
         while not self.subscriptions and self.isConnectedToServer:
             try:
                 pubSubResponse: Message = await self.dataClient.getPubsubMap()
-                self.transferProtocolFlag = pubSubResponse.streamInfo.get('transferProtocolFlag')
-                if not self.transferProtocolFlag:
-                    self.transferProtocol = 'p2p'
-                else:
-                    self.transferProtocol = 'pubsub'
+                self.transferProtocol = pubSubResponse.streamInfo.get('transferProtocol')
+                self.transferProtocolPayload = pubSubResponse.streamInfo.get('transferProtocolPayload')
                 pubSubMapping = pubSubResponse.streamInfo.get('pubSubMapping')
                 if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubMapping:
                     for sub_uuid, data in pubSubMapping.items():
@@ -257,7 +262,10 @@ class Engine:
                 else:
                     raise Exception
                 if self.transferProtocol == 'pubsub':
-                    self.subConnect(key=self.transferProtocolFlag)
+                    self.subConnect(key=self.transferProtocolPayload)
+                    return
+                if self.transferProtocol == 'p2p-proactive':
+                    self.proactivelyConnectToSubscribers(key=self.transferProtocolPayload)
                     return
             except Exception:
                 warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
@@ -485,9 +493,9 @@ class StreamModel:
     def resume(self):
         self.paused = False
 
-    async def appendNewData(self, observation: Union[pd.DataFrame, dict], pubSubFlag: bool): 
+    async def appendNewData(self, observation: Union[pd.DataFrame, dict], pubSubFlag: bool):
         """extract the data and save it to self.data"""
-        if pubSubFlag: 
+        if pubSubFlag:
             parsedData = json.loads(observation.raw)
             if validate_single_entry(parsedData["time"], parsedData["data"]):
                 await self.dataClient.insertStreamData(
