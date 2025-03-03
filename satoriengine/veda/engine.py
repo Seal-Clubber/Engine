@@ -80,7 +80,7 @@ class Engine:
     #    self.streamModels[stream.streamId].chooseAdapter(inplace=True)
     #    self.streamModels[stream.streamId].run_forever()
 
-    def proactivelyConnectToSubscribers(self, subscribers: str):
+    def proactivelyConnectToSubscribers(self, subscribers: list[dict]):
         '''
         establish connections to subscriber data servers and provide
         observations on the datastreams they subscribe to.
@@ -277,7 +277,7 @@ class Engine:
                     self.subConnect(key=self.transferProtocolPayload)
                     return
                 if self.transferProtocol == 'p2p-proactive':
-                    self.proactivelyConnectToSubscribers(subscribers==self.transferProtocolPayload)
+                    self.proactivelyConnectToSubscribers(subscribers=self.transferProtocolPayload)
                     return
             except Exception:
                 warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
