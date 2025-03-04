@@ -15,11 +15,14 @@ from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.pubsub import SatoriPubSubConn
+from satoriengine.veda import config
 from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satoriengine.veda.adapters import ModelAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 
 warnings.filterwarnings('ignore')
 setup(level=INFO)
+
+
 
 class Engine:
 
@@ -248,7 +251,8 @@ class Engine:
         waitingPeriod = 10
         while not self.isConnectedToServer:
             try:
-                self.dataServerIp = '0.0.0.0' #config.get().get('server ip', '0.0.0.0')
+                self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+                #self.dataServerPort = int(config.get().get('server port', 24600)) # if we use specific ports in the case of multiple neurons per ip
                 if await initiateServerConnection():
                     return True
             except Exception as e:
