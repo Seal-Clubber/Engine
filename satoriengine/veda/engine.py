@@ -82,6 +82,7 @@ class Engine:
 
     def proactivelyConnectToSubscribers(self, subscribers: list[dict]):
         '''
+        # todo: move this to the StreamModel.
         establish connections to subscriber data servers and provide
         observations on the datastreams they subscribe to.
         subscribers should look lik this:
