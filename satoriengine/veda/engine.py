@@ -8,8 +8,6 @@ import warnings
 import threading
 import numpy as np
 import pandas as pd
-from satoriengine.veda.adapters import ModelAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
-from satoriengine.veda.data import StreamForecast, validate_single_entry
 from satorilib.concepts import Observation
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
@@ -17,6 +15,8 @@ from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.pubsub import SatoriPubSubConn
+from satoriengine.veda.data import StreamForecast, validate_single_entry
+from satoriengine.veda.adapters import ModelAdapter, StarterAdapter, XgbAdapter, XgbChronosAdapter
 
 warnings.filterwarnings('ignore')
 setup(level=INFO)
