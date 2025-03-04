@@ -17,7 +17,6 @@ from satorilib.utils.time import datetimeToTimestamp, now
 from satorilib.datamanager import DataClient, DataServerApi, DataClientApi, PeerInfo, Message, Subscription
 from satorilib.wallet.evrmore.identity import EvrmoreIdentity
 from satorilib.pubsub import SatoriPubSubConn
-from satorineuron import config
 
 warnings.filterwarnings('ignore')
 setup(level=INFO)
@@ -249,7 +248,7 @@ class Engine:
         waitingPeriod = 10
         while not self.isConnectedToServer:
             try:
-                self.dataServerIp = config.get().get('server ip', '0.0.0.0')
+                self.dataServerIp = '0.0.0.0' #config.get().get('server ip', '0.0.0.0')
                 if await initiateServerConnection():
                     return True
             except Exception as e:
