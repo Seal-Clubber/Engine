@@ -6,10 +6,6 @@ from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
 from satorilib.logging import info, debug
 from Engine.satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
 
-# TODO:
-
-# while fitting pass in the entire dataset
-# about refit?
 
 class LightMVAdapter(ModelAdapter):
 
@@ -45,6 +41,7 @@ class LightMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
+        self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
     
     def compare(self, other: ModelAdapter, **kwargs) -> bool:
@@ -154,16 +151,16 @@ class LightMVAdapter(ModelAdapter):
                     "ag_args": {"name_suffix": "IgnoreAllCovariates"}, 
                 },
             ],
-            "TiDE": [ 
-                { 
-                    "disable_static_features": False,
-                    "disable_known_covariates": False, 
-                    "disable_past_covariates": False,
-                    "target_scaler": "standard",
-                    "covariate_scaler": "global",
-                    "ag_args": {"name_suffix": "UseKnownCovariates"}, 
-                },
-            ],
+            # "TiDE": [ 
+            #     { 
+            #         "disable_static_features": False,
+            #         "disable_known_covariates": False, 
+            #         "disable_past_covariates": False,
+            #         "target_scaler": "standard",
+            #         "covariate_scaler": "global",
+            #         "ag_args": {"name_suffix": "UseKnownCovariates"}, 
+            #     },
+            # ],
             "WaveNet": [
                 {
                     "disable_static_features": False,
