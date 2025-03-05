@@ -3,7 +3,7 @@ import numpy as np
 from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 from satorilib.logging import info, debug
-from Engine.satoriengine.veda.adapters.multivariate.mvadapters import FastMVAdapter, LightMVAdapter, HeavyMVAdapter 
+from satoriengine.veda.adapters.multivariate.mvadapters import FastMVAdapter, LightMVAdapter, HeavyMVAdapter 
 
 
 class MultivariateAdapter(ModelAdapter):

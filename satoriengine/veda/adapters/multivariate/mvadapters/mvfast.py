@@ -4,7 +4,7 @@ from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
 from satorilib.logging import info, debug
-from Engine.satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
+from satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
 
 
 class FastMVAdapter(ModelAdapter):
@@ -76,7 +76,9 @@ class FastMVAdapter(ModelAdapter):
     def predict(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         self._manageData(targetData, covariateData)
-        datasetWithFutureCov = self.appendCovariateFuture(self.fullDataset)
+        print(len(self.fullDataset))
+        print(len(self.covariateColNames))
+        datasetWithFutureCov = self.appendCovariateFuture(self.fullDataset, self.covariateColNames)
         prediction = self.model.predict(self.fullDataset, known_covariates=datasetWithFutureCov.drop('value', axis=1))
         resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: can also use in-built auto-gluon stuff ( optimize )
         return resultDf
@@ -94,7 +96,7 @@ class FastMVAdapter(ModelAdapter):
                         verbosity=0
                     ).fit(
                         self.fullDataset,
-                        random_seed=self.rng,
+                        # random_seed=self.rng,
                         hyperparameters={
                             "Naive": {}, 
                             "SeasonalNaive": {}, 
@@ -114,6 +116,8 @@ class FastMVAdapter(ModelAdapter):
         for colName in covariateColNameList:
             covDf = df[[colName]]
             if not covDf.empty:
+                print(colName)
+                print(len(covDf))
                 predictor = TimeSeriesPredictor(
                     prediction_length=1,
                     eval_metric="MASE",

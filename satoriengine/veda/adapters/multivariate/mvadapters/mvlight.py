@@ -4,7 +4,7 @@ from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
 from satorilib.logging import info, debug
-from Engine.satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
+from satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
 
 
 class LightMVAdapter(ModelAdapter):
@@ -53,7 +53,7 @@ class LightMVAdapter(ModelAdapter):
     def predict(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> Union[None, pd.DataFrame]:
         """prediction without training"""
         self._manageData(targetData, covariateData)
-        datsetWithFutureCov = self.appendCovariateFuture(self.fullDataset)
+        datsetWithFutureCov = self.appendCovariateFuture(self.fullDataset, self.covariateColNames)
         prediction = self.model.predict(self.fullDataset, known_covariates=datsetWithFutureCov.drop('value', axis=1))
         resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: can also use in-built auto-gluon stuff ( optimize )
         return resultDf
