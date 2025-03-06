@@ -37,6 +37,7 @@ class Engine:
         self.subscriptions: dict[str, PeerInfo] = {}
         self.publications: dict[str, PeerInfo] = {}
         self.dataServerIp: str = ''
+        self.dataServerPort: Union[int, None] = None
         self.dataClient: Union[DataClient, None] = None
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
@@ -245,14 +246,14 @@ class Engine:
 
         async def initiateServerConnection() -> bool:
             ''' local engine client authorization '''
-            self.dataClient = DataClient(self.dataServerIp, identity=self.identity)
+            self.dataClient = DataClient(self.dataServerIp, self.dataServerPort, identity=self.identity)
             return await authenticate()
 
         waitingPeriod = 10
         while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
-                #self.dataServerPort = int(config.get().get('server port', 24600)) # if we use specific ports in the case of multiple neurons per ip
+                self.dataServerPort = int(config.get().get('server port', 24602))
                 if await initiateServerConnection():
                     return True
             except Exception as e:
