@@ -52,8 +52,8 @@ class Engine:
                 'dev': ['ws://localhost:24603'],
                 'test': ['ws://test.satorinet.io:24603'],
                 'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod']
-        self.transferProtocol: Union[dict, None] = None
         self.transferProtocol: Union[str, None] = None
+        self.transferProtocolPayload: Union[dict, None] = None
 
 
     ## TODO: fix addStream to work with the new way init looks, not the old way:
@@ -281,9 +281,9 @@ class Engine:
                 if self.transferProtocol == 'pubsub':
                     self.subConnect(key=self.transferProtocolPayload)
                     return
-                if self.transferProtocol == 'p2p-proactive':
-                    self.proactivelyConnectToSubscribers(subscribers=self.transferProtocolPayload)
-                    return
+                # if self.transferProtocol == 'p2p-proactive':
+                #     self.proactivelyConnectToSubscribers(subscribers=self.transferProtocolPayload)
+                #     return
             except Exception:
                 warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
                 await asyncio.sleep(waitingPeriod)
@@ -713,7 +713,7 @@ class StreamModel:
                 import traceback
                 traceback.print_exc()
 
-        if self.transferProtocol == 'p2p':
+        if self.transferProtocol == 'p2p' and self.transferProtocol == 'p2p-proactive':
             init_task = asyncio.create_task(self.p2pInit())
 
         self.thread = threading.Thread(target=training_loop_thread, daemon=True)
