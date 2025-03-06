@@ -18,7 +18,39 @@ def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.
     )
     return data_train, data_traintest
 
+# def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
+#     target_df['date_time'] = pd.to_datetime(target_df['date_time'])
+#     target_df = target_df.set_index('date_time')
+#     start_time = target_df.index.min()
+#     end_time = target_df.index.max()
+#     sf = getSamplingFreq(target_df)
+#     full_range = pd.date_range(start=start_time, end=end_time, freq=sf)
+#     target_df = target_df.reindex(full_range).ffill()
+#     result = []
+#     processed_covariates = []
+#     for i, cov_df in enumerate(covariate_dfs, 1):
+#         cov_df = cov_df.copy()
+#         cov_df['date_time'] = pd.to_datetime(cov_df['date_time'])
+#         cov_df = cov_df.set_index('date_time')
+#         cov_df = cov_df.sort_index()
+#         processed_covariates.append((i, cov_df))
+#     result = []
+#     for target_ts in target_df.index:
+#         row_data = {
+#             'date_time': target_ts,
+#             'value': target_df.loc[target_ts, 'value']
+#         }
+#         for i, cov_df in processed_covariates:
+#             valid_indices = cov_df.index[cov_df.index <= target_ts]
+#             covariate_value = cov_df.loc[valid_indices[-1], 'value'] if len(valid_indices) > 0 else np.nan
+#             row_data[f'covariate_{i}_value'] = covariate_value
+#         result.append(row_data)
+#     alignedDataset = pd.DataFrame(result)
+#     covariateColNames = [col for col in alignedDataset.columns if col not in ['date_time', 'value']]
+#     return alignedDataset, covariateColNames
+
 def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
+    target_df = target_df.copy()
     target_df['date_time'] = pd.to_datetime(target_df['date_time'])
     target_df = target_df.set_index('date_time')
     start_time = target_df.index.min()
@@ -26,22 +58,21 @@ def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> t
     sf = getSamplingFreq(target_df)
     full_range = pd.date_range(start=start_time, end=end_time, freq=sf)
     target_df = target_df.reindex(full_range).ffill()
-    result = []
-    for target_ts in target_df.index:
-        row_data = {
-            'date_time': target_ts,
-            'value': target_df.loc[target_ts, 'value']
-        }
-        for i, cov_df in enumerate(covariate_dfs, 1):
-            cov_df['date_time'] = pd.to_datetime(cov_df['date_time'])
-            cov_df = cov_df.set_index('date_time')
-            valid_covariates = cov_df[:target_ts]
-            covariate_value = valid_covariates['value'].iloc[-1] if not valid_covariates.empty else np.nan
-            row_data[f'covariate_{i}_value'] = covariate_value
-        result.append(row_data)
-    alignedDataset = pd.DataFrame(result)
-    covariateColNames = [col for col in alignedDataset.columns if col not in ['date_time', 'value']]
-    return alignedDataset, covariateColNames
+    result_df = pd.DataFrame({'value': target_df['value']})
+    result_df = result_df.reset_index().rename(columns={'index': 'date_time'})
+    for i, cov_df in enumerate(covariate_dfs, 1):
+        cov_df = cov_df.copy()
+        cov_df['date_time'] = pd.to_datetime(cov_df['date_time'])
+        cov_df = cov_df.set_index('date_time').sort_index()
+        aligned_cov = cov_df.reindex(
+            pd.DatetimeIndex(sorted(set(cov_df.index) | set(full_range))),
+            method='ffill'
+        )
+        aligned_cov = aligned_cov.reindex(full_range)
+        cov_col_name = f'covariate_{i}_value'
+        result_df[cov_col_name] = aligned_cov['value'].values
+    covariateColNames = [col for col in result_df.columns if col not in ['date_time', 'value']]
+    return result_df, covariateColNames
 
 def getSamplingFreq(dataset: pd.DataFrame) -> str:
     def fmt(sf):
