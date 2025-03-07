@@ -64,7 +64,7 @@ class LightMVAdapter(ModelAdapter):
 
     def _multivariateFit(self) -> TimeSeriesPredictor:
         return TimeSeriesPredictor(
-            prediction_length=self.forecastingSteps,
+            prediction_length=self.forecastingSteps, # if we change the forecasting steps, the other variables will have to change accordingly
             eval_metric="MASE",
             target="value", 
             known_covariates_names=self.covariateColNames,
@@ -182,6 +182,7 @@ class LightMVAdapter(ModelAdapter):
         },
             num_val_windows = 1, 
             val_step_size = 7, 
+            refit_every_n_windows = None,
             time_limit=3600, 
             enable_ensemble=True,
         )

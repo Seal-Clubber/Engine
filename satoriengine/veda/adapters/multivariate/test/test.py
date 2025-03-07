@@ -1,5 +1,6 @@
 from satoriengine.veda.adapters.multivariate.mvadapters import FastMVAdapter, LightMVAdapter, HeavyMVAdapter
 import pandas as pd
+import datetime
 
 
 vpsAda = LightMVAdapter()
@@ -13,7 +14,13 @@ covDf3 = pd.read_csv('datasets/aggregate.csv', names=['date_time', 'value', 'id'
 # covDf4 = pd.read_csv('datasets/test.csv', names=['date_time', 'value', 'id'], header=None)
 # model = vpsAda.fit(targetDf, [covDf1])
 print("start fitting")
-model = fastAda.fit(targetDf, [covDf1, covDf2, covDf3])
+current_time = datetime.datetime.now()
+print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
+model = vpsAda.fit(targetDf, [covDf1, covDf2, covDf3])
 print("done fitting")
-resultDf = fastAda.predict(targetDf, [covDf1, covDf2, covDf3])
+current_time = datetime.datetime.now()
+print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
+resultDf = vpsAda.predict(targetDf, [covDf1, covDf2, covDf3])
+current_time = datetime.datetime.now()
+print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
 print(resultDf)

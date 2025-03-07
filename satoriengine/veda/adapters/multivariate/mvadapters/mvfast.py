@@ -43,7 +43,7 @@ class FastMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
-        # TODO : confirm about .refit stuff
+        self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
 
     def compare(self, other: Union['FastMVAdapter', None] = None, **kwargs) -> bool:
@@ -107,6 +107,7 @@ class FastMVAdapter(ModelAdapter):
                         },
                         num_val_windows = 7,
                         val_step_size = self.forecastingSteps,
+                        refit_every_n_windows = None,
                         time_limit=3600,
                         enable_ensemble=True,
                     )
