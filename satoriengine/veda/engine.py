@@ -389,6 +389,16 @@ class StreamModel:
         await self.syncData()
         await self.makeSubscription()
 
+    def returnPeerIp(self, peer: str = Union[str, None]) -> str:
+        if peer is not None:
+            return peer.split(':')[0]
+        return self.publisherHost.split(':')[0]
+
+    def returnPeerPort(self, peer: str = Union[str, None]) -> int:
+        if peer is not None:
+            return int(peer.split(':')[1])
+        return int(self.publisherHost.split(':')[1])
+
     @property
     def isConnectedToPublisher(self):
         if hasattr(self, 'dataClient') and self.dataClient is not None and self.publisherHost is not None:
@@ -405,29 +415,15 @@ class StreamModel:
 
     async def connectToPeer(self) -> bool:
         ''' Connects to a peer to receive subscription if it has an active subscription to the stream '''
-        async def authenticate(publisherIp: str) -> bool:
-            response = await self.dataClient.authenticate(publisherIp)
-            if response.status == DataServerApi.statusSuccess.value:
-                info("successfully connected to an active Publisher Ip at : ", publisherIp, color="green")
-                try:
-                    response = await self.dataClient.addActiveStream(self.streamUuid)
-                    if response.status != DataServerApi.statusSuccess.value:
-                        raise Exception(response.senderMsg)
-                    response = await self.dataClient.addActiveStream(self.predictionStreamUuid)
-                    if response.status != DataServerApi.statusSuccess.value:
-                        raise Exception(response.senderMsg)
-                except Exception as e:
-                    error("Active stream info not set: ", e)
-                return True
-            warning("Authentication failed for :", publisherIp)
-            return False
-
-        async def _isPublisherActive(publisherIp: str) -> bool:
+        async def _isPublisherActive(publisher: str) -> bool:
             ''' confirms if the publisher has the subscription stream in its available stream '''
             try:
-                response = await self.dataClient.isStreamActive(publisherIp, self.streamUuid)
+                response = await self.dataClient.isStreamActive(
+                            peerHost=self.returnPeerIp(publisher),
+                            peerPort=self.returnPeerPort(publisher),
+                            uuid=self.streamUuid)
                 if response.status == DataServerApi.statusSuccess.value:
-                    return await authenticate(publisherIp)
+                    return True
                 else:
                     raise Exception
             except Exception:
@@ -460,7 +456,10 @@ class StreamModel:
             - replace what we have
         '''
         try:
-            externalDataResponse = await self.dataClient.getRemoteStreamData(self.publisherHost, self.streamUuid)
+            externalDataResponse = await self.dataClient.getRemoteStreamData(
+                peerHost=self.returnPeerIp(), 
+                peerPort=self.returnPeerPort(),
+                uuid=self.streamUuid)
             if externalDataResponse.status == DataServerApi.statusSuccess.value:
                 externalDf = externalDataResponse.data
                 if not externalDf.equals(self.data) and len(externalDf) > 0: # TODO : maybe we can find a better logic so that we don't lose the host server's valuable data ( krishna )
@@ -486,7 +485,8 @@ class StreamModel:
         - continually generate predictions for prediction publication streams and pass that to
         '''
         await self.dataClient.subscribe(
-              peerHost=self.publisherHost,
+              peerHost=self.returnPeerIp(),
+              peerPort=self.returnPeerPort(),
               uuid=self.streamUuid,
               publicationUuid=self.predictionStreamUuid,
               callback=self.handleSubscriptionMessage)
@@ -605,7 +605,7 @@ class StreamModel:
             else:
                 raise Exception(response.senderMsg)
         except Exception as e:
-            error(e)
+            debug(e)
             return pd.DataFrame(columns=["date_time", "value", "id"])
 
     def modelPath(self) -> str:
