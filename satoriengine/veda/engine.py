@@ -253,7 +253,7 @@ class Engine:
         while not self.isConnectedToServer:
             try:
                 self.dataServerIp = config.get().get('server ip', '0.0.0.0')
-                self.dataServerPort = int(config.get().get('server port', 24602))
+                self.dataServerPort = int(config.get().get('server port', 24600))
                 if await initiateServerConnection():
                     return True
             except Exception as e:
