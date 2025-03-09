@@ -54,7 +54,7 @@ class LightMVAdapter(ModelAdapter):
         """prediction without training"""
         self._manageData(targetData, covariateData)
         datsetWithFutureCov = self.appendCovariateFuture(self.fullDataset, self.covariateColNames)
-        prediction = self.model.predict(self.fullDataset, known_covariates=datsetWithFutureCov.drop('value', axis=1))
+        prediction = self.model.predict(self.fullDataset, known_covariates=datsetWithFutureCov.tail(1).drop('value', axis=1))
         resultDf = self._getPredictionDataframe(targetData, prediction.mean()[0]) # TODO: can also use in-built auto-gluon stuff ( optimize )
         return resultDf
     
@@ -189,39 +189,53 @@ class LightMVAdapter(ModelAdapter):
     
     @staticmethod
     def appendCovariateFuture(df: pd.DataFrame, covariateColNameList: list[str]) -> pd.DataFrame:
+        last_timestamp = df.index.get_level_values('timestamp').max()
+        time_diff = df.index.get_level_values('timestamp').to_series().diff().mode()[0]
+        next_timestamp = pd.Timestamp(last_timestamp) + time_diff
+        item_id = df.index.get_level_values('item_id')[0]
+        new_row_data = {}
         for colName in covariateColNameList:
             covDf = df[[colName]]
             if not covDf.empty:
-                predictor = TimeSeriesPredictor(
-                    prediction_length=1,
-                    eval_metric="MASE",
-                    target=colName,
-                    verbosity=0,
-                ).fit(
-                    covDf,
-                    hyperparameters={
-                        "RecursiveTabular": {"ag_args": {"name_suffix": "WithLighGBMRegressor"}}
-                    },
-                    num_val_windows=1,
-                    val_step_size=1,
-                    time_limit=600,
-                    enable_ensemble=False,
-                )
-                prediction = predictor.predict(covDf)
-                covariatePredictionValue = prediction.mean()[0]
-                covariatePredictionTimestamp = str(prediction.index[0][1])
-                new_row = pd.DataFrame({
-                    'timeseriesid': [df.index[0][0]],
-                    'date_time': [covariatePredictionTimestamp],
-                    colName: [covariatePredictionValue]
-                })
-                new_row = TimeSeriesDataFrame.from_data_frame(
-                    new_row,
-                    id_column="timeseriesid",
-                    timestamp_column="date_time"
-                )
-                df = pd.concat([df, new_row])
-        return df
+                try:
+                    predictor = TimeSeriesPredictor(
+                        prediction_length=1,
+                        eval_metric="MASE",
+                        target=colName,
+                        verbosity=0,
+                    ).fit(
+                        covDf,
+                        hyperparameters={
+                            "RecursiveTabular": {"ag_args": {"name_suffix": "WithLighGBMRegressor"}}
+                        },
+                        num_val_windows=1,
+                        val_step_size=1,
+                        time_limit=600,
+                        enable_ensemble=False,
+                    )
+                    prediction = predictor.predict(covDf)
+                    new_row_data[colName] = prediction.mean()[0]
+                except Exception as e:
+                    if not covDf.empty:
+                        new_row_data[colName] = covDf[colName].iloc[-1]
+        new_row = pd.DataFrame(index=[(item_id, next_timestamp)], 
+                            columns=df.columns)
+        for col, value in new_row_data.items():
+            new_row[col] = value
+        if not isinstance(new_row.index, pd.MultiIndex):
+            new_row.index = pd.MultiIndex.from_tuples([(item_id, next_timestamp)], 
+                                                    names=df.index.names)
+        formatted_index = pd.MultiIndex.from_tuples([(item_id, next_timestamp)], 
+                                                names=df.index.names)
+        new_row.index = formatted_index
+        result_df = pd.concat([df, new_row])
+        try:
+            if isinstance(df, TimeSeriesDataFrame):
+                result_df = TimeSeriesDataFrame(result_df)
+        except (ImportError, Exception) as e:
+            pass
+        return result_df
+
     
     @staticmethod
     def _getPredictionDataframe(targetDataframe: pd.DataFrame, predictionValue: float) -> pd.DataFrame:
