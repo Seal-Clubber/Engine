@@ -180,8 +180,8 @@ class LightMVAdapter(ModelAdapter):
                 },
             ], 
         },
-            num_val_windows = 1, 
-            val_step_size = 7, 
+            num_val_windows = 7, # no.of backtests
+            val_step_size = self.forecastingSteps, # step size bw backtests
             refit_every_n_windows = None,
             time_limit=3600, 
             enable_ensemble=True,

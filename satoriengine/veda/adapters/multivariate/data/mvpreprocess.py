@@ -26,7 +26,7 @@ def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> t
     end_time = target_df.index.max()
     sf = getSamplingFreq(target_df)
     full_range = pd.date_range(start=start_time, end=end_time, freq=sf)
-    target_df = target_df.reindex(full_range).ffill()
+    target_df = target_df.reindex(full_range, method='nearest').ffill()
     result_df = pd.DataFrame({'value': target_df['value']})
     result_df = result_df.reset_index().rename(columns={'index': 'date_time'})
     for i, cov_df in enumerate(covariate_dfs, 1):
