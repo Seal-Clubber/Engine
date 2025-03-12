@@ -22,6 +22,7 @@ setup(level=INFO)
 
 
 class Engine:
+
     def __init__(self, streams: list[Stream], pubstreams: list[Stream]):
         self.streams = streams
         self.pubstreams = pubstreams
@@ -32,6 +33,20 @@ class Engine:
         self.initializeModels()
         self.paused: bool = False
         self.threads: list[threading.Thread] = []
+
+    def addStream(self, stream: Stream, pubStream: Stream):
+        ''' add streams to a running engine '''
+        # don't duplicate effort
+        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
+            return
+        self.streams.append(stream)
+        self.pubstreams.append(pubStream)
+        self.streamModels[stream.streamId] = StreamModel(
+            streamId=stream.streamId,
+            predictionStreamId=pubStream.streamId,
+            predictionProduced=self.predictionProduced)
+        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
+        self.streamModels[stream.streamId].run_forever()
 
     def pause(self, force: bool = False):
         if force:
@@ -182,7 +197,7 @@ class StreamModel:
         if os.path.isfile(self.modelPath()):
             try:
                 os.remove(self.modelPath())
-                debug("Deleted failed model file", color="teal")
+                debug("Deleted failed model file:", self.modelPath(), color="teal")
             except Exception as e:
                 error(f"Failed to delete model file: {str(e)}")
         backupModel = self.defaultAdapters[-1]()
@@ -291,6 +306,9 @@ class StreamModel:
         using the best known model to make predictions on demand.
         Breaks if backtest error stagnates for 3 iterations.
         """
+        # for testing
+        #if self.modelPath() != "/Satori/Neuron/models/veda/YyBHl6bN1GejAEyjKwEDmywFU-M-/XgbChronosAdapter.joblib":
+        #    return
         while len(self.data) > 0:
             if self.paused:
                 time.sleep(10)
