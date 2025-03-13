@@ -144,6 +144,8 @@ class XgbChronosAdapter(ModelAdapter):
 
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:
         """ Train a new model """
+        if self.chronos.model is None:
+            return TrainingResult(0, self)
         self._manageData(data)
         x = self.dataset.iloc[:-1, :-1]
         y = self.dataset.iloc[:-1, -1]
