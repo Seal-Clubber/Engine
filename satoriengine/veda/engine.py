@@ -8,7 +8,7 @@ import warnings
 import threading
 import numpy as np
 import pandas as pd
-from satorilib.concepts import Observation
+from satorilib.concepts import Observation, Stream
 from satorilib.logging import INFO, setup, debug, info, warning, error
 from satorilib.utils.system import getProcessorCount
 from satorilib.utils.time import datetimeToTimestamp, now
@@ -83,6 +83,20 @@ class Engine:
     #    self.streamModels[stream.streamId].chooseAdapter(inplace=True)
     #    self.streamModels[stream.streamId].run_forever()
 
+    def addStream(self, stream: Stream, pubStream: Stream):
+        ''' add streams to a running engine '''
+        # don't duplicate effort
+        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
+            return
+        self.streams.append(stream)
+        self.pubstreams.append(pubStream)
+        self.streamModels[stream.streamId] = StreamModel(
+            streamId=stream.streamId,
+            predictionStreamId=pubStream.streamId,
+            predictionProduced=self.predictionProduced)
+        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
+        self.streamModels[stream.streamId].run_forever()
+
     def proactivelyConnectToSubscribers(self, subscribers: list[dict]):
         '''
         # todo: move this to the StreamModel.
@@ -117,7 +131,6 @@ class Engine:
             subscription: bool = True,
         ):
             """establishes a connection to the satori server, returns connection object"""
-            from satorineuron.init.start import getStart
 
             def router(response: str):
                 ''' gets observation from pubsub servers '''
@@ -214,20 +227,6 @@ class Engine:
         await self.getPubSubInfo()
         await self.initializeModels()
         # await asyncio.Event().wait()
-
-    def addStream(self, stream: Stream, pubStream: Stream):
-        ''' add streams to a running engine '''
-        # don't duplicate effort
-        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
-            return
-        self.streams.append(stream)
-        self.pubstreams.append(pubStream)
-        self.streamModels[stream.streamId] = StreamModel(
-            streamId=stream.streamId,
-            predictionStreamId=pubStream.streamId,
-            predictionProduced=self.predictionProduced)
-        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
-        self.streamModels[stream.streamId].run_forever()
 
     def pause(self, force: bool = False):
         if force:
@@ -471,7 +470,7 @@ class StreamModel:
         '''
         try:
             externalDataResponse = await self.dataClient.getRemoteStreamData(
-                peerHost=self.returnPeerIp(), 
+                peerHost=self.returnPeerIp(),
                 peerPort=self.returnPeerPort(),
                 uuid=self.streamUuid)
             if externalDataResponse.status == DataServerApi.statusSuccess.value:
