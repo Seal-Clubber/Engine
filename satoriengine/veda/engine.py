@@ -215,6 +215,20 @@ class Engine:
         await self.initializeModels()
         # await asyncio.Event().wait()
 
+    def addStream(self, stream: Stream, pubStream: Stream):
+        ''' add streams to a running engine '''
+        # don't duplicate effort
+        if stream.streamId.uuid in [s.streamId.uuid for s in self.streams]:
+            return
+        self.streams.append(stream)
+        self.pubstreams.append(pubStream)
+        self.streamModels[stream.streamId] = StreamModel(
+            streamId=stream.streamId,
+            predictionStreamId=pubStream.streamId,
+            predictionProduced=self.predictionProduced)
+        self.streamModels[stream.streamId].chooseAdapter(inplace=True)
+        self.streamModels[stream.streamId].run_forever()
+
     def pause(self, force: bool = False):
         if force:
             self.paused = True
@@ -581,7 +595,7 @@ class StreamModel:
         if os.path.isfile(self.modelPath()):
             try:
                 os.remove(self.modelPath())
-                debug('Deleted failed model file', color='teal')
+                debug("Deleted failed model file:", self.modelPath(), color="teal")
             except Exception as e:
                 error(f'Failed to delete model file: {str(e)}')
         backupModel = self.defaultAdapters[-1]()
@@ -669,6 +683,9 @@ class StreamModel:
         model so far in order to replace it if the new model is better, always
         using the best known model to make predictions on demand.
         """
+        # for testing
+        #if self.modelPath() != "/Satori/Neuron/models/veda/YyBHl6bN1GejAEyjKwEDmywFU-M-/XgbChronosAdapter.joblib":
+        #    return
         while len(self.data) > 0:
             if self.paused:
                 await asyncio.sleep(10)
@@ -688,13 +705,13 @@ class StreamModel:
                 else:
                     debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry', print=True)
                     self.failedAdapters.append(self.pilot)
-                    await asyncio.sleep(60*10)
+                    await asyncio.sleep(60)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 error(e)
                 try:
-                    print(self.pilot.dataset)
+                    debug(self.pilot.dataset)
                 except Exception as e:
                     pass
 

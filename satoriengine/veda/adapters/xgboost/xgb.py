@@ -51,8 +51,8 @@ class XgbAdapter(ModelAdapter):
             if os.path.isfile(modelPath):
                 os.remove(modelPath)
             try:
-                if 'XgbPipeline' not in modelPath:
-                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbPipeline.joblib'
+                if 'XgbAdapter' not in modelPath:
+                    modelPath = '/'.join(modelPath.split('/')[:-1]) + '/' + 'XgbAdapter.joblib'
                     return self.load(modelPath)
             except Exception as _:
                 pass
@@ -80,6 +80,7 @@ class XgbAdapter(ModelAdapter):
         if not isinstance(other, self.__class__):
             return True
         thisScore = self.score()
+        #otherScore = other.score(test_x=self.testX, test_y=self.testY)
         otherScore = other.modelError or other.score()
         isImproved = thisScore < otherScore
         if isImproved:
@@ -95,11 +96,13 @@ class XgbAdapter(ModelAdapter):
                 f'\npilot  score: {thisScore}')
         return isImproved
 
-    def score(self, **kwargs) -> float:
-        """will score the model"""
+    def score(self, test_x=None, test_y=None, **kwargs) -> float:
+        """ Will score the model """
         if self.model is None:
             return np.inf
-        self.modelError = mean_absolute_error(self.testY, self.model.predict(self.testX))
+        self.modelError = mean_absolute_error(
+            test_y if test_y is not None else self.testY,
+            self.model.predict(test_x if test_x is not None else self.testX))
         return self.modelError
 
     def fit(self, data: pd.DataFrame, **kwargs) -> TrainingResult:

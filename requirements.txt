@@ -40,4 +40,4 @@ PyYAML==6.0 #5.4.1
 reactivex==4.0.4 #4.0.0b5
 
 # needed for lomb-scargle interpolation
-astropy==7.0.0
+astropy==6.1.7

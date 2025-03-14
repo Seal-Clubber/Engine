@@ -180,7 +180,7 @@ class DataManager(Cached):
                 peer = self.getStart().ipfs.address()
                 payload = {
                     "author": {"pubkey": self.getStart().wallet.publicKey},
-                    "stream": observation.key.topic(asJson=False, authorAsPubkey=True),
+                    "stream": observation.key.mapId,
                     "ipfs": pinAddress,
                     "disk": system.directorySize(path),
                     **({"peer": peer} if peer is not None else {}),
@@ -272,7 +272,7 @@ class DataManager(Cached):
                         print=True,
                     )
                     start.publish(
-                        topic=streamId.topic(),
+                        topic=streamId.jsonId,
                         data=data,
                         observationTime=timestamp,
                         observationHash=observationHash,
