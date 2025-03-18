@@ -41,6 +41,7 @@ class LightMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
+        self.model.feature_importance(self.fullDataset, relative_scores=True)
         self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
     
@@ -151,16 +152,6 @@ class LightMVAdapter(ModelAdapter):
                     "ag_args": {"name_suffix": "IgnoreAllCovariates"}, 
                 },
             ],
-            # "TiDE": [ 
-            #     { 
-            #         "disable_static_features": False,
-            #         "disable_known_covariates": False, 
-            #         "disable_past_covariates": False,
-            #         "target_scaler": "standard",
-            #         "covariate_scaler": "global",
-            #         "ag_args": {"name_suffix": "UseKnownCovariates"}, 
-            #     },
-            # ],
             "WaveNet": [
                 {
                     "disable_static_features": False,
@@ -179,9 +170,20 @@ class LightMVAdapter(ModelAdapter):
                     "ag_args": {"name_suffix": "IgnoreAllCovariates"}, 
                 },
             ], 
+            # Models that can break
+            # "TiDE": [ 
+            #     { 
+            #         "disable_static_features": False,
+            #         "disable_known_covariates": False, 
+            #         "disable_past_covariates": False,
+            #         "target_scaler": "standard",
+            #         "covariate_scaler": "global",
+            #         "ag_args": {"name_suffix": "UseKnownCovariates"}, 
+            #     },
+            # ],
         },
             num_val_windows = 7, # no.of backtests
-            val_step_size = self.forecastingSteps, # step size bw backtests
+            val_step_size = None, # step size bw backtests
             refit_every_n_windows = None,
             time_limit=3600, 
             enable_ensemble=True,

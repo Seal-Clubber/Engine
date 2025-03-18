@@ -5,6 +5,8 @@ from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 from satorilib.logging import info, debug
 from satoriengine.veda.adapters.multivariate.mvadapters import FastMVAdapter, LightMVAdapter, HeavyMVAdapter 
 
+# Whenever there is a change 
+
 
 class MultivariateAdapter(ModelAdapter):
     @staticmethod
