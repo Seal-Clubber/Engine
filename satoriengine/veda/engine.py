@@ -447,9 +447,7 @@ class StreamModel:
             self.publisherHost = self.peerInfo.publishersIp[0]
             if await _isPublisherActive(self.publisherHost):
                 return True
-            self.peerInfo.subscribersIp = [
-                ip for ip in self.peerInfo.subscribersIp if ip != self.dataClient.serverHostPort[0]
-            ]
+            self.peerInfo.subscribersIp = [ip for ip in self.peerInfo.subscribersIp]
             self.rng.shuffle(self.peerInfo.subscribersIp)
             for subscriberIp in self.peerInfo.subscribersIp:
                 if await _isPublisherActive(subscriberIp):
@@ -457,6 +455,7 @@ class StreamModel:
                     return True
             self.publisherHost = None
             debug('Waiting for some time', print=True)
+            # switch to pubsub
             # await asyncio.sleep(60*60)
             await asyncio.sleep(10)
 
