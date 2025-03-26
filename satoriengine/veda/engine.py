@@ -148,7 +148,7 @@ class Engine:
                                 f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
                                 print=True)
                             streamModel = self.streamModels.get(obs.streamId.uuid)
-                            if isinstance(streamModel, StreamModel):
+                            if isinstance(streamModel, StreamModel) and getattr(streamModel, 'UsePubsub', True):
                                 def run_async_in_thread():
                                     try:
                                         loop = asyncio.new_event_loop()
@@ -381,6 +381,7 @@ class StreamModel:
         self.rng = np.random.default_rng(37)
         self.publisherHost = None
         self.transferProtocol: str = transferProtocol
+        self.usePubSub: bool = False
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -438,22 +439,24 @@ class StreamModel:
                 else:
                     raise Exception
             except Exception:
-                warning('Failed to connect to an active Publisher ')
+                # warning('Failed to connect to an active Publisher ')
                 return False
 
         while not self.isConnectedToPublisher:
             self.publisherHost = self.peerInfo.publishersIp[0]
             if await _isPublisherActive(self.publisherHost):
+                self.usePubSub = False
                 return True
             self.peerInfo.subscribersIp = [ip for ip in self.peerInfo.subscribersIp]
             self.rng.shuffle(self.peerInfo.subscribersIp)
             for subscriberIp in self.peerInfo.subscribersIp:
                 if await _isPublisherActive(subscriberIp):
                     self.publisherHost = subscriberIp
+                    self.usePubSub = False
                     return True
             self.publisherHost = None
-            debug('Waiting for some time', print=True)
-            # switch to pubsub
+            warning('Failed to connect to Peers, switching to PubSub', print=True)
+            self.usePubSub = True
             await asyncio.sleep(60*60)
 
     async def syncData(self):
