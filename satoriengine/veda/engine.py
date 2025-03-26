@@ -53,7 +53,6 @@ class Engine:
                 'test': ['ws://test.satorinet.io:24603'],
                 'prod': ['ws://pubsub1.satorinet.io:24603', 'ws://pubsub5.satorinet.io:24603', 'ws://pubsub6.satorinet.io:24603']}['prod']
         self.transferProtocol: Union[str, None] = None
-        self.transferProtocolPayload: Union[dict, None] = None
 
 
     ## TODO: fix addStream to work with the new way init looks, not the old way:
@@ -156,6 +155,7 @@ class Engine:
                                         asyncio.set_event_loop(loop)
                                         loop.run_until_complete(
                                             streamModel.handleSubscriptionMessage(
+                                                "Subscription",
                                                 message=Message({
                                                     'data': obs,
                                                     'status': 'stream/observation'}),
@@ -280,7 +280,8 @@ class Engine:
             try:
                 pubSubResponse: Message = await self.dataClient.getPubsubMap()
                 self.transferProtocol = pubSubResponse.streamInfo.get('transferProtocol')
-                self.transferProtocolPayload = pubSubResponse.streamInfo.get('transferProtocolPayload')
+                transferProtocolPayload = pubSubResponse.streamInfo.get('transferProtocolPayload')
+                transferProtocolKey = pubSubResponse.streamInfo.get('transferProtocolKey')
                 pubSubMapping = pubSubResponse.streamInfo.get('pubSubMapping')
                 if pubSubResponse.status == DataServerApi.statusSuccess.value and pubSubMapping:
                     for sub_uuid, data in pubSubMapping.items():
@@ -291,12 +292,9 @@ class Engine:
                         info(pubSubResponse.senderMsg, color='green')
                 else:
                     raise Exception
-                if self.transferProtocol == 'pubsub':
-                    self.subConnect(key=self.transferProtocolPayload)
+                if self.transferProtocol == 'pubsub-support':
+                    self.subConnect(key=transferProtocolKey)
                     return
-                # if self.transferProtocol == 'p2p-proactive':
-                #     self.proactivelyConnectToSubscribers(subscribers=self.transferProtocolPayload)
-                #     return
             except Exception:
                 warning(f"Failed to fetch pub-sub info, waiting for {waitingPeriod} seconds")
                 await asyncio.sleep(waitingPeriod)
@@ -456,8 +454,7 @@ class StreamModel:
             self.publisherHost = None
             debug('Waiting for some time', print=True)
             # switch to pubsub
-            # await asyncio.sleep(60*60)
-            await asyncio.sleep(10)
+            await asyncio.sleep(60*60)
 
     async def syncData(self):
         '''
@@ -703,7 +700,7 @@ class StreamModel:
                 else:
                     debug(f'model training failed on {self.streamUuid} waiting 10 minutes to retry', print=True)
                     self.failedAdapters.append(self.pilot)
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(600)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -728,7 +725,7 @@ class StreamModel:
                 import traceback
                 traceback.print_exc()
 
-        if self.transferProtocol == 'p2p' and self.transferProtocol == 'p2p-proactive':
+        if self.transferProtocol == 'p2p' or self.transferProtocol == 'p2p-proactive' or self.transferProtocol == 'pubsub-support':
             init_task = asyncio.create_task(self.p2pInit())
 
         self.thread = threading.Thread(target=training_loop_thread, daemon=True)
