@@ -146,8 +146,13 @@ class Engine:
                                         traceback.print_exc()
                                     finally:
                                         loop.close()
+                                        # Remove this thread from the list of active threads
+                                        if thread in self.threads:
+                                            self.threads.remove(thread)
+                                
                                 thread = threading.Thread(target=run_async_in_thread)
                                 thread.daemon = True
+                                self.threads.append(thread)
                                 thread.start()
                         except json.JSONDecodeError:
                             info('received unparsable message:', response, print=True)
