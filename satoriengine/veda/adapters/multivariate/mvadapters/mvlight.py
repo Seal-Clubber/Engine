@@ -11,6 +11,7 @@ class LightMVAdapter(ModelAdapter):
 
     @staticmethod
     def condition(*args, **kwargs) -> float:
+        # TODO: change this appropriately
         if (
             isinstance(kwargs.get('availableRamGigs'), float)
             and kwargs.get('availableRamGigs') < .1
@@ -41,7 +42,6 @@ class LightMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
-        self.model.feature_importance(self.fullDataset, relative_scores=True)
         self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
     
