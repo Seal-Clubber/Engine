@@ -72,7 +72,7 @@ class LightMVAdapter(ModelAdapter):
             verbosity=0
         ).fit(
             self.fullDataset,
-            random_seed=self.rng, 
+            # random_seed=self.rng, 
             hyperparameters={
                 # hyperparameter settings for VPS Satori adapter
                 # Baseline models

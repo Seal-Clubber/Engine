@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from autogluon.timeseries import TimeSeriesDataFrame
+import holidays
 
 
 def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -13,9 +14,26 @@ def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.
         timestamp_column="date_time"
     )
     num_rows = data.num_timesteps_per_item()[1]
+    timestamps = data.index.get_level_values("timestamp")
+    data["hour"] = timestamps.hour
+    data["dayofweek"] = timestamps.weekday
+    # data["weekend"] = timestamps.weekday.isin(WEEKEND_INDICES).astype(float)
+    # data["month"] = timestamps.month
+    data["dayofyear"] = timestamps.dayofyear   
+    data["year"] = timestamps.year    
+    # data["quarter"] = timestamps.quarter
+    US_holidays = holidays.country_holidays(
+        country="US",  # make sure to select the correct country/region!
+        # Add + 1 year to make sure that holidays are initialized for the forecast horizon
+        years=range(timestamps.min().year, timestamps.max().year + 1),
+    )
+    # print('US_holidays:', US_holidays)
+    data = add_holiday_features(data, US_holidays)
     data_train, data_traintest = data.train_test_split(
         prediction_length = forecasting_steps
     )
+    covariateColNames = [col for col in data_traintest.columns if col not in ['date_time', 'value']]
+    print(covariateColNames)
     return data_train, data_traintest
 
 def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
@@ -66,3 +84,17 @@ def getSamplingFreq(dataset: pd.DataFrame) -> str:
     else:
         raise ValueError
     return sampling_frequency        
+
+def add_holiday_features(
+    data: TimeSeriesDataFrame,
+    country_holidays: dict,
+    include_holiday_indicator: bool = True,
+) -> TimeSeriesDataFrame:
+    """Add holiday indicator column to a TimeSeriesDataFrame."""
+    data = data.copy()
+    timestamps = data.index.get_level_values("timestamp")
+    country_holidays_df = pd.get_dummies(pd.Series(country_holidays)).astype(float)
+    holidays_df = country_holidays_df.reindex(timestamps.date).fillna(0)
+    if include_holiday_indicator:
+        data["holiday"] = holidays_df.max(axis=1).values
+    return data
