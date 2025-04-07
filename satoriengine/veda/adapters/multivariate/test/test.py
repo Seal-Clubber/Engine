@@ -13,24 +13,25 @@ covDf2 = pd.read_csv('datasets/co_created/dataset_non_correlated.csv', names=['d
 # covDf3 = pd.read_csv('datasets/aggregate.csv', names=['date_time', 'value', 'id'], header=None)
 # covDf4 = pd.read_csv('datasets/test.csv', names=['date_time', 'value', 'id'], header=None)
 
-adap = LightMVAdapter()
 # adap = FastMVAdapter()
+# adap = LightMVAdapter()
+adap = HeavyMVAdapter()
 
-# print("start fitting")
-# current_time = datetime.datetime.now()
-# print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
+print("start fitting")
+current_time = datetime.datetime.now()
+print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
 
-# model = adap.fit(targetDf[:-4], [covDf1[:-4], covDf2[:-4]])
+model = adap.fit(targetDf[:-4], [covDf1[:-4], covDf2[:-4]])
 
-# current_time = datetime.datetime.now()
-# print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
-# print("done fitting")
+current_time = datetime.datetime.now()
+print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")
+print("done fitting")
 
-# os.makedirs("models", exist_ok=True)
-# state = {'stableModel': model}
-# joblib.dump(state, 'models/vpsnc.joblib')
+os.makedirs("models", exist_ok=True)
+state = {'stableModel': model}
+joblib.dump(state, 'models/heavy1.joblib')
 
-model = joblib.load('models/vpsnc.joblib')['stableModel'].model
+model = joblib.load('models/heavy1.joblib')['stableModel'].model
 
 current_time = datetime.datetime.now()
 print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")

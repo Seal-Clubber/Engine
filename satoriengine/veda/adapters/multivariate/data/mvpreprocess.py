@@ -4,7 +4,7 @@ from autogluon.timeseries import TimeSeriesDataFrame
 import holidays
 
 
-def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.DataFrame]:
+def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     data['date_time'] = pd.to_datetime(data['date_time'])  #convert to datetime
     timeseriesid = 1
     data['timeseriesid'] = timeseriesid #add new colum 'id' to dataframe
@@ -33,10 +33,9 @@ def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.
         prediction_length = forecasting_steps
     )
     covariateColNames = [col for col in data_traintest.columns if col not in ['date_time', 'value']]
-    print(covariateColNames)
-    return data_train, data_traintest
+    return data_train, data_traintest, covariateColNames
 
-def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
+def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> pd.DataFrame:
     target_df = target_df.copy()
     target_df['date_time'] = pd.to_datetime(target_df['date_time'])
     target_df = target_df.set_index('date_time')
@@ -58,8 +57,7 @@ def conformData(target_df: pd.DataFrame, covariate_dfs: list[pd.DataFrame]) -> t
         aligned_cov = aligned_cov.reindex(full_range)
         cov_col_name = f'covariate_{i}_value'
         result_df[cov_col_name] = aligned_cov['value'].values
-    covariateColNames = [col for col in result_df.columns if col not in ['date_time', 'value']]
-    return result_df, covariateColNames
+    return result_df
 
 def getSamplingFreq(dataset: pd.DataFrame) -> str:
     def fmt(sf):

@@ -2,7 +2,9 @@ import pandas as pd
 import numpy as np
 from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
-from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+# from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+from autogluon.timeseries import TimeSeriesDataFrame
+from satoriengine.veda.adapters.multivariate.mvadapters.modified import TimeSeriesPredictor
 from satorilib.logging import info, debug
 from satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
 
@@ -60,8 +62,8 @@ class LightMVAdapter(ModelAdapter):
         return resultDf
     
     def _manageData(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame]):
-        conformedData, self.covariateColNames = conformData(targetData, covariateData) 
-        self.dataTrain, self.fullDataset = createTrainTest(conformedData, self.forecastingSteps)
+        conformedData = conformData(targetData, covariateData) 
+        self.dataTrain, self.fullDataset, self.covariateColNames = createTrainTest(conformedData, self.forecastingSteps)
 
     def _multivariateFit(self) -> TimeSeriesPredictor:
         return TimeSeriesPredictor(

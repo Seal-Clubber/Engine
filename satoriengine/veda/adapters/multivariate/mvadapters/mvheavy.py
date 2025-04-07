@@ -2,7 +2,9 @@ import pandas as pd
 import numpy as np
 from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
-from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+# from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+from autogluon.timeseries import TimeSeriesDataFrame
+from satoriengine.veda.adapters.multivariate.mvadapters.modified import TimeSeriesPredictor
 from satorilib.logging import info, debug
 from satoriengine.veda.adapters.multivariate.data import conformData, createTrainTest, getSamplingFreq
 
@@ -42,10 +44,13 @@ class HeavyMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
-        impFeatures = self.model.feature_importance(self.fullDataset, relative_scores=True)
-        maxImportance = impFeatures['importance'].max()
+        print("initial fitting done")
+        print("Before doing feature importance", self.covariateColNames)
+        featureAttributes = self.model.feature_importance(self.fullDataset, relative_scores=True)
+        maxImportance = featureAttributes['importance'].max()
         # Here we update the the original co-variate column list with the important feature list
-        self.covariateColNames = maxImportance[impFeatures['importance'] > maxImportance * 0.01].index.tolist()
+        self.covariateColNames = featureAttributes[featureAttributes['importance'] > (maxImportance * 0.01)].index.tolist()
+        print("After doing feature importance", self.covariateColNames)
         self.model = self._multivariateFit()
         self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
@@ -65,8 +70,8 @@ class HeavyMVAdapter(ModelAdapter):
         return resultDf
     
     def _manageData(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame]):
-        conformedData, self.covariateColNames = conformData(targetData, covariateData) 
-        self.dataTrain, self.fullDataset = createTrainTest(conformedData, self.forecastingSteps)
+        conformedData = conformData(targetData, covariateData) 
+        self.dataTrain, self.fullDataset, self.covariateColNames = createTrainTest(conformedData, self.forecastingSteps)
 
     def _multivariateFit(self) -> TimeSeriesPredictor:
         return TimeSeriesPredictor(
