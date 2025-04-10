@@ -295,6 +295,7 @@ class StreamModel:
                 f'to {adapter.__name__} on {self.streamId}',
                 color='teal')
             self.adapter = adapter
+            debug('chosen adapter:', self.adapter.__name__)
             self.pilot = adapter(uid=self.streamId)
             self.pilot.load(self.modelPath())
         return adapter
@@ -328,14 +329,15 @@ class StreamModel:
                 else:
                     debug(f'model training failed on {self.streamId} waiting 10 minutes to retry')
                     self.failedAdapters.append(self.pilot)
-                    time.sleep(60*10)
+                    debug('failed adapters:', self.failedAdapters)
+                    time.sleep(10)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 error(e)
                 try:
                     import numpy as np
-                    print(self.pilot.dataset)
+                    debug(self.pilot.dataset)
                 except Exception as e:
                     pass
 
