@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import datetime
 from typing import Union
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 # from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
@@ -31,7 +32,7 @@ class LightMVAdapter(ModelAdapter):
         self.modelError: float = 0
         self.covariateColNames: list[str] = []
         self.forecastingSteps: int = 1
-        self.rng = np.random.default_rng(37)
+        self.rng = np.random.default_rng(datetime.datetime.now().microsecond // 100)
 
     def load(self, modelPath: str, **kwargs) -> Union[None, "ModelAdapter"]:
         """loads the model model from disk if present"""

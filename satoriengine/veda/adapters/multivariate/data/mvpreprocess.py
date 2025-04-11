@@ -2,12 +2,66 @@ import pandas as pd
 import numpy as np
 from autogluon.timeseries import TimeSeriesDataFrame
 import holidays
+from sklearn.preprocessing import (
+    FunctionTransformer,
+    PolynomialFeatures,
+)
 
 
-def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+def createTrainTest(data, forecasting_steps: int = 1, includeMulFeatures: bool = False, isUS: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     data['date_time'] = pd.to_datetime(data['date_time'])  #convert to datetime
     timeseriesid = 1
+    hour_period = 24
+    data["hour"] = data["date_time"].dt.hour
+    # covariates["hour_sin"] = sin_transformer(24).fit_transform(covariates)["hour"]
+    data["hour_sin"] = np.sin(data["hour"] / hour_period * 2 * np.pi)
+    # covariates["hour_cos"] = cos_transformer(24).fit_transform(covariates)["hour"]
+    data["hour_cos"] = np.cos(data["hour"] / hour_period * 2 * np.pi)
+    # cos_transformer(24).fit_transform(covariates)["hour"]
+
+    dayofweek_period = 7
+    data["dayofweek"] =  data["date_time"].dt.dayofweek
+    data["dayofweek_sin"] = np.sin(data["dayofweek"] / dayofweek_period * 2 * np.pi)
+    data["dayofweek_cos"] = np.cos(data["dayofweek"] / dayofweek_period * 2 * np.pi)
+
+    # We could do the sin and cos transform for month, week, or quarter
+    
+    # WEEKEND_INDICES = [5, 6] # new
+    # data["weekend"] = timestamps.weekday.isin(WEEKEND_INDICES).astype(float)
+    # data["month"] = timestamps.month
+    # data["week"] = timestamps.week
+    # data["quarter"] = timestamps.quarter
+    data["dayofyear"] = data["date_time"].dt.dayofyear
+    data["year"] = data["date_time"].dt.year
+
     data['timeseriesid'] = timeseriesid #add new colum 'id' to dataframe
+
+    if includeMulFeatures:
+        # Order 2 multiplicative interactions
+        # ==============================================================================
+        transformer_multiply = PolynomialFeatures(
+                            degree           = 2,
+                            interaction_only = True,
+                            include_bias     = False
+                        ).set_output(transform="pandas")
+        multiplicative_cols = [
+            'value',
+            'hour_sin', 
+            'hour_cos',
+            'dayofweek_sin',
+            'dayofweek_cos',
+            'dayofyear'
+        ]
+        multiplicative_features = transformer_multiply.fit_transform(data[multiplicative_cols])
+        multiplicative_features = multiplicative_features.drop(columns=multiplicative_cols)
+
+        # multiplicative_features.columns = [f"mult_{col}" for col in multiplicative_features.columns]
+        multiplicative_features.columns = [f"{col}" for col in multiplicative_features.columns]
+        multiplicative_features.columns = multiplicative_features.columns.str.replace(" ", "*")
+        assert all(multiplicative_features.index == data.index)
+
+        data = pd.concat([data, multiplicative_features], axis=1)
+
     data = TimeSeriesDataFrame.from_data_frame(
         data,
         id_column="timeseriesid",
@@ -15,20 +69,20 @@ def createTrainTest(data, forecasting_steps: int = 1) -> tuple[pd.DataFrame, pd.
     )
     num_rows = data.num_timesteps_per_item()[1]
     timestamps = data.index.get_level_values("timestamp")
-    data["hour"] = timestamps.hour
-    data["dayofweek"] = timestamps.weekday
-    # data["weekend"] = timestamps.weekday.isin(WEEKEND_INDICES).astype(float)
-    # data["month"] = timestamps.month
-    data["dayofyear"] = timestamps.dayofyear   
-    data["year"] = timestamps.year    
+    # data["hour"] = timestamps.hour
+    # data["dayofweek"] = timestamps.weekday
+    # # data["weekend"] = timestamps.weekday.isin(WEEKEND_INDICES).astype(float)
+    # # data["month"] = timestamps.month
+    # data["dayofyear"] = timestamps.dayofyear   
+    # data["year"] = timestamps.year    
     # data["quarter"] = timestamps.quarter
-    US_holidays = holidays.country_holidays(
-        country="US",  # make sure to select the correct country/region!
-        # Add + 1 year to make sure that holidays are initialized for the forecast horizon
-        years=range(timestamps.min().year, timestamps.max().year + 1),
-    )
-    # print('US_holidays:', US_holidays)
-    data = add_holiday_features(data, US_holidays)
+    if isUS:
+        US_holidays = holidays.country_holidays(
+            country="US",  # make sure to select the correct country/region!
+            # Add + 1 year to make sure that holidays are initialized for the forecast horizon
+            years=range(timestamps.min().year, timestamps.max().year + 1),
+        )
+        data = add_holiday_features(data, US_holidays)
     data_train, data_traintest = data.train_test_split(
         prediction_length = forecasting_steps
     )

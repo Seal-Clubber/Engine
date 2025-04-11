@@ -1,4 +1,5 @@
 from satoriengine.veda.adapters.multivariate.mvadapters import FastMVAdapter, LightMVAdapter, HeavyMVAdapter
+from satoriengine.veda.adapters.multivariate.data.mvpreprocess import conformData, createTrainTest
 import pandas as pd
 import datetime
 import os
@@ -29,9 +30,17 @@ print("done fitting")
 
 os.makedirs("models", exist_ok=True)
 state = {'stableModel': model}
-joblib.dump(state, 'models/heavy1.joblib')
+joblib.dump(state, 'models/heavy3.joblib')
 
-model = joblib.load('models/heavy1.joblib')['stableModel'].model
+conformedData = conformData(targetDf[:-1], [covDf1[:-1], covDf2[:-1]]) 
+dataTrain, fullDataset, covariateColNames = createTrainTest(conformedData, 1, False, True)
+
+model = joblib.load('models/heavy3.joblib')['stableModel'].model
+print(type(model.model))
+results = model.model.leaderboard(fullDataset)
+sortedresults = results.sort_values('score_val').iloc[::-1]
+sortedresults.rename(columns={'score_test': 'score_trainingdata', 'score_val': 'score_testdata'}, inplace=True)
+print(sortedresults)
 
 current_time = datetime.datetime.now()
 print(f"Current time with milliseconds: {current_time.strftime('%H:%M:%S.%f')[:-3]}")

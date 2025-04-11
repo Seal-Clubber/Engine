@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Union
+import datetime
 from satoriengine.veda.adapters.interface import ModelAdapter, TrainingResult
 # from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
 from autogluon.timeseries import TimeSeriesDataFrame
@@ -31,7 +32,9 @@ class HeavyMVAdapter(ModelAdapter):
         self.modelError: float = 0.0
         self.covariateColNames: list[str] = []
         self.forecastingSteps: int = 1
-        self.rng = np.random.default_rng(37)
+        self.includeMulFeatures: bool = False
+        self.isUS: bool = True
+        self.rng = np.random.default_rng(datetime.datetime.now().microsecond // 100)
 
     def load(self, modelPath: str, **kwargs) -> Union[None, "ModelAdapter"]:
         """loads the model model from disk if present"""
@@ -44,13 +47,10 @@ class HeavyMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
-        print("initial fitting done")
-        print("Before doing feature importance", self.covariateColNames)
+        # Feature importance to be done every x times, not all the time
         featureAttributes = self.model.feature_importance(self.fullDataset, relative_scores=True)
         maxImportance = featureAttributes['importance'].max()
-        # Here we update the the original co-variate column list with the important feature list
         self.covariateColNames = featureAttributes[featureAttributes['importance'] > (maxImportance * 0.01)].index.tolist()
-        print("After doing feature importance", self.covariateColNames)
         self.model = self._multivariateFit()
         self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
@@ -71,7 +71,7 @@ class HeavyMVAdapter(ModelAdapter):
     
     def _manageData(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame]):
         conformedData = conformData(targetData, covariateData) 
-        self.dataTrain, self.fullDataset, self.covariateColNames = createTrainTest(conformedData, self.forecastingSteps)
+        self.dataTrain, self.fullDataset, self.covariateColNames = createTrainTest(conformedData, self.forecastingSteps, self.includeMulFeatures, self.isUS)
 
     def _multivariateFit(self) -> TimeSeriesPredictor:
         return TimeSeriesPredictor(
