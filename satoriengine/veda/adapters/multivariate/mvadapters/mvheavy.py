@@ -34,6 +34,7 @@ class HeavyMVAdapter(ModelAdapter):
         self.forecastingSteps: int = 1
         self.includeMulFeatures: bool = False
         self.isUS: bool = True
+        self.fitCount: int = 0
         self.rng = np.random.default_rng(datetime.datetime.now().microsecond // 100)
 
     def load(self, modelPath: str, **kwargs) -> Union[None, "ModelAdapter"]:
@@ -47,11 +48,16 @@ class HeavyMVAdapter(ModelAdapter):
     def fit(self, targetData: pd.DataFrame, covariateData: list[pd.DataFrame], **kwargs) -> TrainingResult:
         self._manageData(targetData, covariateData)
         self.model = self._multivariateFit()
-        # Feature importance to be done every x times, not all the time
-        featureAttributes = self.model.feature_importance(self.fullDataset, relative_scores=True)
-        maxImportance = featureAttributes['importance'].max()
-        self.covariateColNames = featureAttributes[featureAttributes['importance'] > (maxImportance * 0.01)].index.tolist()
-        self.model = self._multivariateFit()
+        if self.fitCount == 0:
+            # Feature importance to be done every x times, not all the time
+            featureAttributes = self.model.feature_importance(self.fullDataset, relative_scores=True)
+            maxImportance = featureAttributes['importance'].max()
+            self.covariateColNames = featureAttributes[featureAttributes['importance'] > (maxImportance * 0.01)].index.tolist()
+            self.model = self._multivariateFit()
+        if self.fitCount >= 9:
+            self.fitCount = 0
+        else:
+            self.fitCount += 1
         self.model.refit_full(model = 'best', set_best_to_refit_full = True)
         return TrainingResult(1, self)
     
