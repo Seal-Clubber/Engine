@@ -353,7 +353,7 @@ class StreamModel:
         self.cpu = getProcessorCount()
         self.pauseAll = pauseAll
         self.resumeAll = resumeAll
-        self.preferredAdapters: list[ModelAdapter] = [StarterAdapter, XgbAdapter, XgbChronosAdapter]# SKAdapter #model[0] issue
+        self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
@@ -630,11 +630,13 @@ class StreamModel:
         else:
             import psutil
             availableRamGigs = psutil.virtual_memory().available / 1e9
+            availableSwapGigs = psutil.swap_memory().free / 1e9
+            totalAvailableRamGigs = availableRamGigs + availableSwapGigs
             adapter = None
             for p in self.preferredAdapters:
                 if p in self.failedAdapters:
                     continue
-                if p.condition(data=self.data, cpu=self.cpu, availableRamGigs=availableRamGigs) == 1:
+                if p.condition(data=self.data, cpu=self.cpu, availableRamGigs=totalAvailableRamGigs) == 1:
                     adapter = p
                     break
             if adapter is None:
