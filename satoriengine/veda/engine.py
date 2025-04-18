@@ -286,6 +286,7 @@ class Engine:
         ''' alternative to await asyncio.Event().wait() '''
         while True:
             await asyncio.sleep(10)
+            self.cleanupThreads()
             if not self.isConnectedToServer:
                 await self.connectToDataServer()
                 await self.startService()
@@ -426,10 +427,11 @@ class StreamModel:
                 return False
 
         while not self.isConnectedToPublisher:
-            self.publisherHost = self.peerInfo.publishersIp[0]
-            if await _isPublisherActive(self.publisherHost):
-                self.usePubSub = False
-                return True
+            if self.peerInfo.publishersIp:
+                self.publisherHost = self.peerInfo.publishersIp[0]
+                if await _isPublisherActive(self.publisherHost):
+                    self.usePubSub = False
+                    return True
             self.peerInfo.subscribersIp = [ip for ip in self.peerInfo.subscribersIp]
             self.rng.shuffle(self.peerInfo.subscribersIp)
             for subscriberIp in self.peerInfo.subscribersIp:
