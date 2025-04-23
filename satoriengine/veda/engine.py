@@ -534,8 +534,13 @@ class StreamModel:
             observationDf = observation.reset_index().rename(columns={
                                 'index': 'date_time',
                                 'hash': 'id'
-                            })
-            if validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
+                            }).drop(columns=['provider'])
+            observation_id = observationDf['id'].values[0]
+
+            # Check if self.data is not empty and if the ID already exists
+            if not self.data.empty and observation_id in self.data['id'].values:
+                debug("Row not added because observation with same ID already exists")
+            elif validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
                 self.data = pd.concat([self.data, observationDf], ignore_index=True)
             else:
                 error("Row not added due to corrupt observation")
