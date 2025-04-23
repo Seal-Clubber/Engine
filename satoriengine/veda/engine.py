@@ -366,6 +366,7 @@ class StreamModel:
         self.publisherHost = None
         self.transferProtocol: str = transferProtocol
         self.usePubSub: bool = False
+        self.syncedPublishers = set()
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -382,15 +383,17 @@ class StreamModel:
         await self.startStreamService()
 
     async def startStreamService(self):
-        await self.syncData()
+        if self.publisherHost not in self.syncedPublishers:
+            await self.syncData()
+            self.syncedPublishers.add(self.publisherHost)
         await self.makeSubscription()
 
-    def returnPeerIp(self, peer: str = Union[str, None]) -> str:
+    def returnPeerIp(self, peer: Union[str, None] = None) -> str:
         if peer is not None:
             return peer.split(':')[0]
         return self.publisherHost.split(':')[0]
 
-    def returnPeerPort(self, peer: str = Union[str, None]) -> int:
+    def returnPeerPort(self, peer: Union[str, None] = None) -> int:
         if peer is not None:
             return int(peer.split(':')[1])
         return int(self.publisherHost.split(':')[1])
@@ -427,7 +430,7 @@ class StreamModel:
                 return False
 
         while not self.isConnectedToPublisher:
-            if self.peerInfo.publishersIp:
+            if self.peerInfo.publishersIp is not None:
                 self.publisherHost = self.peerInfo.publishersIp[0]
                 if await _isPublisherActive(self.publisherHost):
                     self.usePubSub = False
