@@ -366,7 +366,7 @@ class StreamModel:
         self.publisherHost = None
         self.transferProtocol: str = transferProtocol
         self.usePubSub: bool = False
-        self.syncedPublishers = set()
+        # self.syncedPublishers = set() # variable used for not syncing everytime
 
     async def initialize(self):
         self.data: pd.DataFrame = await self.loadData()
@@ -383,9 +383,11 @@ class StreamModel:
         await self.startStreamService()
 
     async def startStreamService(self):
-        if self.publisherHost not in self.syncedPublishers:
-            await self.syncData()
-            self.syncedPublishers.add(self.publisherHost)
+        # The below helps to not sync everytime we connect to publisher, if any problems arises with sync then we can enable the below
+        # if self.publisherHost not in self.syncedPublishers:
+        #     await self.syncData()
+        #     self.syncedPublishers.add(self.publisherHost)
+        await self.syncData()
         await self.makeSubscription()
 
     def returnPeerIp(self, peer: Union[str, None] = None) -> str:
@@ -401,7 +403,7 @@ class StreamModel:
     @property
     def isConnectedToPublisher(self):
         if hasattr(self, 'dataClient') and self.dataClient is not None and self.publisherHost is not None:
-            return self.dataClient.isConnected(self.publisherHost)
+            return self.dataClient.isConnected(self.returnPeerIp(), self.returnPeerPort())
         return False
 
     async def stayConnectedToPublisher(self):
@@ -575,6 +577,7 @@ class StreamModel:
                 if isinstance(forecast, pd.DataFrame):
                     predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
                                     }, index=[datetimeToTimestamp(now())])
+                    print(predictionDf)
                     await self.passPredictionData(predictionDf)
                 else:
                     raise Exception('Forecast not in dataframe format')
