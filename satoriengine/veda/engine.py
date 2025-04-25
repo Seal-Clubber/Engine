@@ -301,6 +301,7 @@ class Engine:
                     predictionStreamUuid=pubUuid,
                     peerInfo=peers,
                     dataClient=self.dataClient,
+                    identity=self.identity,
                     pauseAll=self.pause,
                     resumeAll=self.resume,
                     transferProtocol=self.transferProtocol)
@@ -325,6 +326,7 @@ class StreamModel:
         predictionStreamUuid: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
+        identity: EvrmoreIdentity,
         pauseAll:callable,
         resumeAll:callable,
         transferProtocol: str
@@ -334,6 +336,7 @@ class StreamModel:
             predictionStreamUuid,
             peerInfo,
             dataClient,
+            identity,
             pauseAll,
             resumeAll,
             transferProtocol
@@ -347,6 +350,7 @@ class StreamModel:
         predictionStreamUuid: str,
         peerInfo: PeerInfo,
         dataClient: DataClient,
+        identity: EvrmoreIdentity,
         pauseAll:callable,
         resumeAll:callable,
         transferProtocol: str
@@ -361,7 +365,8 @@ class StreamModel:
         self.streamUuid: str = streamUuid
         self.predictionStreamUuid: str = predictionStreamUuid
         self.peerInfo: PeerInfo = peerInfo
-        self.dataClient: DataClient = dataClient
+        self.dataClientOfIntServer: DataClient = dataClient
+        self.identity: EvrmoreIdentity = identity
         self.rng = np.random.default_rng(37)
         self.publisherHost = None
         self.transferProtocol: str = transferProtocol
@@ -375,9 +380,11 @@ class StreamModel:
         self.pilot.load(self.modelPath())
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
+        self.dataClientOfExtServer: Union[DataClient, None] = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
 
     async def p2pInit(self):
+        # await self.makeSubscription(self.dataClientOfIntServer.serverHostPort[0], True)
         await self.connectToPeer()
         asyncio.create_task(self.stayConnectedToPublisher())
         await self.startStreamService()
@@ -402,8 +409,8 @@ class StreamModel:
 
     @property
     def isConnectedToPublisher(self):
-        if hasattr(self, 'dataClient') and self.dataClient is not None and self.publisherHost is not None:
-            return self.dataClient.isConnected(self.returnPeerIp(), self.returnPeerPort())
+        if hasattr(self, 'dataClientOfExtServer') and self.dataClientOfExtServer is not None and self.publisherHost is not None:
+            return self.dataClientOfExtServer.isConnected(self.returnPeerIp(), self.returnPeerPort())
         return False
 
     async def stayConnectedToPublisher(self):
@@ -419,7 +426,7 @@ class StreamModel:
         async def _isPublisherActive(publisher: str) -> bool:
             ''' confirms if the publisher has the subscription stream in its available stream '''
             try:
-                response = await self.dataClient.isStreamActive(
+                response = await self.dataClientOfExtServer.isStreamActive(
                             peerHost=self.returnPeerIp(publisher),
                             peerPort=self.returnPeerPort(publisher),
                             uuid=self.streamUuid)
@@ -428,11 +435,11 @@ class StreamModel:
                 else:
                     raise Exception
             except Exception:
-                # warning('Failed to connect to an active Publisher ')
+                # warning('Failed to connect to an active Publisher ', publisher)
                 return False
 
         while not self.isConnectedToPublisher:
-            if self.peerInfo.publishersIp is not None:
+            if self.peerInfo.publishersIp is not None and len(self.peerInfo.publishersIp) > 0:
                 self.publisherHost = self.peerInfo.publishersIp[0]
                 if await _isPublisherActive(self.publisherHost):
                     self.usePubSub = False
@@ -458,14 +465,14 @@ class StreamModel:
             - replace what we have
         '''
         try:
-            externalDataResponse = await self.dataClient.getRemoteStreamData(
+            externalDataResponse = await self.dataClientOfExtServer.getRemoteStreamData(
                 peerHost=self.returnPeerIp(),
                 peerPort=self.returnPeerPort(),
                 uuid=self.streamUuid)
             if externalDataResponse.status == DataServerApi.statusSuccess.value:
                 externalDf = externalDataResponse.data
                 if not externalDf.equals(self.data) and len(externalDf) > 0: # TODO : maybe we can find a better logic so that we don't lose the host server's valuable data ( krishna )
-                    response = await self.dataClient.insertStreamData(
+                    response = await self.dataClientOfIntServer.insertStreamData(
                                     uuid=self.streamUuid,
                                     data=externalDf,
                                     replace=True
@@ -480,18 +487,26 @@ class StreamModel:
             error("Failed to sync data, ", e)
 
     # TODO: after subscribing let others know that we are subscribed to a particular data stream
-    async def makeSubscription(self):
+    async def makeSubscription(self, peerHost: Union[str, None] = None, serverSubscribe: bool = False):
         '''
         - and subscribe to the stream so we get the information
             - whenever we get an observation on this stream, pass to the DataServer
         - continually generate predictions for prediction publication streams and pass that to
         '''
-        await self.dataClient.subscribe(
-              peerHost=self.returnPeerIp(),
-              peerPort=self.returnPeerPort(),
-              uuid=self.streamUuid,
-              publicationUuid=self.predictionStreamUuid,
-              callback=self.handleSubscriptionMessage)
+        if serverSubscribe:
+            await self.dataClientOfIntServer.subscribe(
+                peerHost=peerHost or self.returnPeerIp(),
+                **(dict() if serverSubscribe is True else {'peerPort': self.returnPeerPort()}),
+                uuid=self.streamUuid,
+                publicationUuid=self.predictionStreamUuid,
+                callback=self.handleSubscriptionMessage)
+        else:
+            await self.dataClientOfExtServer.subscribe(
+                peerHost=peerHost or self.returnPeerIp(),
+                **(dict() if serverSubscribe is True else {'peerPort': self.returnPeerPort()}),
+                uuid=self.streamUuid,
+                publicationUuid=self.predictionStreamUuid,
+                callback=self.handleSubscriptionMessage)
 
     async def handleSubscriptionMessage(self, subscription: any,  message: Message, pubSubFlag: bool = False):
         if message.status == DataClientApi.streamInactive.value:
@@ -512,52 +527,61 @@ class StreamModel:
 
     async def appendNewData(self, observation: Union[pd.DataFrame, dict], pubSubFlag: bool):
         """extract the data and save it to self.data"""
-        if pubSubFlag:
-            parsedData = json.loads(observation.raw)
-            if validate_single_entry(parsedData["time"], parsedData["data"]):
-                await self.dataClient.insertStreamData(
-                        uuid=self.streamUuid,
-                        data=pd.DataFrame({ 'value': [float(parsedData["data"])]
-                                    }, index=[str(parsedData["time"])]),
-                        isSub=True
-                    )
-                self.data = pd.concat(
-                    [
-                        self.data,
-                        pd.DataFrame({
-                            "date_time": [str(parsedData["time"])],
-                            "value": [float(parsedData["data"])],
-                            "id": [str(parsedData["hash"])]})
-                    ],
-                    ignore_index=True)
+        try:
+            if pubSubFlag:
+                parsedData = json.loads(observation.raw)
+                if validate_single_entry(parsedData["time"], parsedData["data"]):
+                        await self.dataClientOfIntServer.insertStreamData(
+                                uuid=self.streamUuid,
+                                data=pd.DataFrame({ 'value': [float(parsedData["data"])]
+                                            }, index=[str(parsedData["time"])]),
+                                isSub=True
+                            )
+                        self.data = pd.concat(
+                            [
+                                self.data,
+                                pd.DataFrame({
+                                    "date_time": [str(parsedData["time"])],
+                                    "value": [float(parsedData["data"])],
+                                    "id": [str(parsedData["hash"])]})
+                            ],
+                            ignore_index=True)
+                else:
+                    error("Row not added due to corrupt observation")
             else:
-                error("Row not added due to corrupt observation")
-        else:
-            observationDf = observation.reset_index().rename(columns={
-                                'index': 'date_time',
-                                'hash': 'id'
-                            }).drop(columns=['provider'])
-            observation_id = observationDf['id'].values[0]
+                observationDf = observation.reset_index().rename(columns={
+                                    'index': 'date_time',
+                                    'hash': 'id'
+                                }).drop(columns=['provider'])
+                observation_id = observationDf['id'].values[0]
 
-            # Check if self.data is not empty and if the ID already exists
-            if not self.data.empty and observation_id in self.data['id'].values:
-                debug("Row not added because observation with same ID already exists")
-            elif validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
-                self.data = pd.concat([self.data, observationDf], ignore_index=True)
-            else:
-                error("Row not added due to corrupt observation")
+                # Check if self.data is not empty and if the ID already exists
+                if not self.data.empty and observation_id in self.data['id'].values:
+                    error("Row not added because observation with same ID already exists")
+                elif validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
+                    await self.dataClientOfIntServer.insertStreamData(
+                            uuid=self.streamUuid,
+                            data=observationDf,
+                            isSub=True
+                        )
+                    self.data = pd.concat([self.data, observationDf], ignore_index=True)
+                else:
+                    error("Row not added due to corrupt observation")
+        except Exception as e:
+            error("Subscription data not added", e)
 
     async def passPredictionData(self, forecast: pd.DataFrame):
         try:
-            response = await self.dataClient.insertStreamData(
+            response = await self.dataClientOfIntServer.insertStreamData(
                             uuid=self.predictionStreamUuid,
                             data=forecast,
                             isSub=True
                         )
-            if response.status == DataServerApi.statusSuccess.value:
-                info(response.senderMsg, color='green')
-            else:
-                raise Exception(response.senderMsg)
+            print(response.to_dict())
+            # if response.status == DataServerApi.statusSuccess.value:
+            #     info(response.senderMsg, color='green')
+            # else:
+            #     raise Exception(response.senderMsg)
         except Exception as e:
             error('Failed to send Prediction to server : ', e)
 
@@ -602,7 +626,7 @@ class StreamModel:
 
     async def loadData(self) -> pd.DataFrame:
         try:
-            response = await self.dataClient.getLocalStreamData(uuid=self.streamUuid)
+            response = await self.dataClientOfIntServer.getLocalStreamData(uuid=self.streamUuid)
             if response.status == DataServerApi.statusSuccess.value:
                 conformedData = response.data.reset_index().rename(columns={
                     'ts': 'date_time',
