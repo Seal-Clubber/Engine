@@ -380,7 +380,7 @@ class StreamModel:
         self.pilot.load(self.modelPath())
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        self.dataClientOfIntServer: Union[DataClient, None] = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
+        self.dataClientOfExtServer: Union[DataClient, None] = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
 
     async def p2pInit(self):
@@ -409,8 +409,8 @@ class StreamModel:
 
     @property
     def isConnectedToPublisher(self):
-        if hasattr(self, 'dataClientOfIntServer') and self.dataClientOfIntServer is not None and self.publisherHost is not None:
-            return self.dataClientOfIntServer.isConnected(self.returnPeerIp(), self.returnPeerPort())
+        if hasattr(self, 'dataClientOfExtServer') and self.dataClientOfExtServer is not None and self.publisherHost is not None:
+            return self.dataClientOfExtServer.isConnected(self.returnPeerIp(), self.returnPeerPort())
         return False
 
     async def stayConnectedToPublisher(self):
@@ -426,7 +426,7 @@ class StreamModel:
         async def _isPublisherActive(publisher: str) -> bool:
             ''' confirms if the publisher has the subscription stream in its available stream '''
             try:
-                response = await self.dataClientOfIntServer.isStreamActive(
+                response = await self.dataClientOfExtServer.isStreamActive(
                             peerHost=self.returnPeerIp(publisher),
                             peerPort=self.returnPeerPort(publisher),
                             uuid=self.streamUuid)
@@ -470,7 +470,7 @@ class StreamModel:
             - replace what we have
         '''
         try:
-            externalDataResponse = await self.dataClientOfIntServer.getRemoteStreamData(
+            externalDataResponse = await self.dataClientOfExtServer.getRemoteStreamData(
                 peerHost=self.returnPeerIp(),
                 peerPort=self.returnPeerPort(),
                 uuid=self.streamUuid)
@@ -511,7 +511,7 @@ class StreamModel:
                 publicationUuid=self.predictionStreamUuid,
                 callback=self.handleSubscriptionMessage)
         else:
-            await self.dataClientOfIntServer.subscribe(
+            await self.dataClientOfExtServer.subscribe(
                 peerHost=peerHost or self.returnPeerIp(),
                 **(dict() if serverSubscribe is True else {'peerPort': self.returnPeerPort()}),
                 uuid=self.streamUuid,
@@ -587,11 +587,10 @@ class StreamModel:
                             data=forecast,
                             isSub=True
                         )
-            print(response.to_dict())
-            # if response.status == DataServerApi.statusSuccess.value:
-            #     info(response.senderMsg, color='green')
-            # else:
-            #     raise Exception(response.senderMsg)
+            if response.status == DataServerApi.statusSuccess.value:
+                info(response.senderMsg, color='green')
+            else:
+                raise Exception(response.senderMsg)
         except Exception as e:
             error('Failed to send Prediction to server : ', e)
 
