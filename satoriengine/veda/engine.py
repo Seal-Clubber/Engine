@@ -285,7 +285,7 @@ class Engine:
     async def stayConnectedForever(self):
         ''' alternative to await asyncio.Event().wait() '''
         while True:
-            await asyncio.sleep(10)
+            await asyncio.sleep(1)
             self.cleanupThreads()
             if not self.isConnectedToServer:
                 await self.connectToDataServer()
@@ -453,6 +453,11 @@ class StreamModel:
                     return True
             self.publisherHost = None
             warning('Failed to connect to Peers, switching to PubSub', print=True)
+            # p2p-proactive publisher
+            # check if the direct publisher has un-reachable ip, if it does then subscribe to our own server for the stream id
+            # but since we don't know if that publisher is active we are going to connect to pub-sub anyways
+            # once we get a subscription stream in our server from the direct publisher, the server sends that back to this engine client which indicates that publisher is active
+            # so we disconnect from pubsub and keep being subscribed to our server, if we get in-active message then we do the whole process again.
             self.usePubSub = True
             await asyncio.sleep(60*60)
 
@@ -479,6 +484,11 @@ class StreamModel:
                                 )
                     if response.status == DataServerApi.statusSuccess.value:
                         info("Data updated in server", color='green')
+                        externalDf = externalDf.reset_index().rename(columns={
+                                    'ts': 'date_time',
+                                    'hash': 'id'
+                                }).drop(columns=['provider'])
+                        self.data = externalDf
                     else:
                         raise Exception(externalDataResponse.senderMsg)
                 else:
