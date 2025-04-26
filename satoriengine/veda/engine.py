@@ -285,7 +285,7 @@ class Engine:
     async def stayConnectedForever(self):
         ''' alternative to await asyncio.Event().wait() '''
         while True:
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
             self.cleanupThreads()
             if not self.isConnectedToServer:
                 await self.connectToDataServer()
@@ -358,7 +358,7 @@ class StreamModel:
         self.cpu = getProcessorCount()
         self.pauseAll = pauseAll
         self.resumeAll = resumeAll
-        self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        self.preferredAdapters: list[ModelAdapter] = [XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
@@ -380,7 +380,7 @@ class StreamModel:
         self.pilot.load(self.modelPath())
         self.stable: ModelAdapter = copy.deepcopy(self.pilot)
         self.paused: bool = False
-        self.dataClientOfExtServer: Union[DataClient, None] = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
+        self.dataClientOfIntServer: Union[DataClient, None] = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
 
     async def p2pInit(self):
@@ -409,13 +409,13 @@ class StreamModel:
 
     @property
     def isConnectedToPublisher(self):
-        if hasattr(self, 'dataClientOfExtServer') and self.dataClientOfExtServer is not None and self.publisherHost is not None:
-            return self.dataClientOfExtServer.isConnected(self.returnPeerIp(), self.returnPeerPort())
+        if hasattr(self, 'dataClientOfIntServer') and self.dataClientOfIntServer is not None and self.publisherHost is not None:
+            return self.dataClientOfIntServer.isConnected(self.returnPeerIp(), self.returnPeerPort())
         return False
 
     async def stayConnectedToPublisher(self):
         while True:
-            await asyncio.sleep(10)
+            await asyncio.sleep(12)
             if not self.isConnectedToPublisher:
                 await self.connectToPeer()
                 await self.startStreamService()
@@ -426,7 +426,7 @@ class StreamModel:
         async def _isPublisherActive(publisher: str) -> bool:
             ''' confirms if the publisher has the subscription stream in its available stream '''
             try:
-                response = await self.dataClientOfExtServer.isStreamActive(
+                response = await self.dataClientOfIntServer.isStreamActive(
                             peerHost=self.returnPeerIp(publisher),
                             peerPort=self.returnPeerPort(publisher),
                             uuid=self.streamUuid)
@@ -470,7 +470,7 @@ class StreamModel:
             - replace what we have
         '''
         try:
-            externalDataResponse = await self.dataClientOfExtServer.getRemoteStreamData(
+            externalDataResponse = await self.dataClientOfIntServer.getRemoteStreamData(
                 peerHost=self.returnPeerIp(),
                 peerPort=self.returnPeerPort(),
                 uuid=self.streamUuid)
@@ -511,7 +511,7 @@ class StreamModel:
                 publicationUuid=self.predictionStreamUuid,
                 callback=self.handleSubscriptionMessage)
         else:
-            await self.dataClientOfExtServer.subscribe(
+            await self.dataClientOfIntServer.subscribe(
                 peerHost=peerHost or self.returnPeerIp(),
                 **(dict() if serverSubscribe is True else {'peerPort': self.returnPeerPort()}),
                 uuid=self.streamUuid,
