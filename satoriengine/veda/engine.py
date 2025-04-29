@@ -121,11 +121,6 @@ class Engine:
                     if response.startswith('{"topic":') or response.startswith('{"data":'):
                         try:
                             obs = Observation.parse(response)
-                            info(
-                                'received:',
-                                f'\n {obs.streamId.cleanId}',
-                                f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
-                                print=True)
                             streamModel = self.streamModels.get(obs.streamId.uuid)
                             if isinstance(streamModel, StreamModel) and getattr(streamModel, 'UsePubsub', True):
                                 def run_async_in_thread():
@@ -150,6 +145,11 @@ class Engine:
                                         if thread in self.threads:
                                             self.threads.remove(thread)
                                 
+                                info(
+                                    'received:',
+                                    f'\n {obs.streamId.cleanId}',
+                                    f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
+                                    print=True)
                                 thread = threading.Thread(target=run_async_in_thread)
                                 thread.daemon = True
                                 self.threads.append(thread)
@@ -358,7 +358,8 @@ class StreamModel:
         self.cpu = getProcessorCount()
         self.pauseAll = pauseAll
         self.resumeAll = resumeAll
-        self.preferredAdapters: list[ModelAdapter] = [XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        # self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        self.preferredAdapters: list[ModelAdapter] = [ XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
@@ -415,7 +416,7 @@ class StreamModel:
 
     async def stayConnectedToPublisher(self):
         while True:
-            await asyncio.sleep(12)
+            await asyncio.sleep(9)
             if not self.isConnectedToPublisher:
                 await self.connectToPeer()
                 await self.startStreamService()
