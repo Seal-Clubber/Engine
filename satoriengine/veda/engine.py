@@ -121,6 +121,11 @@ class Engine:
                     if response.startswith('{"topic":') or response.startswith('{"data":'):
                         try:
                             obs = Observation.parse(response)
+                            warning(
+                                'received:',
+                                f'\n {obs.streamId.cleanId}',
+                                f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
+                                print=True)
                             streamModel = self.streamModels.get(obs.streamId.uuid)
                             if isinstance(streamModel, StreamModel) and getattr(streamModel, 'UsePubsub', True):
                                 def run_async_in_thread():
@@ -358,8 +363,8 @@ class StreamModel:
         self.cpu = getProcessorCount()
         self.pauseAll = pauseAll
         self.resumeAll = resumeAll
-        # self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
-        self.preferredAdapters: list[ModelAdapter] = [ XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        # self.preferredAdapters: list[ModelAdapter] = [ XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
@@ -749,12 +754,29 @@ class StreamModel:
     def run_forever(self):
         '''Creates separate threads for running the peer connections and model training loop'''
 
+        if hasattr(self, 'thread') and self.thread and self.thread.is_alive():
+            warning(f"Thread for model {self.streamUuid} already running. Not creating another.")
+            return
+
+        # def training_loop_thread():
+        #     try:
+        #         loop = asyncio.new_event_loop()
+        #         asyncio.set_event_loop(loop)
+        #         loop.run_until_complete(self.run())
+        #         loop.close()
+        #     except Exception as e:
+        #         error(f"Error in training loop thread: {e}")
+        #         import traceback
+        #         traceback.print_exc()
+
         def training_loop_thread():
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(self.run())
-                loop.close()
+                try:
+                    loop.run_until_complete(self.run())
+                finally:
+                    loop.close()
             except Exception as e:
                 error(f"Error in training loop thread: {e}")
                 import traceback
