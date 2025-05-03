@@ -290,7 +290,7 @@ class Engine:
     async def stayConnectedForever(self):
         ''' alternative to await asyncio.Event().wait() '''
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
             self.cleanupThreads()
             if not self.isConnectedToServer:
                 await self.connectToDataServer()
@@ -565,11 +565,7 @@ class StreamModel:
                 else:
                     error("Row not added due to corrupt observation")
             else:
-                observationDf = observation.reset_index().rename(columns={
-                                    'index': 'date_time',
-                                    'hash': 'id'
-                                }).drop(columns=['provider'])
-                observation_id = observationDf['id'].values[0]
+                observation_id = observationDf['hash'].values[0]
 
                 # Check if self.data is not empty and if the ID already exists
                 if not self.data.empty and observation_id in self.data['id'].values:
@@ -577,9 +573,13 @@ class StreamModel:
                 elif validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
                     await self.dataClientOfIntServer.insertStreamData(
                             uuid=self.streamUuid,
-                            data=observationDf,
+                            data=observation,
                             isSub=True
                         )
+                    observationDf = observation.reset_index().rename(columns={
+                                        'index': 'date_time',
+                                        'hash': 'id'
+                                    }).drop(columns=['provider'])
                     self.data = pd.concat([self.data, observationDf], ignore_index=True)
                 else:
                     error("Row not added due to corrupt observation")
