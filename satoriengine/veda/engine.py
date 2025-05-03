@@ -543,6 +543,7 @@ class StreamModel:
 
     async def appendNewData(self, observation: Union[pd.DataFrame, dict], pubSubFlag: bool):
         """extract the data and save it to self.data"""
+        print(observation)
         try:
             if pubSubFlag:
                 parsedData = json.loads(observation.raw)
@@ -565,8 +566,7 @@ class StreamModel:
                 else:
                     error("Row not added due to corrupt observation")
             else:
-                observation_id = observationDf['hash'].values[0]
-
+                observation_id = observation['hash'].values[0]
                 # Check if self.data is not empty and if the ID already exists
                 if not self.data.empty and observation_id in self.data['id'].values:
                     error("Row not added because observation with same ID already exists")
