@@ -570,7 +570,7 @@ class StreamModel:
                 # Check if self.data is not empty and if the ID already exists
                 if not self.data.empty and observation_id in self.data['id'].values:
                     error("Row not added because observation with same ID already exists")
-                elif validate_single_entry(observationDf['date_time'].values[0], observationDf["value"].values[0]):
+                elif validate_single_entry(observation.index[0], observation["value"].values[0]):
                     await self.dataClientOfIntServer.insertStreamData(
                             uuid=self.streamUuid,
                             data=observation,
