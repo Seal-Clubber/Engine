@@ -293,7 +293,7 @@ class Engine:
     async def stayConnectedForever(self):
         ''' alternative to await asyncio.Event().wait() '''
         while True:
-            await asyncio.sleep(2)
+            await asyncio.sleep(5)
             self.cleanupThreads()
             if not self.isConnectedToServer:
                 await self.connectToDataServer()
@@ -578,15 +578,19 @@ class StreamModel:
                 if not self.data.empty and observation_id in self.data['id'].values:
                     error("Row not added because observation with same ID already exists")
                 elif validate_single_entry(observation.index[0], observation["value"].values[0]):
-                    await self.dataClientOfIntServer.insertStreamData(
+                    response = await self.dataClientOfIntServer.insertStreamData(
                             uuid=self.streamUuid,
                             data=observation,
                             isSub=True
                         )
+                    if response.status == DataServerApi.statusSuccess.value:
+                        info(response.senderMsg, color='green')
+                    else:
+                        raise Exception("Raw ", response.senderMsg)
                     observationDf = observation.reset_index().rename(columns={
-                                        'index': 'date_time',
-                                        'hash': 'id'
-                                    }).drop(columns=['provider'])
+                                'index': 'date_time',
+                                'hash': 'id'
+                            }).drop(columns=['provider'])
                     self.data = pd.concat([self.data, observationDf], ignore_index=True)
                 else:
                     error("Row not added due to corrupt observation")
@@ -601,7 +605,7 @@ class StreamModel:
                             isSub=True
                         )
             if response.status == DataServerApi.statusSuccess.value:
-                info(response.senderMsg, color='green')
+                info("Prediction", response.senderMsg, color='green')
             else:
                 raise Exception(response.senderMsg)
         except Exception as e:
@@ -623,7 +627,6 @@ class StreamModel:
                 if isinstance(forecast, pd.DataFrame):
                     predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
                                     }, index=[datetimeToTimestamp(now())])
-                    print(predictionDf)
                     await self.passPredictionData(predictionDf)
                 else:
                     raise Exception('Forecast not in dataframe format')
