@@ -242,6 +242,9 @@ class Engine:
             response = await self.dataClient.authenticate(islocal='engine')
             if response.status == DataServerApi.statusSuccess.value:
                 info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
+                for _, streamModel in self.streamModels.items():
+                    if hasattr(streamModel, 'dataClientOfIntServer'):
+                        streamModel.updateDataClient(self.dataClient)
                 return True
             return False
 
@@ -402,6 +405,10 @@ class StreamModel:
         #     self.syncedPublishers.add(self.publisherHost)
         await self.syncData()
         await self.makeSubscription()
+
+    def updateDataClient(self, dataClient):
+        ''' Update the internal server data client reference '''
+        self.dataClientOfIntServer = dataClient
 
     def returnPeerIp(self, peer: Union[str, None] = None) -> str:
         if peer is not None:
