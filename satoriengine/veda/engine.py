@@ -366,8 +366,8 @@ class StreamModel:
         self.cpu = getProcessorCount()
         self.pauseAll = pauseAll
         self.resumeAll = resumeAll
-        self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
-        # self.preferredAdapters: list[ModelAdapter] = [ XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        # self.preferredAdapters: list[ModelAdapter] = [XgbChronosAdapter, XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
+        self.preferredAdapters: list[ModelAdapter] = [ XgbAdapter, StarterAdapter ]# SKAdapter #model[0] issue
         self.defaultAdapters: list[ModelAdapter] = [XgbAdapter, XgbAdapter, StarterAdapter]
         self.failedAdapters = []
         self.thread: threading.Thread = None
@@ -380,6 +380,7 @@ class StreamModel:
         self.publisherHost = None
         self.transferProtocol: str = transferProtocol
         self.usePubSub: bool = False
+        self.currentPredictionTask = None
         # self.syncedPublishers = set() # variable used for not syncing everytime
 
     async def initialize(self):
@@ -392,8 +393,42 @@ class StreamModel:
         self.dataClientOfExtServer: Union[DataClient, None] = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
         debug(f'AI Engine: stream id {self.streamUuid} using {self.adapter.__name__}', color='teal')
 
+    # async def tempDataClientWithServer(self):
+    #     ''' we instantiate a data client which has isLocal='engine' as Auth everytime we try to communicate with our own data stream and close it after the usage '''
+    #     async def authenticate(dataClient: DataClient) -> bool:
+    #         response = await dataClient.authenticate(islocal='engine')
+    #         if response.status == DataServerApi.statusSuccess.value:
+    #             info("Local Engine successfully connected to Server Ip at :", self.dataServerIp, color="green")
+    #             return True
+    #         return False
+
+    #     async def initiateServerConnection() -> bool:
+    #         ''' local engine client authorization '''
+    #         dataClientTemp = DataClient(self.dataClientOfIntServer.serverHostPort[0], self.dataClientOfIntServer.serverPort, identity=self.identity)
+    #         return await authenticate(dataClientTemp)
+
+    #     while not self.isConnectedToServer:
+    #         try:
+    #             if await initiateServerConnection():
+    #                 return True
+    #         except Exception as e:
+    #             error(f'Failed to connect to server', e)
+
+    # Testing Purpose ( Don't Delete ): Add heartbeat mechanism to maintain connections during long processing
+    async def maintain_connection(self):
+        """Send periodic heartbeats to server to keep connection alive"""
+        while True:
+            if self.dataClientOfIntServer.isConnected():
+                try:
+                    # A lightweight ping-like request
+                    await self.dataClientOfIntServer.isLocalEngineClient()
+                except Exception:
+                    pass
+            await asyncio.sleep(15)  
+
     async def p2pInit(self):
         # await self.makeSubscription(self.dataClientOfIntServer.serverHostPort[0], True)
+        # asyncio.create_task(self.maintain_connection()) # Testing
         await self.connectToPeer()
         asyncio.create_task(self.stayConnectedToPublisher())
         await self.startStreamService()
@@ -538,9 +573,19 @@ class StreamModel:
             await self.startStreamService()
         else:
             await self.appendNewData(message.data, pubSubFlag)
-            self.pauseAll()
-            await self.producePrediction()
-            self.resumeAll()
+            self.pauseAll(force=True)
+            # if backlog exist then cancel that and execute new task with latest data
+            if self.currentPredictionTask is not None and not self.currentPredictionTask.done():
+                self.currentPredictionTask.cancel()
+                print(f"Canceled existing prediction task for stream {self.streamUuid}")
+
+            self.currentPredictionTask = asyncio.create_task(self.producePrediction())
+
+            running_tasks = len([t for t in asyncio.all_tasks() if not t.done()])
+            all_tasks = len([t for t in asyncio.all_tasks()])
+            print("all_tasks", all_tasks)
+            print(f"Total running tasks: {running_tasks}")
+            self.resumeAll(force=True)
 
     def pause(self):
         self.paused = True
@@ -623,10 +668,15 @@ class StreamModel:
         try:
             updatedModel = updatedModel or self.stable
             if updatedModel is not None:
-                forecast = updatedModel.predict(data=self.data)
+                loop = asyncio.get_event_loop()
+                forecast = await loop.run_in_executor(
+                    None,  # Uses default executor (ThreadPoolExecutor)
+                    lambda: updatedModel.predict(data=self.data)
+                )
                 if isinstance(forecast, pd.DataFrame):
                     predictionDf = pd.DataFrame({ 'value': [StreamForecast.firstPredictionOf(forecast)]
                                     }, index=[datetimeToTimestamp(now())])
+                    print(predictionDf)
                     await self.passPredictionData(predictionDf)
                 else:
                     raise Exception('Forecast not in dataframe format')
