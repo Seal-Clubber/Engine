@@ -133,42 +133,62 @@ class Engine:
                                     f'\n {obs.streamId.cleanId}',
                                     f'\n ({obs.value}, {obs.observationTime}, {obs.observationHash})',
                                     print=True)
-                                
-                                asyncio.create_task(
-                                    streamModel.handleSubscriptionMessage(
-                                        "Subscription",
-                                        message=Message({
-                                            'data': obs,
-                                            'status': 'stream/observation'}),
-                                        pubSubFlag=True)
-                                )
+                                # try:
+                                #     task = asyncio.create_task(
+                                #         streamModel.handleSubscriptionMessage(
+                                #             "Subscription",
+                                #             message=Message({
+                                #                 'data': obs,
+                                #                 'status': 'stream/observation'}),
+                                #             pubSubFlag=True)
+                                #     )
+                                    
+                                #     # Store the task reference to prevent garbage collection
+                                #     self.threads.append(task)  # Rename self.threads to self.tasks for clarity
+                                    
+                                #     # Set up a callback to handle task completion and cleanup
+                                #     def task_done_callback(completed_task):
+                                #         try:
+                                #             # Check for exceptions
+                                #             if completed_task.exception():
+                                #                 error(f"Exception in task: {completed_task.exception()}")
+                                #             # Remove task from the list once completed
+                                #             if completed_task in self.threads:
+                                #                 self.threads.remove(completed_task)
+                                #         except asyncio.CancelledError:
+                                #             # Handle cancellation
+                                #             pass
+                                    
+                                #     task.add_done_callback(task_done_callback)
+                                # except Exception as e:
+                                #     error(f"Failed to create task: {e}")
 
-                                # def run_async_in_thread():
-                                #     try:
-                                #         loop = asyncio.new_event_loop()
-                                #         asyncio.set_event_loop(loop)
-                                #         loop.run_until_complete(
-                                #             streamModel.handleSubscriptionMessage(
-                                #                 "Subscription",
-                                #                 message=Message({
-                                #                     'data': obs,
-                                #                     'status': 'stream/observation'}),
-                                #                 pubSubFlag=True)
-                                #         )
-                                #     except Exception as e:
-                                #         print(f"Exception in async thread: {e}")
-                                #         import traceback
-                                #         traceback.print_exc()
-                                #     finally:
-                                #         loop.close()
-                                #         # Remove this thread from the list of active threads
-                                #         if thread in self.threads:
-                                #             self.threads.remove(thread)
+                                def run_async_in_thread():
+                                    try:
+                                        loop = asyncio.new_event_loop()
+                                        asyncio.set_event_loop(loop)
+                                        loop.run_until_complete(
+                                            streamModel.handleSubscriptionMessage(
+                                                "Subscription",
+                                                message=Message({
+                                                    'data': obs,
+                                                    'status': 'stream/observation'}),
+                                                pubSubFlag=True)
+                                        )
+                                    except Exception as e:
+                                        print(f"Exception in async thread: {e}")
+                                        import traceback
+                                        traceback.print_exc()
+                                    finally:
+                                        loop.close()
+                                        # Remove this thread from the list of active threads
+                                        if thread in self.threads:
+                                            self.threads.remove(thread)
                                 
-                                # thread = threading.Thread(target=run_async_in_thread)
-                                # thread.daemon = True
-                                # self.threads.append(thread)
-                                # thread.start()
+                                thread = threading.Thread(target=run_async_in_thread)
+                                thread.daemon = True
+                                self.threads.append(thread)
+                                thread.start()
                         except json.JSONDecodeError:
                             info('received unparsable message:', response, print=True)
                     else:
@@ -584,19 +604,19 @@ class StreamModel:
         else:
             await self.appendNewData(message.data, pubSubFlag)
             self.pauseAll(force=True)
-            try:
-                if self.currentPredictionTask is not None and not self.currentPredictionTask.done():
-                    self.currentPredictionTask.cancel()
-                    try:
-                        await asyncio.wait_for(asyncio.shield(self.currentPredictionTask), timeout=0.5)
-                    except (asyncio.CancelledError, asyncio.TimeoutError):
-                        pass
-                    debug(f"Canceled existing prediction task for stream {self.streamUuid}")
-            except Exception as e:
-                debug(f"Error canceling task: {str(e)}")
+            # try:
+            #     if self.currentPredictionTask is not None and not self.currentPredictionTask.done():
+            #         self.currentPredictionTask.cancel()
+            #         try:
+            #             await asyncio.wait_for(asyncio.shield(self.currentPredictionTask), timeout=0.5)
+            #         except (asyncio.CancelledError, asyncio.TimeoutError):
+            #             pass
+            #         error(f"Canceled existing prediction task for stream {self.streamUuid}")
+            # except Exception as e:
+            #     error(f"Error canceling task: {str(e)}")
 
-            self.currentPredictionTask = asyncio.create_task(self.producePrediction())
-
+            # self.currentPredictionTask = asyncio.create_task(self.producePrediction())
+            await self.producePrediction()
             running_tasks = len([t for t in asyncio.all_tasks() if not t.done()])
             all_tasks = len([t for t in asyncio.all_tasks()])
             print("all_tasks", all_tasks)
