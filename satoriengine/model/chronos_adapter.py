@@ -14,7 +14,7 @@ class ChronosAdapter:
             'HF_HOME', default='/Satori/Neuron/models/huggingface')
         os.makedirs(hfhome, exist_ok=True)
         device_map = 'cuda' if useGPU else 'cpu'
-        self.device = torch.device(device_map)
+        #self.device = torch.device(device_map)
         self.pipeline = ChronosPipeline.from_pretrained(
             "amazon/chronos-t5-large" if useGPU else "amazon/chronos-t5-small",
             # "amazon/chronos-t5-tiny", # 8M
