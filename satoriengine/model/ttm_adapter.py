@@ -22,7 +22,7 @@ class TTMAdapter():
             device_map=device_map,
             # force_download=True,
         )
-        self.ctx_len = 512  # historical context
+        self.ctx_len = 8  # historical context
         self.pipeline.to(self.device)  # Move model to the appropriate device
 
     def fit(self, trainX, trainY, eval_set=None, verbose=False, epochs=10, batch_size=32, learning_rate=1e-4):
