@@ -13,6 +13,7 @@ class TTMAdapter:
         hfhome = os.environ.get('HF_HOME', default='/Satori/Neuron/models/huggingface')
         os.makedirs(hfhome, exist_ok=True)
         device_map = 'cuda' if useGPU else 'cpu'
+        print(device_map)
         self.device = torch.device(device_map)
         self.pipeline = TinyTimeMixerForPrediction.from_pretrained(
             "ibm/TTM",
