@@ -48,7 +48,7 @@ class TTMAdapter:
 
         # DataLoader
         train_data = TensorDataset(trainX_tensor, trainY_tensor)
-        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=0)
 
         optimizer = optim.Adam(self.pipeline.parameters(), lr=learning_rate, weight_decay=1e-5)
         loss_fn = nn.MSELoss()
