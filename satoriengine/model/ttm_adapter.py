@@ -1,6 +1,7 @@
 import os
 import time
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from torch import nn, optim
@@ -35,13 +36,16 @@ class TTMAdapter:
         return np.array(padded, dtype=np.float32)
 
     def fit(self, trainX, trainY, eval_set=None, verbose=False, epochs=10, batch_size=32, learning_rate=1e-4):
-        if not isinstance(trainX, (list, np.ndarray)):
-            raise TypeError(f"❌ trainX must be a list or array. Got: {type(trainX)}")
+        # Accept DataFrame or array/list
+        if isinstance(trainX, pd.DataFrame):
+            trainX = trainX.values
+        elif not isinstance(trainX, (list, np.ndarray)):
+            raise TypeError(f"❌ trainX must be a list, array, or DataFrame. Got: {type(trainX)}")
 
         trainX = self._pad_or_truncate(trainX, self.ctx_len)
         trainY = np.array(trainY, dtype=np.float32)
         if trainY.ndim == 2:
-            trainY = np.expand_dims(trainY, axis=-1)  # Shape (N, 96, 1)
+            trainY = np.expand_dims(trainY, axis=-1)
 
         trainX_tensor = torch.tensor(trainX, dtype=torch.float32).to(self.device)
         trainY_tensor = torch.tensor(trainY, dtype=torch.float32).to(self.device)
@@ -76,7 +80,12 @@ class TTMAdapter:
     def evaluate(self, eval_set):
         self.pipeline.eval()
         evalX, evalY = eval_set
+
+        # Accept DataFrame for evalX
+        if isinstance(evalX, pd.DataFrame):
+            evalX = evalX.values
         evalX = self._pad_or_truncate(evalX, self.ctx_len)
+
         evalY = np.array(evalY, dtype=np.float32)
         if evalY.ndim == 2:
             evalY = np.expand_dims(evalY, axis=-1)
